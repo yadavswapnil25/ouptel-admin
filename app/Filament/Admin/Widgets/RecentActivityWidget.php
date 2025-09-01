@@ -2,10 +2,10 @@
 
 namespace App\Filament\Admin\Widgets;
 
+use App\Models\User;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
 
 class RecentActivityWidget extends BaseWidget
@@ -64,15 +64,14 @@ class RecentActivityWidget extends BaseWidget
 
     protected function getTableQuery(): Builder
     {
-        // Use a simple approach - just show recent users for now
-        // This avoids the complex union query issue
-        return DB::table('Wo_Users')
+        // Use Eloquent User model instead of DB::table() to return correct Builder type
+        return User::query()
             ->select(
                 'user_id as id', 
                 'username', 
                 'joined as time', 
-                DB::raw("'user' as type"), 
-                DB::raw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) as title"), 
+                \DB::raw("'user' as type"), 
+                \DB::raw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) as title"), 
                 'username as user'
             )
             ->where('joined', '>=', strtotime('-7 days'))

@@ -16,6 +16,16 @@ class EditEvent extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // If cover is empty, preserve the existing value
+        if (empty($data['cover'])) {
+            unset($data['cover']);
+        }
+        
+        return $data;
+    }
 }
 
 

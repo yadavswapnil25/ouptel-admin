@@ -36,6 +36,14 @@ class Event extends Model
         'end_time' => 'datetime:H:i',
     ];
 
+    /**
+     * Mutator to prevent null values for cover field
+     */
+    public function setCoverAttribute($value)
+    {
+        $this->attributes['cover'] = $value ?: $this->attributes['cover'] ?? '';
+    }
+
     public function poster(): BelongsTo
     {
         return $this->belongsTo(User::class, 'poster_id', 'user_id');

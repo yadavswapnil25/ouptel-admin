@@ -87,6 +87,8 @@ class EventResource extends Resource
                             ->image()
                             ->directory('events/covers')
                             ->visibility('public')
+                            ->preserveFilenames()
+                            ->dehydrated(fn ($state) => filled($state))
                             ->columnSpanFull(),
                     ])
                     ->columns(2),
