@@ -89,6 +89,12 @@ class EventResource extends Resource
                             ->visibility('public')
                             ->preserveFilenames()
                             ->dehydrated(fn ($state) => filled($state))
+                            ->maxSize(5120) // 5MB limit
+                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                            ->imageEditor()
+                            ->imageCropAspectRatio('16:9')
+                            ->imageResizeTargetWidth('800')
+                            ->imageResizeTargetHeight('450')
                             ->columnSpanFull(),
                     ])
                     ->columns(2),

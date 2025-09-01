@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Storage;
 
 class Event extends Model
 {
@@ -42,6 +43,21 @@ class Event extends Model
     public function setCoverAttribute($value)
     {
         $this->attributes['cover'] = $value ?: $this->attributes['cover'] ?? '';
+    }
+
+    /**
+     * Boot method to handle file cleanup
+     */
+    protected static function boot()
+    {
+        parent::boot();
+        
+        static::deleting(function ($event) {
+            // Delete cover file when event is deleted
+            if ($event->cover && Storage::disk('public')->exists('events/covers/' . $event->cover)) {
+                Storage::disk('public')->delete('events/covers/' . $event->cover);
+            }
+        });
     }
 
     public function poster(): BelongsTo
