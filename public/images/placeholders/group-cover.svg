@@ -1,0 +1,10 @@
+<svg width="1200" height="400" viewBox="0 0 1200 400" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1200" height="400" fill="#7F9CF5"/>
+  <circle cx="200" cy="100" r="30" fill="white" opacity="0.3"/>
+  <circle cx="1000" cy="300" r="50" fill="white" opacity="0.2"/>
+  <circle cx="600" cy="200" r="40" fill="white" opacity="0.25"/>
+  <text x="600" y="200" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="48" font-weight="bold">Group Cover</text>
+</svg>
+
+
+
