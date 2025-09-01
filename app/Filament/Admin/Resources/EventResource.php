@@ -234,13 +234,11 @@ class EventResource extends Resource
 
                 Tables\Filters\Filter::make('has_attendees')
                     ->label('Has Attendees')
-                    ->query(fn (Builder $query): Builder => $query->whereHas('going')),
+                    ->query(fn (Builder $query): Builder => $query->whereRaw('(SELECT COUNT(*) FROM Wo_Egoing WHERE Wo_Egoing.event_id = Wo_Events.id) > 0')),
 
                 Tables\Filters\Filter::make('popular_events')
                     ->label('Popular Events')
-                    ->query(fn (Builder $query): Builder => $query->whereHas('going', function ($q) {
-                        $q->havingRaw('COUNT(*) >= 10');
-                    })),
+                    ->query(fn (Builder $query): Builder => $query->whereRaw('(SELECT COUNT(*) FROM Wo_Egoing WHERE Wo_Egoing.event_id = Wo_Events.id) >= 10')),
             ])
             ->actions([
                 ActionGroup::make([
