@@ -1,0 +1,108 @@
+/* Ouptel Admin Panel Custom Styles */
+
+:root {
+    --ouptel-primary: #3B82F6;
+    --ouptel-secondary: #1E40AF;
+    --ouptel-accent: #60A5FA;
+    --ouptel-success: #10B981;
+    --ouptel-warning: #F59E0B;
+    --ouptel-danger: #EF4444;
+}
+
+/* Custom Brand Colors */
+.fi-brand {
+    color: var(--ouptel-primary) !important;
+}
+
+/* Custom Navigation */
+.fi-sidebar-nav-item {
+    border-radius: 8px;
+    margin: 2px 0;
+}
+
+.fi-sidebar-nav-item:hover {
+    background-color: rgba(59, 130, 246, 0.1);
+}
+
+.fi-sidebar-nav-item-active {
+    background-color: var(--ouptel-primary) !important;
+    color: white !important;
+}
+
+/* Custom Dashboard Cards */
+.fi-wi-stats-overview-stat {
+    border-radius: 12px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Custom Buttons */
+.fi-btn-primary {
+    background-color: var(--ouptel-primary);
+    border-color: var(--ouptel-primary);
+}
+
+.fi-btn-primary:hover {
+    background-color: var(--ouptel-secondary);
+    border-color: var(--ouptel-secondary);
+}
+
+/* Custom Forms */
+.fi-fo-field-wrp-label {
+    color: var(--ouptel-secondary);
+    font-weight: 600;
+}
+
+/* Custom Tables */
+.fi-ta-header-cell {
+    background-color: #F8FAFC;
+    color: var(--ouptel-secondary);
+    font-weight: 600;
+}
+
+/* Custom Login Page */
+.fi-login-page {
+    background: linear-gradient(135deg, var(--ouptel-primary) 0%, var(--ouptel-secondary) 100%);
+}
+
+.fi-login-page .fi-card {
+    border-radius: 16px;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+/* Custom Brand Logo */
+.fi-brand-logo {
+    max-height: 40px;
+    width: auto;
+}
+
+/* Custom Footer */
+.fi-footer {
+    background-color: #F8FAFC;
+    border-top: 1px solid #E2E8F0;
+}
+
+/* Custom Notifications */
+.fi-no-notification {
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .fi-sidebar {
+        width: 100%;
+    }
+    
+    .fi-main {
+        margin-left: 0;
+    }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+    :root {
+        --ouptel-primary: #60A5FA;
+        --ouptel-secondary: #3B82F6;
+    }
+}
+
