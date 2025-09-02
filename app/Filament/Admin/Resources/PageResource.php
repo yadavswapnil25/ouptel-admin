@@ -89,17 +89,17 @@ class PageResource extends Resource
                 
                 Forms\Components\Section::make('Page Details')
                     ->schema([
-                        TextInput::make('page_website')
+                        TextInput::make('website')
                             ->label('Website')
                             ->url(),
                         
-                        TextInput::make('page_phone')
+                        TextInput::make('phone')
                             ->label('Phone'),
                         
-                        TextInput::make('page_address')
+                        TextInput::make('address')
                             ->label('Address'),
                         
-                        Textarea::make('page_about')
+                        Textarea::make('page_description')
                             ->label('About')
                             ->rows(4),
                     ])
@@ -107,12 +107,12 @@ class PageResource extends Resource
                 
                 Forms\Components\Section::make('Media')
                     ->schema([
-                        FileUpload::make('page_avatar')
+                        FileUpload::make('avatar')
                             ->label('Avatar')
                             ->image()
                             ->directory('pages/avatars'),
                         
-                        FileUpload::make('page_cover')
+                        FileUpload::make('cover')
                             ->label('Cover Photo')
                             ->image()
                             ->directory('pages/covers'),
@@ -132,7 +132,7 @@ class PageResource extends Resource
                     ->sortable()
                     ->searchable(),
                 
-                Tables\Columns\ImageColumn::make('page_avatar')
+                Tables\Columns\ImageColumn::make('avatar')
                     ->label('Avatar')
                     ->circular()
                     ->size(40),
@@ -195,7 +195,8 @@ class PageResource extends Resource
                 
                 Filter::make('verified')
                     ->label('Verified Pages')
-                    ->query(fn (Builder $query): Builder => $query->where('verified', true)),
+                    ->query(fn (Builder $query): Builder => $query->where('verified', true))
+                    ->indicateUsing(fn (): string => 'Verified Pages Only'),
                 
                 Filter::make('active')
                     ->label('Active Pages')
@@ -207,6 +208,7 @@ class PageResource extends Resource
                 DeleteAction::make()
                     ->requiresConfirmation(),
             ])
+
             ->bulkActions([
                 Tables\Actions\BulkActionGroup::make([
                     BulkAction::make('delete')

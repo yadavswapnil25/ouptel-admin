@@ -18,12 +18,11 @@ class Page extends Model
         'page_category',
         'user_id',
         'verified',
-        'page_avatar',
-        'page_cover',
-        'page_website',
-        'page_phone',
-        'page_address',
-        'page_about',
+        'avatar',
+        'cover',
+        'website',
+        'phone',
+        'address',
         'page_created',
         'active',
     ];
@@ -34,6 +33,64 @@ class Page extends Model
         'page_created' => 'datetime',
     ];
 
+    /**
+     * Mutator to ensure verified field is properly handled
+     */
+    public function setVerifiedAttribute($value)
+    {
+        // Convert boolean to string '0' or '1' for ENUM('0', '1') column
+        $this->attributes['verified'] = (bool) $value ? '1' : '0';
+    }
+
+    /**
+     * Mutator to ensure active field is properly handled
+     */
+    public function setActiveAttribute($value)
+    {
+        // Convert boolean to string '0' or '1' for ENUM('0', '1') column
+        $this->attributes['active'] = (bool) $value ? '1' : '0';
+    }
+
+    /**
+     * Mutator to prevent null values for website field
+     */
+    public function setWebsiteAttribute($value)
+    {
+        $this->attributes['website'] = $value ?: $this->attributes['website'] ?? '';
+    }
+
+    /**
+     * Mutator to prevent null values for avatar field
+     */
+    public function setAvatarAttribute($value)
+    {
+        $this->attributes['avatar'] = $value ?: $this->attributes['avatar'] ?? '';
+    }
+
+    /**
+     * Mutator to prevent null values for cover field
+     */
+    public function setCoverAttribute($value)
+    {
+        $this->attributes['cover'] = $value ?: $this->attributes['cover'] ?? '';
+    }
+
+    /**
+     * Mutator to prevent null values for phone field
+     */
+    public function setPhoneAttribute($value)
+    {
+        $this->attributes['phone'] = $value ?: $this->attributes['phone'] ?? '';
+    }
+
+    /**
+     * Mutator to prevent null values for address field
+     */
+    public function setAddressAttribute($value)
+    {
+        $this->attributes['address'] = $value ?: $this->attributes['address'] ?? '';
+    }
+
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
@@ -41,7 +98,9 @@ class Page extends Model
 
     public function getAvatarAttribute(): string
     {
-        return \App\Helpers\ImageHelper::getImageUrl($this->page_avatar, 'page');
+        // Access the raw attribute to avoid infinite loop
+        $avatarValue = $this->attributes['avatar'] ?? null;
+        return \App\Helpers\ImageHelper::getImageUrl($avatarValue, 'page');
     }
 
     public function getUrlAttribute(): string
