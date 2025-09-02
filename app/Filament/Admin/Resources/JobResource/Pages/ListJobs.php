@@ -15,6 +15,15 @@ class ListJobs extends ListRecords
     {
         return [
             Actions\CreateAction::make(),
+            Actions\Action::make('reset_filters')
+                ->label('Reset Filters')
+                ->icon('heroicon-o-arrow-path')
+                ->color('gray')
+                ->action(function () {
+                    session()->forget('tableFilters');
+                    return redirect()->to(request()->url());
+                })
+                ->visible(fn () => request()->has('tableFilters') || session()->has('tableFilters')),
         ];
     }
 

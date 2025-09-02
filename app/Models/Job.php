@@ -49,6 +49,12 @@ class Job extends Model
         'lng' => 'float',
     ];
 
+    // Mutator to prevent null values for image field
+    public function setImageAttribute($value)
+    {
+        $this->attributes['image'] = $value ?: '';
+    }
+
     // Relationships
     public function user()
     {

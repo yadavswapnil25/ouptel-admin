@@ -63,6 +63,7 @@ class FundingResource extends Resource
                             ->image()
                             ->directory('funding')
                             ->visibility('public')
+                            ->dehydrated(fn ($state) => filled($state))
                             ->columnSpanFull(),
                     ]),
             ]);

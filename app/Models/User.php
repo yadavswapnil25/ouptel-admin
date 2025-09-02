@@ -51,6 +51,17 @@ class User extends Authenticatable
         'password' => 'hashed',
     ];
 
+    // Mutators to handle ENUM values for verified and active columns
+    public function setVerifiedAttribute($value)
+    {
+        $this->attributes['verified'] = (bool) $value ? '1' : '0';
+    }
+
+    public function setActiveAttribute($value)
+    {
+        $this->attributes['active'] = (bool) $value ? '1' : '0';
+    }
+
     /**
      * Check if user is admin (assuming admin users have email ending with @admin or specific pattern)
      */

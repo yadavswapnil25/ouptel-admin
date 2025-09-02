@@ -17,6 +17,16 @@ class EditFunding extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Unset empty image value to prevent null constraint violation
+        if (empty($data['image'])) {
+            unset($data['image']);
+        }
+        
+        return $data;
+    }
 }
 
 

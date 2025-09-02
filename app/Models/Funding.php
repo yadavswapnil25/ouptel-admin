@@ -28,6 +28,12 @@ class Funding extends Model
         'time' => 'datetime',
     ];
 
+    // Mutator to prevent null values for image field
+    public function setImageAttribute($value)
+    {
+        $this->attributes['image'] = $value ?: '';
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');

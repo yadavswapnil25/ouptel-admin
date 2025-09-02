@@ -198,7 +198,8 @@ class JobResource extends Resource
                             ->label('Job Image')
                             ->image()
                             ->directory('jobs')
-                            ->visibility('public'),
+                            ->visibility('public')
+                            ->dehydrated(fn ($state) => filled($state)),
 
                         Forms\Components\Select::make('image_type')
                             ->label('Image Type')
@@ -367,7 +368,7 @@ class JobResource extends Resource
                                 fn (Builder $query, $amount): Builder => $query->where('maximum', '<=', $amount),
                             );
                     }),
-            ])
+            ], layout: Tables\Enums\FiltersLayout::AboveContent)
             ->actions([
                 Action::make('view')
                     ->label('View')
@@ -389,7 +390,19 @@ class JobResource extends Resource
                     DeleteBulkAction::make(),
                 ]),
             ])
-            ->defaultSort('time', 'desc');
+            ->defaultSort('time', 'desc')
+            ->persistFiltersInSession()
+            ->headerActions([
+                Action::make('reset_filters')
+                    ->label('Reset All Filters')
+                    ->icon('heroicon-o-arrow-path')
+                    ->color('gray')
+                    ->action(function () {
+                        session()->forget('tableFilters');
+                        return redirect()->to(request()->url());
+                    })
+                    ->visible(fn () => request()->has('tableFilters') || session()->has('tableFilters')),
+            ]);
     }
 
     public static function getRelations(): array
