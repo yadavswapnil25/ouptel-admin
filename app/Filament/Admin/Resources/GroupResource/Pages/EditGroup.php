@@ -16,4 +16,13 @@ class EditGroup extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Unset empty values for optional fields to prevent null constraint violations
+        if (empty($data['avatar'])) { unset($data['avatar']); }
+        if (empty($data['cover'])) { unset($data['cover']); }
+        
+        return $data;
+    }
 }

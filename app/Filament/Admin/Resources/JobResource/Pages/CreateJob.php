@@ -15,6 +15,16 @@ class CreateJob extends CreateRecord
         
         return $data;
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Unset empty image value to prevent null constraint violation
+        if (empty($data['image'])) {
+            unset($data['image']);
+        }
+        
+        return $data;
+    }
 }
 
 

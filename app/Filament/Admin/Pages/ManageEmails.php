@@ -13,6 +13,7 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ManageEmails extends Page implements HasForms
 {
@@ -180,11 +181,17 @@ class ManageEmails extends Page implements HasForms
             foreach ($data as $templateType => $content) {
                 if (empty($content)) continue;
 
+                // Ensure content is a string, not an array
+                $messageContent = is_array($content) ? implode('', $content) : (string) $content;
+                
+                // Skip if content is still empty after conversion
+                if (empty(trim($messageContent))) continue;
+
                 EmailTemplate::updateOrCreate(
                     ['email_to' => $templateType],
                     [
                         'subject' => $this->getDefaultSubject($templateType),
-                        'message' => $content,
+                        'message' => $messageContent,
                     ]
                 );
             }
@@ -195,9 +202,15 @@ class ManageEmails extends Page implements HasForms
                 ->send();
 
         } catch (\Exception $e) {
+            // Log the error for debugging
+            Log::error('Error saving email templates: ' . $e->getMessage(), [
+                'data' => $data,
+                'trace' => $e->getTraceAsString()
+            ]);
+
             Notification::make()
                 ->title('Error saving emails')
-                ->body($e->getMessage())
+                ->body('An error occurred while saving the email templates. Please check the logs for details.')
                 ->danger()
                 ->send();
         }

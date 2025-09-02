@@ -28,9 +28,6 @@ class Article extends Model
         'view',
         'shared',
         'tags',
-        'meta_title',
-        'meta_description',
-        'meta_keywords',
     ];
 
     protected $casts = [
@@ -39,6 +36,28 @@ class Article extends Model
         'view' => 'integer',
         'shared' => 'integer',
     ];
+
+    // Mutator to prevent null values for thumbnail field
+    public function setThumbnailAttribute($value)
+    {
+        $this->attributes['thumbnail'] = $value ?: '';
+    }
+
+    // Mutator to convert tags array to string
+    public function setTagsAttribute($value)
+    {
+        if (is_array($value)) {
+            $this->attributes['tags'] = implode(',', array_filter($value));
+        } else {
+            $this->attributes['tags'] = $value ?: '';
+        }
+    }
+
+    // Mutator to handle ENUM values for active column
+    public function setActiveAttribute($value)
+    {
+        $this->attributes['active'] = (bool) $value ? '1' : '0';
+    }
 
     public function user(): BelongsTo
     {

@@ -20,6 +20,22 @@ class EmailTemplate extends Model
         'message',
     ];
 
+    // Mutators to ensure proper data types
+    public function setMessageAttribute($value)
+    {
+        $this->attributes['message'] = is_array($value) ? implode('', $value) : ($value ?: '');
+    }
+
+    public function setSubjectAttribute($value)
+    {
+        $this->attributes['subject'] = is_array($value) ? implode('', $value) : ($value ?: '');
+    }
+
+    public function setEmailToAttribute($value)
+    {
+        $this->attributes['email_to'] = is_array($value) ? implode('', $value) : ($value ?: '');
+    }
+
     /**
      * Get the email template by name (for backward compatibility with old system)
      */

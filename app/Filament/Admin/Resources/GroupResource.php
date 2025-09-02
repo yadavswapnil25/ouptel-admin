@@ -10,6 +10,7 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Tables\Filters\Filter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -70,12 +71,14 @@ class GroupResource extends Resource
                             ->label('Group Avatar')
                             ->image()
                             ->directory('groups/avatars')
-                            ->visibility('public'),
+                            ->visibility('public')
+                            ->dehydrated(fn ($state) => filled($state)),
                         Forms\Components\FileUpload::make('cover')
                             ->label('Group Cover')
                             ->image()
                             ->directory('groups/covers')
-                            ->visibility('public'),
+                            ->visibility('public')
+                            ->dehydrated(fn ($state) => filled($state)),
                     ])->columns(2),
                 
                 Forms\Components\Section::make('Settings')
@@ -171,8 +174,14 @@ class GroupResource extends Resource
                         'private' => 'Private',
                         'secret' => 'Secret',
                     ]),
-                Tables\Filters\TernaryFilter::make('active')
-                    ->label('Active'),
+                Tables\Filters\Filter::make('active')
+                    ->label('Active Groups')
+                    ->query(fn (Builder $query): Builder => $query->where('active', '1'))
+                    ->indicateUsing(fn (): string => 'Active Groups Only'),
+                Tables\Filters\Filter::make('inactive')
+                    ->label('Inactive Groups')
+                    ->query(fn (Builder $query): Builder => $query->where('active', '0'))
+                    ->indicateUsing(fn (): string => 'Inactive Groups Only'),
 
             ])
             ->actions([

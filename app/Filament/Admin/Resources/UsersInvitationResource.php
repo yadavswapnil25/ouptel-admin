@@ -86,7 +86,6 @@ class UsersInvitationResource extends Resource
                     ->label('Time')
                     ->getStateUsing(fn ($record) => $record->time_elapsed)
                     ->sortable()
-                    ->searchable()
                     ->badge()
                     ->color('info'),
 
@@ -110,7 +109,6 @@ class UsersInvitationResource extends Resource
                     ->label('Used By')
                     ->getStateUsing(fn ($record) => $record->used_by ?? 'Not used')
                     ->sortable()
-                    ->searchable()
                     ->badge()
                     ->color(fn ($record) => $record->invited_id > 0 ? 'success' : 'gray'),
 

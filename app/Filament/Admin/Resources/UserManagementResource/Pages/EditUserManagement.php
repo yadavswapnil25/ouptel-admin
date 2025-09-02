@@ -17,4 +17,14 @@ class EditUserManagement extends EditRecord
             Actions\DeleteAction::make(),
         ];
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Ensure verified field is always present to prevent null values
+        if (!isset($data['verified'])) {
+            $data['verified'] = false;
+        }
+        
+        return $data;
+    }
 }

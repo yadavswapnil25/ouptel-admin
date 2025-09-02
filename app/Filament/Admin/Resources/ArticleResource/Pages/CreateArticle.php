@@ -15,6 +15,21 @@ class CreateArticle extends CreateRecord
         
         return $data;
     }
+
+    protected function mutateFormDataBeforeSave(array $data): array
+    {
+        // Unset empty thumbnail value to prevent null constraint violation
+        if (empty($data['thumbnail'])) {
+            unset($data['thumbnail']);
+        }
+
+        // Handle tags array to string conversion
+        if (isset($data['tags']) && is_array($data['tags'])) {
+            $data['tags'] = implode(',', array_filter($data['tags']));
+        }
+        
+        return $data;
+    }
 }
 
 

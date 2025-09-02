@@ -91,7 +91,8 @@ class UserManagementResource extends Resource
                             ->required(),
 
                         Toggle::make('verified')
-                            ->label('Verified User'),
+                            ->label('Verified User')
+                            ->dehydrated(fn ($state) => filled($state)),
                     ])
                     ->columns(2),
             ]);

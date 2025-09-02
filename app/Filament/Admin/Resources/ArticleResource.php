@@ -118,34 +118,21 @@ class ArticleResource extends Resource
                         Forms\Components\TagsInput::make('tags')
                             ->label('Tags')
                             ->placeholder('Add tags...')
+                            ->separator(',')
                             ->columnSpanFull(),
                     ])
                     ->columns(2),
 
-                Forms\Components\Section::make('Media & SEO')
+                Forms\Components\Section::make('Media')
                     ->schema([
                         Forms\Components\FileUpload::make('thumbnail')
                             ->label('Featured Image')
                             ->image()
                             ->directory('blog')
-                            ->visibility('public'),
-
-                        Forms\Components\TextInput::make('meta_title')
-                            ->label('Meta Title')
-                            ->maxLength(60)
-                            ->helperText('SEO title for search engines'),
-
-                        Forms\Components\Textarea::make('meta_description')
-                            ->label('Meta Description')
-                            ->rows(3)
-                            ->maxLength(160)
-                            ->helperText('SEO description for search engines'),
-
-                        Forms\Components\TagsInput::make('meta_keywords')
-                            ->label('Meta Keywords')
-                            ->placeholder('Add keywords...'),
+                            ->visibility('public')
+                            ->dehydrated(fn ($state) => filled($state)),
                     ])
-                    ->columns(2),
+                    ->columns(1),
 
                 Forms\Components\Section::make('Settings')
                     ->schema([
