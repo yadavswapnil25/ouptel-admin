@@ -51,6 +51,7 @@ class AddNewLanguageAndKey extends Page implements HasForms
                             ->label('Language Name')
                             ->required()
                             ->maxLength(200)
+                            ->rules(['required', 'string', 'max:200'])
                             ->helperText('Use only english letters, no spaces allowed. E.g: russian')
                             ->placeholder('russian'),
 
@@ -58,6 +59,7 @@ class AddNewLanguageAndKey extends Page implements HasForms
                             ->label('Language ISO')
                             ->required()
                             ->maxLength(10)
+                            ->rules(['required', 'string', 'max:10'])
                             ->helperText('Language ISO code (e.g., en, ar, fr)')
                             ->placeholder('ru'),
 
@@ -69,6 +71,7 @@ class AddNewLanguageAndKey extends Page implements HasForms
                             ])
                             ->default('ltr')
                             ->required()
+                            ->rules(['required', 'string', 'in:ltr,rtl'])
                             ->helperText('The direction of the language'),
                     ])
                     ->columns(2),
@@ -80,12 +83,14 @@ class AddNewLanguageAndKey extends Page implements HasForms
                             ->label('Key Name')
                             ->required()
                             ->maxLength(160)
+                            ->rules(['required', 'string', 'max:160'])
                             ->helperText('Use only english letters, no spaces allowed, example: this_is_a_key')
                             ->placeholder('this_is_a_key'),
 
                         TextInput::make('keyData.type')
                             ->label('Type')
                             ->maxLength(100)
+                            ->rules(['nullable', 'string', 'max:100'])
                             ->helperText('Optional type classification for this key')
                             ->placeholder('general'),
 
@@ -93,6 +98,7 @@ class AddNewLanguageAndKey extends Page implements HasForms
                             ->label('English Translation')
                             ->rows(3)
                             ->required()
+                            ->rules(['required', 'string'])
                             ->helperText('English translation for this key')
                             ->columnSpanFull(),
 
@@ -100,31 +106,37 @@ class AddNewLanguageAndKey extends Page implements HasForms
                             ->schema([
                                 Textarea::make('keyData.arabic')
                                     ->label('Arabic')
-                                    ->rows(3),
+                                    ->rows(3)
+                                    ->rules(['nullable', 'string']),
 
                                 Textarea::make('keyData.french')
                                     ->label('French')
-                                    ->rows(3),
+                                    ->rows(3)
+                                    ->rules(['nullable', 'string']),
 
                                 Textarea::make('keyData.german')
                                     ->label('German')
-                                    ->rows(3),
+                                    ->rows(3)
+                                    ->rules(['nullable', 'string']),
 
                                 Textarea::make('keyData.italian')
                                     ->label('Italian')
-                                    ->rows(3),
+                                    ->rows(3)
+                                    ->rules(['nullable', 'string']),
 
                                 Textarea::make('keyData.russian')
                                     ->label('Russian')
-                                    ->rows(3),
+                                    ->rows(3)
+                                    ->rules(['nullable', 'string']),
 
                                 Textarea::make('keyData.spanish')
                                     ->label('Spanish')
-                                    ->rows(3),
+                                    ->rows(3)
+                                    ->rules(['nullable', 'string']),
                             ]),
                     ]),
             ])
-            ->statePath('data');
+            ->statePath('');
     }
 
     protected function getFormActions(): array

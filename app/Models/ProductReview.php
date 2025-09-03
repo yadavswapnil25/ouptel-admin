@@ -17,13 +17,13 @@ class ProductReview extends Model
     protected $fillable = [
         'user_id',
         'product_id',
-        'rating',
+        'star',
         'review',
         'time',
     ];
 
     protected $casts = [
-        'rating' => 'integer',
+        'star' => 'integer',
         'time' => 'integer',
     ];
 
@@ -44,7 +44,19 @@ class ProductReview extends Model
 
     public function getRatingStarsAttribute(): string
     {
-        return str_repeat('★', $this->rating) . str_repeat('☆', 5 - $this->rating);
+        return str_repeat('★', $this->star) . str_repeat('☆', 5 - $this->star);
+    }
+
+    // Accessor for backward compatibility
+    public function getRatingAttribute(): int
+    {
+        return $this->star;
+    }
+
+    // Mutator for backward compatibility
+    public function setRatingAttribute($value): void
+    {
+        $this->attributes['star'] = $value;
     }
 }
 

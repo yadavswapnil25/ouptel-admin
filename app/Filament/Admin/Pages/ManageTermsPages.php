@@ -37,7 +37,6 @@ class ManageTermsPages extends Page implements HasTable
                     ->label('Page Name')
                     ->getStateUsing(fn ($record) => $record->display_name)
                     ->sortable()
-                    ->searchable()
                     ->weight('bold'),
 
                 TextColumn::make('description')

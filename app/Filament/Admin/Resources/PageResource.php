@@ -151,18 +151,20 @@ class PageResource extends Resource
                     ->url(fn (Page $record): string => $record->owner->url ?? '#')
                     ->openUrlInNewTab(),
                 
-                TextColumn::make('page_category')
+                TextColumn::make('category_name')
                     ->label('Category')
                     ->sortable()
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
-                        'business' => 'success',
-                        'entertainment' => 'warning',
-                        'education' => 'info',
-                        'health' => 'danger',
-                        'technology' => 'primary',
-                        'sports' => 'secondary',
-                        'news' => 'gray',
+                        'Business' => 'success',
+                        'Entertainment' => 'warning',
+                        'Education' => 'info',
+                        'Health' => 'danger',
+                        'Technology' => 'primary',
+                        'Sports' => 'secondary',
+                        'News' => 'gray',
+                        'Other' => 'gray',
+                        'Uncategorized' => 'gray',
                         default => 'gray',
                     }),
                 

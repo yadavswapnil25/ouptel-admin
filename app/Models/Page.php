@@ -110,7 +110,22 @@ class Page extends Model
 
     public function getCategoryNameAttribute(): string
     {
-        return $this->page_category ?: 'Uncategorized';
+        if (!$this->page_category) {
+            return 'Uncategorized';
+        }
+        
+        // Convert category values to proper names
+        return match ($this->page_category) {
+            'business' => 'Business',
+            'entertainment' => 'Entertainment',
+            'education' => 'Education',
+            'health' => 'Health',
+            'technology' => 'Technology',
+            'sports' => 'Sports',
+            'news' => 'News',
+            'other' => 'Other',
+            default => ucfirst($this->page_category),
+        };
     }
 }
 

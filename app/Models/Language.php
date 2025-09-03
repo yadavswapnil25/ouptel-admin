@@ -37,12 +37,7 @@ class Language extends Model
         return $this->name . ' (' . strtoupper($this->code) . ')';
     }
 
-    public function getIsActiveAttribute(): bool
-    {
-        // For now, we'll consider all languages as active
-        // This could be extended to check a status field if it exists
-        return true;
-    }
+
 }
 
 

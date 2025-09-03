@@ -82,7 +82,7 @@ class ReviewResource extends Resource
                             )
                             ->required(),
 
-                        TextInput::make('rating')
+                        TextInput::make('star')
                             ->label('Rating')
                             ->numeric()
                             ->minValue(1)
@@ -125,7 +125,7 @@ class ReviewResource extends Resource
                     ->sortable()
                     ->limit(30),
 
-                TextColumn::make('rating')
+                TextColumn::make('star')
                     ->label('Rating')
                     ->formatStateUsing(function ($state) {
                         return str_repeat('★', $state) . str_repeat('☆', 5 - $state);
@@ -185,7 +185,7 @@ class ReviewResource extends Resource
                         );
                     }),
 
-                SelectFilter::make('rating')
+                SelectFilter::make('star')
                     ->label('Rating')
                     ->options([
                         1 => '1 Star',
@@ -197,17 +197,17 @@ class ReviewResource extends Resource
                     ->query(function (Builder $query, array $data): Builder {
                         return $query->when(
                             $data['value'],
-                            fn (Builder $query, $rating): Builder => $query->where('rating', $rating),
+                            fn (Builder $query, $rating): Builder => $query->where('star', $rating),
                         );
                     }),
 
                 Tables\Filters\Filter::make('high_ratings')
                     ->label('High Ratings (4-5 stars)')
-                    ->query(fn (Builder $query): Builder => $query->whereIn('rating', [4, 5])),
+                    ->query(fn (Builder $query): Builder => $query->whereIn('star', [4, 5])),
 
                 Tables\Filters\Filter::make('low_ratings')
                     ->label('Low Ratings (1-2 stars)')
-                    ->query(fn (Builder $query): Builder => $query->whereIn('rating', [1, 2])),
+                    ->query(fn (Builder $query): Builder => $query->whereIn('star', [1, 2])),
 
                 Tables\Filters\Filter::make('recent_reviews')
                     ->label('Recent Reviews (Last 7 days)')

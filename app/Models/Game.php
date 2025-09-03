@@ -21,12 +21,10 @@ class Game extends Model
         'game_link',
         'active',
         'time',
-        'last_play',
     ];
 
     protected $casts = [
         'time' => 'integer',
-        'last_play' => 'integer',
         'active' => 'integer',
     ];
 
@@ -55,7 +53,8 @@ class Game extends Model
 
     public function getLastPlayedDateAttribute(): ?string
     {
-        return $this->last_play ? date('Y-m-d H:i:s', $this->last_play) : null;
+        // Since last_play column doesn't exist, return null or use time as fallback
+        return null;
     }
 
     public function getPlayersCountAttribute(): int
@@ -71,5 +70,40 @@ class Game extends Model
     public function getGameUrlAttribute(): string
     {
         return $this->game_link ?: '#';
+    }
+
+    // Prevent setting last_play field since it doesn't exist in database
+    public function setLastPlayAttribute($value): void
+    {
+        // Do nothing - this field doesn't exist in the database
+        // This prevents errors when code tries to set last_play
+    }
+
+    // Ensure game_avatar always has a value since it's NOT NULL in database
+    public function setGameAvatarAttribute($value): void
+    {
+        if (empty($value)) {
+            // Set a default placeholder image if no avatar is provided
+            $this->attributes['game_avatar'] = 'default-game-avatar.jpg';
+        } else {
+            $this->attributes['game_avatar'] = $value;
+        }
+    }
+
+    // Ensure game_link always has a value since it's NOT NULL in database
+    public function setGameLinkAttribute($value): void
+    {
+        if (empty($value)) {
+            // Set a default value if no link is provided
+            $this->attributes['game_link'] = '#';
+        } else {
+            $this->attributes['game_link'] = $value;
+        }
+    }
+
+    // Ensure active always has a value since it's NOT NULL in database
+    public function setActiveAttribute($value): void
+    {
+        $this->attributes['active'] = $value ?? 1; // Default to 1 (active) if null
     }
 }
