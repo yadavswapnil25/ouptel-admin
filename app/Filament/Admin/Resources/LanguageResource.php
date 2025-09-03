@@ -68,14 +68,12 @@ class LanguageResource extends Resource
 
                 TextColumn::make('display_name')
                     ->label('Language Name')
-                    ->searchable()
                     ->sortable()
                     ->weight('bold')
                     ->color('primary'),
 
                 TextColumn::make('name')
                     ->label('Name')
-                    ->searchable()
                     ->sortable(),
 
                 TextColumn::make('code')
@@ -83,18 +81,9 @@ class LanguageResource extends Resource
                     ->badge()
                     ->color('secondary')
                     ->sortable(),
-
-                BooleanColumn::make('is_active')
-                    ->label('Status')
-                    ->trueIcon('heroicon-o-check-circle')
-                    ->falseIcon('heroicon-o-x-circle'),
             ])
             ->filters([
-                Tables\Filters\TernaryFilter::make('is_active')
-                    ->label('Status')
-                    ->placeholder('All languages')
-                    ->trueLabel('Active only')
-                    ->falseLabel('Inactive only'),
+                // No filters needed since all languages are considered active
             ])
             ->actions([
                 ActionGroup::make([

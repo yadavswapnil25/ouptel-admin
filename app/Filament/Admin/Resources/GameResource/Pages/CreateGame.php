@@ -12,7 +12,6 @@ class CreateGame extends CreateRecord
     protected function mutateFormDataBeforeCreate(array $data): array
     {
         $data['time'] = time();
-        $data['last_play'] = 0;
         return $data;
     }
 }
