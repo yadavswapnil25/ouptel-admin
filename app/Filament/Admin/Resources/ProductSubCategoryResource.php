@@ -29,15 +29,15 @@ class ProductSubCategoryResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';
 
-    protected static ?string $navigationLabel = 'Products Sub Categories';
+    protected static ?string $navigationLabel = 'Product Sub Categories';
 
     protected static ?string $modelLabel = 'Product Sub Category';
 
     protected static ?string $pluralModelLabel = 'Products Sub Categories';
 
-    protected static ?string $navigationGroup = 'Categories';
+    protected static ?string $navigationGroup = 'Store';
 
-    protected static ?int $navigationSort = 7;
+    protected static ?int $navigationSort = 6;
 
     public static function form(Form $form): Form
     {
@@ -85,7 +85,7 @@ class ProductSubCategoryResource extends Resource
     {
         return $table
             ->modifyQueryUsing(function (Builder $query) {
-                return $query->orderBy('parent_id', 'asc')->orderBy('id', 'asc');
+                return $query->orderBy('category_id', 'asc')->orderBy('id', 'asc');
             })
             ->columns([
                 TextColumn::make('id')
@@ -95,7 +95,6 @@ class ProductSubCategoryResource extends Resource
 
                 TextColumn::make('parent.name')
                     ->label('Parent Category')
-                    ->searchable()
                     ->sortable()
                     ->badge()
                     ->color('secondary'),
@@ -109,7 +108,6 @@ class ProductSubCategoryResource extends Resource
 
                 TextColumn::make('name')
                     ->label('Sub Category Name')
-                    ->searchable()
                     ->sortable()
                     ->weight('bold'),
             ])

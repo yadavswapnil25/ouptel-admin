@@ -115,10 +115,10 @@ class UserStoriesResource extends Resource
                         return strlen($state) > 50 ? $state : null;
                     }),
 
-                ImageColumn::make('thumbnail')
+                ImageColumn::make('thumbnail_url')
                     ->label('Thumbnail')
                     ->circular()
-                    ->defaultImageUrl(fn ($record) => \App\Helpers\ImageHelper::getPlaceholder('story-thumbnail')),
+                    ->defaultImageUrl(fn ($record) => \App\Helpers\ImageHelper::getPlaceholder('default')),
 
                 TextColumn::make('posted')
                     ->label('Posted')

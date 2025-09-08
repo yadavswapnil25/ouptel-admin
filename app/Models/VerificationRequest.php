@@ -59,4 +59,44 @@ class VerificationRequest extends Model
     {
         return $this->seen ? date('Y-m-d H:i:s', $this->seen) : null;
     }
+
+    /**
+     * Set passport attribute with default value if null
+     */
+    public function setPassportAttribute($value): void
+    {
+        $this->attributes['passport'] = $value ?: '';
+    }
+
+    /**
+     * Set photo attribute with default value if null
+     */
+    public function setPhotoAttribute($value): void
+    {
+        $this->attributes['photo'] = $value ?: '';
+    }
+
+    /**
+     * Set user_name attribute with default value if null
+     */
+    public function setUserNameAttribute($value): void
+    {
+        $this->attributes['user_name'] = $value ?: '';
+    }
+
+    /**
+     * Set type attribute with default value if null
+     */
+    public function setTypeAttribute($value): void
+    {
+        $this->attributes['type'] = $value ?: '';
+    }
+
+    /**
+     * Set seen attribute with default value if null
+     */
+    public function setSeenAttribute($value): void
+    {
+        $this->attributes['seen'] = $value ?: 0;
+    }
 }

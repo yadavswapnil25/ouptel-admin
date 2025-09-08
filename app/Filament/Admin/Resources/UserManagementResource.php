@@ -110,10 +110,10 @@ class UserManagementResource extends Resource
                     ->sortable()
                     ->searchable(),
 
-                ImageColumn::make('avatar')
+                ImageColumn::make('avatar_url')
                     ->label('Avatar')
                     ->circular()
-                    ->defaultImageUrl(fn ($record) => \App\Helpers\ImageHelper::getPlaceholder('user-avatar')),
+                    ->defaultImageUrl(fn ($record) => \App\Helpers\ImageHelper::getPlaceholder('user')),
 
                 TextColumn::make('username')
                     ->label('Username')
@@ -124,7 +124,6 @@ class UserManagementResource extends Resource
 
                 TextColumn::make('full_name')
                     ->label('Full Name')
-                    ->searchable()
                     ->sortable(),
 
                 TextColumn::make('email')

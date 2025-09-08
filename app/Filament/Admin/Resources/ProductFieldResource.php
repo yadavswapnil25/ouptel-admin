@@ -31,15 +31,15 @@ class ProductFieldResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-cog-6-tooth';
 
-    protected static ?string $navigationLabel = 'Products Fields';
+    protected static ?string $navigationLabel = 'Product Fields';
 
     protected static ?string $modelLabel = 'Product Field';
 
     protected static ?string $pluralModelLabel = 'Products Fields';
 
-    protected static ?string $navigationGroup = 'Custom Fields';
+    protected static ?string $navigationGroup = 'Store';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 7;
 
     public static function form(Form $form): Form
     {

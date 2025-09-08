@@ -82,7 +82,6 @@ class PageCategoryResource extends Resource
 
                 TextColumn::make('name')
                     ->label('Category Name')
-                    ->searchable()
                     ->sortable()
                     ->weight('bold'),
             ])

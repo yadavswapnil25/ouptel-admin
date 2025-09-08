@@ -45,7 +45,6 @@ class ManageGenders extends Page implements HasTable
             ->columns([
                 TextColumn::make('gender_id')
                     ->label('Gender ID')
-                    ->searchable()
                     ->sortable()
                     ->weight('bold')
                     ->color('primary'),
@@ -53,7 +52,6 @@ class ManageGenders extends Page implements HasTable
                 TextColumn::make('gender_name')
                     ->label('Gender Name')
                     ->getStateUsing(fn ($record) => \App\Models\Gender::getGenderName($record->gender_id))
-                    ->searchable()
                     ->sortable(),
 
                 TextColumn::make('users_count')

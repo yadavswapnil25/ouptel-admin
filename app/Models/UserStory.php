@@ -49,4 +49,12 @@ class UserStory extends Model
         // You may need to adjust this logic based on the actual format
         return $this->expire && strtotime($this->expire) < time();
     }
+
+    /**
+     * Get story's thumbnail URL with fallback to placeholder
+     */
+    public function getThumbnailUrlAttribute(): string
+    {
+        return \App\Helpers\ImageHelper::getImageUrl($this->thumbnail, 'default');
+    }
 }

@@ -36,7 +36,9 @@ class JobResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Jobs';
 
-    protected static ?string $navigationGroup = 'Content Management';
+    protected static ?string $navigationGroup = 'Manage Features';
+
+    protected static ?int $navigationSort = 5;
 
     public static function form(Form $form): Form
     {

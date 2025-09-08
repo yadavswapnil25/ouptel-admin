@@ -26,15 +26,15 @@ class ProductCategoryResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';
 
-    protected static ?string $navigationLabel = 'Products Categories';
+    protected static ?string $navigationLabel = 'Product Categories';
 
     protected static ?string $modelLabel = 'Product Category';
 
     protected static ?string $pluralModelLabel = 'Products Categories';
 
-    protected static ?string $navigationGroup = 'Categories';
+    protected static ?string $navigationGroup = 'Store';
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 5;
 
     public static function form(Form $form): Form
     {
@@ -81,7 +81,6 @@ class ProductCategoryResource extends Resource
 
                 TextColumn::make('name')
                     ->label('Category Name')
-                    ->searchable()
                     ->sortable()
                     ->weight('bold'),
             ])
