@@ -32,9 +32,9 @@ class BlogCategoryResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Blogs Categories';
 
-    protected static ?string $navigationGroup = 'Categories';
+    protected static ?string $navigationGroup = 'Manage Features';
 
-    protected static ?int $navigationSort = 5;
+    protected static ?int $navigationSort = 8;
 
     public static function form(Form $form): Form
     {
@@ -64,8 +64,28 @@ class BlogCategoryResource extends Resource
     {
         return $table
             ->modifyQueryUsing(function (Builder $query) {
+                // Handle custom search for category names
+                $search = request('tableSearch');
+                if ($search) {
+                    $query->where(function (Builder $query) use ($search) {
+                        // Search by ID
+                        $query->where('id', 'like', "%{$search}%")
+                              // Search by lang_key
+                              ->orWhere('lang_key', 'like', "%{$search}%")
+                              // Search by category name in Wo_Langs table
+                              ->orWhereExists(function ($subQuery) use ($search) {
+                                  $subQuery->select(\Illuminate\Support\Facades\DB::raw(1))
+                                      ->from('Wo_Langs')
+                                      ->whereColumn('Wo_Langs.id', 'Wo_Blogs_Categories.lang_key')
+                                      ->where('Wo_Langs.type', 'category')
+                                      ->where('Wo_Langs.english', 'like', "%{$search}%");
+                              });
+                    });
+                }
                 return $query->orderBy('id', 'asc');
             })
+            ->searchable()
+            ->searchOnBlur()
             ->columns([
                 TextColumn::make('id')
                     ->label('ID')
@@ -81,7 +101,6 @@ class BlogCategoryResource extends Resource
 
                 TextColumn::make('name')
                     ->label('Category Name')
-                    ->searchable()
                     ->sortable()
                     ->weight('bold'),
             ])

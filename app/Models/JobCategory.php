@@ -21,36 +21,27 @@ class JobCategory extends Model
     }
 
     // Accessors
-    public function getNameAttribute()
+    public function getNameAttribute(): string
     {
-        // Map lang_key to actual category names
-        $categoryNames = [
-            '1580' => 'Technology',
-            '1581' => 'Healthcare',
-            '1582' => 'Education',
-            '1583' => 'Finance',
-            '1584' => 'Marketing',
-            '1585' => 'Sales',
-            '1586' => 'Customer Service',
-            '1587' => 'Human Resources',
-            '1588' => 'Operations',
-            '1589' => 'Engineering',
-            '1590' => 'Design',
-            '1591' => 'Writing',
-            '1592' => 'Legal',
-            '1593' => 'Consulting',
-            '1594' => 'Retail',
-            '1595' => 'Hospitality',
-            '1596' => 'Transportation',
-            '1597' => 'Manufacturing',
-            '1598' => 'Construction',
-            '1599' => 'Agriculture',
-            '1600' => 'Media',
-            '1601' => 'Entertainment',
-            '1602' => 'Sports',
-            '1603' => 'Other',
-        ];
-
-        return $categoryNames[$this->lang_key] ?? "Category {$this->id}";
+        // The lang_key is actually an ID that references Wo_Langs table
+        // We need to fetch the English translation from the language table
+        $langKey = $this->lang_key;
+        
+        if (!$langKey) {
+            return 'Uncategorized';
+        }
+        
+        // Try to get the English translation from Wo_Langs table
+        $translation = \Illuminate\Support\Facades\DB::table('Wo_Langs')
+            ->where('id', $langKey)
+            ->where('type', 'category')
+            ->first();
+            
+        if ($translation && !empty($translation->english)) {
+            return $translation->english;
+        }
+        
+        // Fallback to the lang_key if no translation found
+        return $langKey;
     }
 }

@@ -15,25 +15,31 @@ class GroupCategory extends Model
 
     protected $fillable = [
         'id',
+        'lang_key',
     ];
 
     public function getNameAttribute(): string
     {
-        // Map id to actual category names
-        $categoryNames = [
-            1 => 'Business',
-            2 => 'Entertainment',
-            3 => 'Sports',
-            4 => 'Technology',
-            5 => 'Education',
-            6 => 'Health',
-            7 => 'Travel',
-            8 => 'Food',
-            9 => 'Lifestyle',
-            10 => 'News',
-        ];
+        // The lang_key is actually an ID that references Wo_Langs table
+        // We need to fetch the English translation from the language table
+        $langKey = $this->lang_key;
 
-        return $categoryNames[$this->id] ?? "Category {$this->id}";
+        if (!$langKey) {
+            return 'Uncategorized';
+        }
+
+        // Try to get the English translation from Wo_Langs table
+        $translation = \Illuminate\Support\Facades\DB::table('Wo_Langs')
+            ->where('id', $langKey)
+            ->where('type', 'category')
+            ->first();
+
+        if ($translation && !empty($translation->english)) {
+            return $translation->english;
+        }
+
+        // Fallback to the lang_key if no translation found
+        return $langKey;
     }
 }
 

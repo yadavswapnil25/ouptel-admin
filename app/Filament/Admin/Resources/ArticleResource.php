@@ -34,7 +34,9 @@ class ArticleResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Articles';
 
-    protected static ?string $navigationGroup = 'Content Management';
+    protected static ?string $navigationGroup = 'Manage Features';
+
+    protected static ?int $navigationSort = 7;
 
     public static function form(Form $form): Form
     {

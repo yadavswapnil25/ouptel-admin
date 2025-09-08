@@ -20,21 +20,26 @@ class PageCategory extends Model
 
     public function getNameAttribute(): string
     {
-        // Map lang_key to actual category names
-        $categoryNames = [
-            'business' => 'Business',
-            'entertainment' => 'Entertainment',
-            'sports' => 'Sports',
-            'technology' => 'Technology',
-            'education' => 'Education',
-            'health' => 'Health',
-            'travel' => 'Travel',
-            'food' => 'Food',
-            'lifestyle' => 'Lifestyle',
-            'news' => 'News',
-        ];
-
-        return $categoryNames[$this->lang_key] ?? ucfirst($this->lang_key);
+        // The lang_key is actually an ID that references Wo_Langs table
+        // We need to fetch the English translation from the language table
+        $langKey = $this->lang_key;
+        
+        if (!$langKey) {
+            return 'Uncategorized';
+        }
+        
+        // Try to get the English translation from Wo_Langs table
+        $translation = \Illuminate\Support\Facades\DB::table('Wo_Langs')
+            ->where('id', $langKey)
+            ->where('type', 'category')
+            ->first();
+            
+        if ($translation && !empty($translation->english)) {
+            return $translation->english;
+        }
+        
+        // Fallback to the lang_key if no translation found
+        return $langKey;
     }
 }
 

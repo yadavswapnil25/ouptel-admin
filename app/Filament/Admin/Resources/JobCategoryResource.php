@@ -32,9 +32,9 @@ class JobCategoryResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Job Categories';
 
-    protected static ?string $navigationGroup = 'Categories';
+    protected static ?string $navigationGroup = 'Manage Features';
 
-    protected static ?int $navigationSort = 8;
+    protected static ?int $navigationSort = 6;
 
     public static function form(Form $form): Form
     {
@@ -64,25 +64,39 @@ class JobCategoryResource extends Resource
     {
         return $table
             ->modifyQueryUsing(function (Builder $query) {
+                // Handle custom search for category names
+                $search = request('tableSearch') ?? request('search') ?? request('q');
+                if ($search) {
+                    $query->where(function (Builder $query) use ($search) {
+                        // Search by ID
+                        $query->where('id', 'like', "%{$search}%")
+                              // Search by lang_key
+                              ->orWhere('lang_key', 'like', "%{$search}%")
+                              // Search by category name in Wo_Langs table
+                              ->orWhereExists(function ($subQuery) use ($search) {
+                                  $subQuery->select(\Illuminate\Support\Facades\DB::raw(1))
+                                      ->from('Wo_Langs')
+                                      ->whereColumn('Wo_Langs.id', 'Wo_Job_Categories.lang_key')
+                                      ->where('Wo_Langs.type', 'category')
+                                      ->where('Wo_Langs.english', 'like', "%{$search}%");
+                              });
+                    });
+                }
                 return $query->orderBy('id', 'asc');
             })
             ->columns([
                 TextColumn::make('id')
                     ->label('ID')
-                    ->sortable()
-                    ->searchable(),
+                    ->sortable(),
 
                 TextColumn::make('lang_key')
                     ->label('Language Key')
-                    ->searchable()
                     ->sortable()
                     ->badge()
                     ->color('primary'),
 
                 TextColumn::make('name')
                     ->label('Category Name')
-                    ->searchable()
-                    ->sortable()
                     ->weight('bold'),
             ])
             ->filters([

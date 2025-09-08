@@ -113,10 +113,10 @@ class OnlineUsersResource extends Resource
                     ->sortable()
                     ->searchable(),
 
-                ImageColumn::make('avatar')
+                ImageColumn::make('avatar_url')
                     ->label('Avatar')
                     ->circular()
-                    ->defaultImageUrl(fn ($record) => \App\Helpers\ImageHelper::getPlaceholder('user-avatar')),
+                    ->defaultImageUrl(fn ($record) => \App\Helpers\ImageHelper::getPlaceholder('user')),
 
                 TextColumn::make('username')
                     ->label('Username')

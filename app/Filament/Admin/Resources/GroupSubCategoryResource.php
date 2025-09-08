@@ -85,7 +85,7 @@ class GroupSubCategoryResource extends Resource
     {
         return $table
             ->modifyQueryUsing(function (Builder $query) {
-                return $query->orderBy('parent_id', 'asc')->orderBy('id', 'asc');
+                return $query->orderBy('category_id', 'asc')->orderBy('id', 'asc');
             })
             ->columns([
                 TextColumn::make('id')
@@ -109,7 +109,6 @@ class GroupSubCategoryResource extends Resource
 
                 TextColumn::make('name')
                     ->label('Sub Category Name')
-                    ->searchable()
                     ->sortable()
                     ->weight('bold'),
             ])
