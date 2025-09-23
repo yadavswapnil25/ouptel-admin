@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../Ouptel Code Old/admin-panel"
+		},
+		{
+			"path": "../Ouptel Code Old/api"
 		}
 	],
 	"settings": {}

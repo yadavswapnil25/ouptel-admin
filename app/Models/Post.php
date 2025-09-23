@@ -80,7 +80,7 @@ class Post extends Model
     ];
 
     protected $casts = [
-        'time' => 'datetime',
+        'time' => 'integer',
         'post_id' => 'integer',
         'user_id' => 'integer',
         'recipient_id' => 'integer',
