@@ -131,6 +131,134 @@
         },
         "description": "Creates a new album post for the logged-in user (from token). Images are stored in Wo_Albums_Media."
       }
+    },
+    {
+      "name": "Events - Browse",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/events?status=upcoming&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","events"],
+          "query": [
+            {"key":"status","value":"upcoming"},
+            {"key":"per_page","value":"12"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Events - Going",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {"raw": "{{base_url}}/api/v1/events/going","host":["{{base_url}}"],"path":["api","v1","events","going"]}
+      }
+    },
+    {
+      "name": "Events - Invited",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {"raw": "{{base_url}}/api/v1/events/invited","host":["{{base_url}}"],"path":["api","v1","events","invited"]}
+      }
+    },
+    {
+      "name": "Events - Interested",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {"raw": "{{base_url}}/api/v1/events/interested","host":["{{base_url}}"],"path":["api","v1","events","interested"]}
+      }
+    },
+    {
+      "name": "Events - Mine",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {"raw": "{{base_url}}/api/v1/my-events","host":["{{base_url}}"],"path":["api","v1","my-events"]}
+      }
+    },
+    {
+      "name": "Events - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json"}
+        ],
+        "body": {"mode":"raw","raw":"{\n  \"name\": \"Hackathon 2025\",\n  \"location\": \"NYC\",\n  \"start_date\": \"2025-10-10\",\n  \"start_time\": \"09:00\",\n  \"end_date\": \"2025-10-11\",\n  \"end_time\": \"09:00\"\n}"},
+        "url": {"raw":"{{base_url}}/api/v1/events","host":["{{base_url}}"],"path":["api","v1","events"]}
+      }
+    },
+    {
+      "name": "Pages - List (my_pages)",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {"raw":"{{base_url}}/api/v1/pages?type=my_pages","host":["{{base_url}}"],"path":["api","v1","pages"],"query":[{"key":"type","value":"my_pages"}]}
+      }
+    },
+    {
+      "name": "Pages - Meta (categories & subs)",
+      "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/pages/meta","host":["{{base_url}}"],"path":["api","v1","pages","meta"]}}
+    },
+    {
+      "name": "Pages - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json"}
+        ],
+        "body": {"mode":"raw","raw":"{\n  \"page_name\": \"mybrand\",\n  \"page_title\": \"My Brand\",\n  \"page_category\": 3\n}"},
+        "url": {"raw":"{{base_url}}/api/v1/pages","host":["{{base_url}}"],"path":["api","v1","pages"]}
+      }
+    },
+    {
+      "name": "Groups - Suggested",
+      "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/groups?type=suggested","host":["{{base_url}}"],"path":["api","v1","groups"],"query":[{"key":"type","value":"suggested"}]}}
+    },
+    {
+      "name": "Groups - Meta",
+      "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/groups/meta","host":["{{base_url}}"],"path":["api","v1","groups","meta"]}}
+    },
+    {
+      "name": "Groups - Create",
+      "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"group_name\": \"devs\",\n  \"group_title\": \"Developers\",\n  \"category\": 1,\n  \"privacy\": \"public\",\n  \"join_privacy\": \"public\"\n}"},"url":{"raw":"{{base_url}}/api/v1/groups","host":["{{base_url}}"],"path":["api","v1","groups"]}}
+    },
+    {
+      "name": "Blogs - List",
+      "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/blogs?term=music","host":["{{base_url}}"],"path":["api","v1","blogs"],"query":[{"key":"term","value":"music"}]}}
+    },
+    {
+      "name": "Products - Market",
+      "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/products?term=phone","host":["{{base_url}}"],"path":["api","v1","products"],"query":[{"key":"term","value":"phone"}]}}
+    },
+    {
+      "name": "Products - My",
+      "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/my-products","host":["{{base_url}}"],"path":["api","v1","my-products"]}}
+    },
+    {
+      "name": "Products - Purchased",
+      "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/purchased-products","host":["{{base_url}}"],"path":["api","v1","purchased-products"]}}
+    },
+    {
+      "name": "Products - Create",
+      "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"name\": \"iPhone 13\",\n  \"category\": 2,\n  \"price\": 699.99,\n  \"currency\": \"USD\",\n  \"type\": 0,\n  \"images\": [\n    \"uploads/p1.jpg\"\n  ]\n}"},"url":{"raw":"{{base_url}}/api/v1/products","host":["{{base_url}}"],"path":["api","v1","products"]}}
+    },
+    {
+      "name": "Directory - Users",
+      "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/directory?type=users&term=john","host":["{{base_url}}"],"path":["api","v1","directory"],"query":[{"key":"type","value":"users"},{"key":"term","value":"john"}]}}
+    },
+    {
+      "name": "Games - List",
+      "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/games?term=2048","host":["{{base_url}}"],"path":["api","v1","games"],"query":[{"key":"term","value":"2048"}]}}
+    },
+    {
+      "name": "Games - Create",
+      "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"game_name\": \"2048\",\n  \"game_link\": \"https://example.com/games/2048\"\n}"},"url":{"raw":"{{base_url}}/api/v1/games","host":["{{base_url}}"],"path":["api","v1","games"]}}
     }
   ],
   "variable": [

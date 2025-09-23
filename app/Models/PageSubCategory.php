@@ -23,7 +23,6 @@ class PageSubCategory extends Model
     protected static function boot()
     {
         parent::boot();
-        
         static::addGlobalScope('page', function ($query) {
             $query->where('type', 'page');
         });

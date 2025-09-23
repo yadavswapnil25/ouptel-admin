@@ -59,6 +59,11 @@ class Group extends Model
         return $this->belongsTo(User::class, 'user_id', 'user_id');
     }
 
+    public function members()
+    {
+        return $this->hasMany(GroupMember::class, 'group_id', 'id');
+    }
+
     public function getAvatarUrlAttribute(): string
     {
         return \App\Helpers\ImageHelper::getImageUrl($this->avatar, 'group');
