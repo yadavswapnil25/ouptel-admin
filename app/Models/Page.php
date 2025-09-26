@@ -28,7 +28,8 @@ class Page extends Model
 
     protected $casts = [
         'verified' => 'boolean',
-        'active' => 'boolean',
+        'active' => 'string',
+        'user_id' => 'string',
     ];
 
     /**

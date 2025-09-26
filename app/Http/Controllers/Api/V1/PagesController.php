@@ -26,30 +26,29 @@ class PagesController extends BaseController
             $token = substr($authHeader, 7);
             $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         }
-
-        $query = Page::query()->where('active', 1);
-
+        
+        $query = Page::query()->where('active', '1');
         if ($type === 'my_pages') {
             if (!$tokenUserId) {
                 return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
             }
-            $query->where('user_id', $tokenUserId);
+            $query->where('user_id', (string) $tokenUserId);
         } elseif ($type === 'liked') {
             if (!$tokenUserId) {
                 return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
             }
             $likedPageIds = DB::table('Wo_Pages_Likes')
-                ->where('user_id', $tokenUserId)
+                ->where('user_id', (string) $tokenUserId)
                 ->pluck('page_id');
             $query->whereIn('page_id', $likedPageIds);
         } elseif ($type === 'suggested') {
             // Suggested pages: not owned by user and not liked by user
             if ($tokenUserId) {
                 $likedPageIds = DB::table('Wo_Pages_Likes')
-                    ->where('user_id', $tokenUserId)
+                    ->where('user_id', (string) $tokenUserId)
                     ->pluck('page_id')
                     ->toArray();
-                $query->where('user_id', '!=', $tokenUserId)
+                $query->where('user_id', '!=', (string) $tokenUserId)
                       ->whereNotIn('page_id', $likedPageIds);
             }
         } else {
@@ -163,9 +162,9 @@ class PagesController extends BaseController
         $page->page_title = $validated['page_title'];
         $page->page_description = $validated['page_description'] ?? '';
         $page->page_category = $validated['page_category'];
-        $page->user_id = $userId;
+        $page->user_id = (string) $userId;
         $page->verified = false;
-        $page->active = true;
+        $page->active = '1';
         $page->website = $validated['website'] ?? '';
         $page->phone = $validated['phone'] ?? '';
         $page->address = $validated['address'] ?? '';
