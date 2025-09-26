@@ -18,7 +18,7 @@ class ProductsController extends BaseController
         $perPage = max(1, min($perPage, 50));
 
         $query = Product::query()
-            ->where('active', 1)
+            ->where('active', '1')
             ->orderByDesc('id');
 
         if ($request->filled('category')) {
@@ -30,7 +30,7 @@ class ProductsController extends BaseController
         }
 
         if ($request->filled('type')) { // 0=physical,1=digital
-            $query->where('type', (int) $request->query('type'));
+            $query->where('type', (string) $request->query('type'));
         }
 
         if ($request->filled('min_price')) {
@@ -60,7 +60,7 @@ class ProductsController extends BaseController
             if (!$userId) {
                 return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
             }
-            $query->where('user_id', $userId);
+            $query->where('user_id', (string) $userId);
         }
 
         $paginator = $query->paginate($perPage);
@@ -227,19 +227,19 @@ class ProductsController extends BaseController
         ]);
 
         $product = new Product();
-        $product->user_id = $userId;
+        $product->user_id = (string) $userId;
         $product->name = $validated['name'];
         $product->description = $validated['description'] ?? '';
         $product->category = $validated['category'];
         $product->sub_category = $validated['sub_category'] ?? 0;
         $product->price = (float) $validated['price'];
         $product->currency = $validated['currency'];
-        $product->type = (int) $validated['type'];
-        $product->units = isset($validated['units']) ? (int) $validated['units'] : 0;
+        $product->type = (string) $validated['type'];
+        $product->units = isset($validated['units']) ? (string) $validated['units'] : '0';
         $product->location = $validated['location'] ?? '';
-        $product->status = 1; // Active
-        $product->active = 1;
-        $product->time = time();
+        $product->status = '1'; // Active
+        $product->active = '1';
+        $product->time = (string) time();
         $product->save();
 
         if (!empty($validated['images'])) {

@@ -37,11 +37,12 @@ class Product extends Model
 
     protected $casts = [
         'price' => 'decimal:2',
-        'units' => 'integer',
-        'time' => 'integer',
-        'status' => 'integer',
-        'active' => 'integer',
-        'type' => 'integer',
+        'units' => 'string',
+        'time' => 'string',
+        'status' => 'string',
+        'active' => 'string',
+        'type' => 'string',
+        'user_id' => 'string',
     ];
 
     public function user(): BelongsTo
@@ -136,6 +137,37 @@ class Product extends Model
     public function getTotalSalesAttribute(): float
     {
         return $this->orders()->sum('final_price');
+    }
+
+    // Mutators to handle data type conversions
+    public function setTypeAttribute($value)
+    {
+        $this->attributes['type'] = (string) $value;
+    }
+
+    public function setStatusAttribute($value)
+    {
+        $this->attributes['status'] = (string) $value;
+    }
+
+    public function setActiveAttribute($value)
+    {
+        $this->attributes['active'] = (string) $value;
+    }
+
+    public function setUnitsAttribute($value)
+    {
+        $this->attributes['units'] = (string) $value;
+    }
+
+    public function setTimeAttribute($value)
+    {
+        $this->attributes['time'] = (string) $value;
+    }
+
+    public function setUserIdAttribute($value)
+    {
+        $this->attributes['user_id'] = (string) $value;
     }
 }
 
