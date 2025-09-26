@@ -259,6 +259,922 @@
     {
       "name": "Games - Create",
       "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"game_name\": \"2048\",\n  \"game_link\": \"https://example.com/games/2048\"\n}"},"url":{"raw":"{{base_url}}/api/v1/games","host":["{{base_url}}"],"path":["api","v1","games"]}}
+    },
+    {
+      "name": "Forums - Browse",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums?type=all&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums"],
+          "query": [
+            {"key":"type","value":"all"},
+            {"key":"per_page","value":"12"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Forums - My Forums",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums?type=my_forums",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums"],
+          "query": [{"key":"type","value":"my_forums"}]
+        }
+      }
+    },
+    {
+      "name": "Forums - Suggested",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums?type=suggested",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums"],
+          "query": [{"key":"type","value":"suggested"}]
+        }
+      }
+    },
+    {
+      "name": "Forums - Meta",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/meta",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","meta"]
+        }
+      }
+    },
+    {
+      "name": "Forums - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Tech Discussion\",\n  \"description\": \"Discuss latest technology trends\",\n  \"category\": 1,\n  \"privacy\": \"public\",\n  \"join_privacy\": \"public\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums"]
+        }
+      }
+    },
+    {
+      "name": "Forums - Get Forum",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1"]
+        }
+      }
+    },
+    {
+      "name": "Forums - Get Topics",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/topics?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","topics"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Forums - Create Topic",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"subject\": \"New iPhone Release\",\n  \"content\": \"What do you think about the new iPhone features?\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/topics",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","topics"]
+        }
+      }
+    },
+    {
+      "name": "Forums - Get Topic Replies",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/topics/1/replies?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","topics","1","replies"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Forums - Create Reply",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"content\": \"I think the camera improvements are amazing!\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/topics/1/replies",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","topics","1","replies"]
+        }
+      }
+    },
+    {
+      "name": "Forums - Members",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/members",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","members"]
+        }
+      }
+    },
+    {
+      "name": "Forums - Search",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/search?q=technology&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","search"],
+          "query": [
+            {"key":"q","value":"technology"},
+            {"key":"per_page","value":"12"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Forums - My Threads",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/my-threads?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","my-threads"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Forums - My Messages",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/my-messages?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","my-messages"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Jobs - Browse",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs?type=all&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","jobs"],
+          "query": [
+            {"key":"type","value":"all"},
+            {"key":"per_page","value":"12"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Jobs - My Jobs",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs?type=my_jobs&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","jobs"],
+          "query": [
+            {"key":"type","value":"my_jobs"},
+            {"key":"per_page","value":"12"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Jobs - Applied Jobs",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs?type=applied_jobs&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","jobs"],
+          "query": [
+            {"key":"type","value":"applied_jobs"},
+            {"key":"per_page","value":"12"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Jobs - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Senior PHP Developer\",\n  \"description\": \"We are looking for an experienced PHP developer to join our team. You will be responsible for developing and maintaining web applications using Laravel framework.\",\n  \"company\": \"Tech Solutions Inc\",\n  \"location\": \"New York, NY\",\n  \"salary\": 80000,\n  \"type\": \"full-time\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","jobs"]
+        }
+      }
+    },
+    {
+      "name": "Jobs - Meta",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs/meta",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","jobs","meta"]
+        }
+      }
+    },
+    {
+      "name": "Jobs - Details",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","jobs","1"]
+        }
+      }
+    },
+    {
+      "name": "Jobs - Applications",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs/1/applications?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","jobs","1","applications"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Jobs - Apply",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cover_letter\": \"I am very interested in this position and believe my skills match your requirements perfectly.\",\n  \"resume_url\": \"https://example.com/resume.pdf\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs/1/apply",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","jobs","1","apply"]
+        }
+      }
+    },
+    {
+      "name": "Jobs - Search",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/jobs/search?term=developer",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","jobs","search"],
+          "query": [{"key":"term","value":"developer"}]
+        }
+      }
+    },
+    {
+      "name": "Jobs - My Applications",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/my-applications?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","my-applications"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Offers - Browse",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/offers?type=all&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","offers"],
+          "query": [
+            {"key":"type","value":"all"},
+            {"key":"per_page","value":"12"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Offers - My Offers",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/offers?type=my_offers&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","offers"],
+          "query": [
+            {"key":"type","value":"my_offers"},
+            {"key":"per_page","value":"12"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Offers - Applied Offers",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/offers?type=applied_offers&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","offers"],
+          "query": [
+            {"key":"type","value":"applied_offers"},
+            {"key":"per_page","value":"12"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "Offers - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Web Development Services\",\n  \"description\": \"Professional web development services including frontend and backend development using modern technologies.\",\n  \"price\": 1500,\n  \"currency\": \"USD\",\n  \"location\": \"Remote\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/offers",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","offers"]
+        }
+      }
+    },
+    {
+      "name": "Offers - Meta",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/offers/meta",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","offers","meta"]
+        }
+      }
+    },
+    {
+      "name": "Offers - Details",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/offers/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","offers","1"]
+        }
+      }
+    },
+    {
+      "name": "Offers - Applications",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/offers/1/applications?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","offers","1","applications"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Offers - Apply",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/offers/1/apply",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","offers","1","apply"]
+        }
+      }
+    },
+    {
+      "name": "Offers - Search",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/offers/search?term=web development",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","offers","search"],
+          "query": [{"key":"term","value":"web development"}]
+        }
+      }
+    },
+    {
+      "name": "Offers - My Applications",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/my-offer-applications?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","my-offer-applications"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Friends - List",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends?type=all&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends"],
+          "query": [{"key":"type","value":"all"},{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Friends - Search",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends/search?term=john&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends","search"],
+          "query": [{"key":"term","value":"john"},{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Friends - Requests",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends/requests?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends","requests"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Friends - Send Request",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": \"1234\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends/send-request",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends","send-request"]
+        }
+      }
+    },
+    {
+      "name": "Friends - Accept Request",
+      "request": {
+        "method": "POST",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends/requests/1/accept",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends","requests","1","accept"]
+        }
+      }
+    },
+    {
+      "name": "Friends - Decline Request",
+      "request": {
+        "method": "POST",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends/requests/1/decline",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends","requests","1","decline"]
+        }
+      }
+    },
+    {
+      "name": "Friends - Remove Friend",
+      "request": {
+        "method": "DELETE",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends","1"]
+        }
+      }
+    },
+    {
+      "name": "Friends - Block User",
+      "request": {
+        "method": "POST",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends/1/block",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends","1","block"]
+        }
+      }
+    },
+    {
+      "name": "Friends - Unblock User",
+      "request": {
+        "method": "POST",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends/1/unblock",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends","1","unblock"]
+        }
+      }
+    },
+    {
+      "name": "Friends - Suggested",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends/suggested?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends","suggested"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Common Things - List",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/common-things?type=all&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","common-things"],
+          "query": [{"key":"type","value":"all"},{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Common Things - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Laptop for Sale\",\n  \"description\": \"MacBook Pro 13-inch, excellent condition, barely used.\",\n  \"category_id\": \"2\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/common-things",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","common-things"]
+        }
+      }
+    },
+    {
+      "name": "Common Things - Show",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/common-things/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","common-things","1"]
+        }
+      }
+    },
+    {
+      "name": "Common Things - Update",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Updated Laptop for Sale\",\n  \"description\": \"MacBook Pro 13-inch, excellent condition, barely used. Price negotiable.\",\n  \"category_id\": \"2\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/common-things/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","common-things","1"]
+        }
+      }
+    },
+    {
+      "name": "Common Things - Delete",
+      "request": {
+        "method": "DELETE",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/common-things/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","common-things","1"]
+        }
+      }
+    },
+    {
+      "name": "Common Things - Search",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/common-things/search?term=laptop&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","common-things","search"],
+          "query": [{"key":"term","value":"laptop"},{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Common Things - Categories",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/common-things/categories",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","common-things","categories"]
+        }
+      }
+    },
+    {
+      "name": "Common Things - My Things",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/my-common-things?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","my-common-things"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Common Things - By Category",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/common-things/category/2?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","common-things","category","2"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Fundings - List",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/fundings?type=all&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","fundings"],
+          "query": [{"key":"type","value":"all"},{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Fundings - Create",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Help Build a School\",\n  \"description\": \"We need funding to build a new school in rural area to provide education for 200 children.\",\n  \"amount\": 100,\n  \"currency\": \"USD\",\n  \"category_id\": \"2\",\n  \"funding_type\": \"4\",\n  \"target_amount\": 50000,\n  \"deadline\": \"2025-12-31\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/fundings",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","fundings"]
+        }
+      }
+    },
+    {
+      "name": "Fundings - Show",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/fundings/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","fundings","1"]
+        }
+      }
+    },
+    {
+      "name": "Fundings - Update",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Updated: Help Build a School\",\n  \"description\": \"We need funding to build a new school in rural area to provide education for 200 children. Updated target amount.\",\n  \"amount\": 100,\n  \"currency\": \"USD\",\n  \"category_id\": \"2\",\n  \"funding_type\": \"4\",\n  \"target_amount\": 75000,\n  \"deadline\": \"2025-12-31\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/fundings/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","fundings","1"]
+        }
+      }
+    },
+    {
+      "name": "Fundings - Delete",
+      "request": {
+        "method": "DELETE",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/fundings/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","fundings","1"]
+        }
+      }
+    },
+    {
+      "name": "Fundings - Search",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/fundings/search?term=school&per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","fundings","search"],
+          "query": [{"key":"term","value":"school"},{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Fundings - Categories",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/fundings/categories",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","fundings","categories"]
+        }
+      }
+    },
+    {
+      "name": "Fundings - My Fundings",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/my-fundings?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","my-fundings"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Fundings - By Category",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/fundings/category/2?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","fundings","category","2"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
+    },
+    {
+      "name": "Fundings - Contribute",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 500,\n  \"message\": \"Happy to support this great cause!\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/fundings/1/contribute",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","fundings","1","contribute"]
+        }
+      }
+    },
+    {
+      "name": "Fundings - My Contributions",
+      "request": {
+        "method": "GET",
+        "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
+        "url": {
+          "raw": "{{base_url}}/api/v1/my-contributions?per_page=12",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","my-contributions"],
+          "query": [{"key":"per_page","value":"12"}]
+        }
+      }
     }
   ],
   "variable": [

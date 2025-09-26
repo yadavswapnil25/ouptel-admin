@@ -5,40 +5,44 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class JobApplication extends Model
+class CommonThing extends Model
 {
-    protected $table = 'Wo_Job_Apply';
+    protected $table = 'Wo_CommonThings';
     protected $primaryKey = 'id';
     public $timestamps = false;
 
     protected $fillable = [
-        'job_id',
+        'title',
+        'description',
+        'category_id',
         'user_id',
+        'status',
         'time',
     ];
 
     protected $casts = [
-        'job_id' => 'string',
+        'category_id' => 'string',
         'user_id' => 'string',
+        'status' => 'string',
         'time' => 'string',
     ];
 
-    // Note: Wo_Jobs table might not exist
-    // public function job(): BelongsTo
-    // {
-    //     return $this->belongsTo(Job::class, 'job_id', 'id');
-    // }
-
-    // Note: User relationship might not exist
+    // Note: Wo_Users table might not exist
     // public function user(): BelongsTo
     // {
     //     return $this->belongsTo(User::class, 'user_id', 'user_id');
     // }
 
+    // Note: Wo_CommonThingCategories table might not exist
+    // public function category(): BelongsTo
+    // {
+    //     return $this->belongsTo(CommonThingCategory::class, 'category_id', 'id');
+    // }
+
     // Mutators
-    public function setJobIdAttribute($value)
+    public function setCategoryIdAttribute($value)
     {
-        $this->attributes['job_id'] = (string) $value;
+        $this->attributes['category_id'] = (string) $value;
     }
 
     public function setUserIdAttribute($value)
@@ -46,11 +50,10 @@ class JobApplication extends Model
         $this->attributes['user_id'] = (string) $value;
     }
 
-    // Note: status column doesn't exist in Wo_Job_Apply table
-    // public function setStatusAttribute($value)
-    // {
-    //     $this->attributes['status'] = (string) $value;
-    // }
+    public function setStatusAttribute($value)
+    {
+        $this->attributes['status'] = (string) $value;
+    }
 
     public function setTimeAttribute($value)
     {
@@ -62,17 +65,16 @@ class JobApplication extends Model
     }
 
     // Accessors
-    // Note: status column doesn't exist in Wo_Job_Apply table
-    // public function getStatusAttribute($value)
-    // {
-    //     $statuses = [
-    //         '1' => 'pending',
-    //         '2' => 'reviewed',
-    //         '3' => 'accepted',
-    //         '4' => 'rejected',
-    //     ];
-    //     return $statuses[$value] ?? 'pending';
-    // }
+    public function getStatusAttribute($value)
+    {
+        $statuses = [
+            '1' => 'active',
+            '2' => 'inactive',
+            '3' => 'pending',
+            '4' => 'rejected',
+        ];
+        return $statuses[$value] ?? 'active';
+    }
 
     public function getTimeAttribute($value)
     {

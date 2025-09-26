@@ -5,28 +5,28 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class JobApplication extends Model
+class OfferApplication extends Model
 {
-    protected $table = 'Wo_Job_Apply';
+    protected $table = 'Wo_Offer_Apply';
     protected $primaryKey = 'id';
     public $timestamps = false;
 
     protected $fillable = [
-        'job_id',
+        'offer_id',
         'user_id',
         'time',
     ];
 
     protected $casts = [
-        'job_id' => 'string',
+        'offer_id' => 'string',
         'user_id' => 'string',
         'time' => 'string',
     ];
 
-    // Note: Wo_Jobs table might not exist
-    // public function job(): BelongsTo
+    // Note: Wo_Offers table might not exist
+    // public function offer(): BelongsTo
     // {
-    //     return $this->belongsTo(Job::class, 'job_id', 'id');
+    //     return $this->belongsTo(Offer::class, 'offer_id', 'id');
     // }
 
     // Note: User relationship might not exist
@@ -36,21 +36,15 @@ class JobApplication extends Model
     // }
 
     // Mutators
-    public function setJobIdAttribute($value)
+    public function setOfferIdAttribute($value)
     {
-        $this->attributes['job_id'] = (string) $value;
+        $this->attributes['offer_id'] = (string) $value;
     }
 
     public function setUserIdAttribute($value)
     {
         $this->attributes['user_id'] = (string) $value;
     }
-
-    // Note: status column doesn't exist in Wo_Job_Apply table
-    // public function setStatusAttribute($value)
-    // {
-    //     $this->attributes['status'] = (string) $value;
-    // }
 
     public function setTimeAttribute($value)
     {
@@ -60,19 +54,6 @@ class JobApplication extends Model
             $this->attributes['time'] = (string) time();
         }
     }
-
-    // Accessors
-    // Note: status column doesn't exist in Wo_Job_Apply table
-    // public function getStatusAttribute($value)
-    // {
-    //     $statuses = [
-    //         '1' => 'pending',
-    //         '2' => 'reviewed',
-    //         '3' => 'accepted',
-    //         '4' => 'rejected',
-    //     ];
-    //     return $statuses[$value] ?? 'pending';
-    // }
 
     public function getTimeAttribute($value)
     {

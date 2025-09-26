@@ -17,11 +17,18 @@ use App\Http\Controllers\Api\V1\ProductsController;
 use App\Http\Controllers\Api\V1\DirectoryController;
 use App\Http\Controllers\Api\V1\EventsController;
 use App\Http\Controllers\Api\V1\GamesController;
+use App\Http\Controllers\Api\V1\ForumsController;
+use App\Http\Controllers\Api\V1\JobsController;
+use App\Http\Controllers\Api\V1\OffersController;
+use App\Http\Controllers\Api\V1\FriendsController;
+use App\Http\Controllers\Api\V1\CommonThingsController;
+use App\Http\Controllers\Api\V1\FundingsController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
 Route::post('/create-album', [AlbumController::class, 'store']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/debug-users', [AuthController::class, 'debugUsers']);
 Route::get('/watch', [WatchController::class, 'index']);
 Route::get('/reels', [ReelsController::class, 'index']);
 Route::get('/saved-posts', [SavedPostsController::class, 'index']);
@@ -52,5 +59,82 @@ Route::get('/events/interested', [EventsController::class, 'interested']);
 Route::get('/my-events', [EventsController::class, 'mine']);
 Route::get('/games', [GamesController::class, 'index']);
 Route::post('/games', [GamesController::class, 'store']);
+
+// Forum routes
+Route::get('/forums', [ForumsController::class, 'index']);
+Route::post('/forums', [ForumsController::class, 'store']);
+Route::get('/forums/meta', [ForumsController::class, 'meta']);
+Route::get('/forums/{id}', [ForumsController::class, 'show']);
+Route::get('/forums/{id}/topics', [ForumsController::class, 'topics']);
+Route::post('/forums/{id}/topics', [ForumsController::class, 'createTopic']);
+Route::get('/forums/{forumId}/topics/{topicId}/replies', [ForumsController::class, 'topicReplies']);
+Route::post('/forums/{forumId}/topics/{topicId}/replies', [ForumsController::class, 'createReply']);
+
+// Forum menu routes
+Route::get('/forums/{id}/members', [ForumsController::class, 'members']);
+Route::get('/forums/search', [ForumsController::class, 'search']);
+Route::get('/my-threads', [ForumsController::class, 'myThreads']);
+Route::get('/my-messages', [ForumsController::class, 'myMessages']);
+
+// Job routes
+Route::get('/jobs', [JobsController::class, 'index']);
+Route::post('/jobs', [JobsController::class, 'store']);
+Route::get('/jobs/meta', [JobsController::class, 'meta']);
+Route::get('/jobs/{id}', [JobsController::class, 'show']);
+Route::get('/jobs/{id}/applications', [JobsController::class, 'applications']);
+Route::post('/jobs/{id}/apply', [JobsController::class, 'apply']);
+
+// Job menu routes
+Route::get('/jobs/search', [JobsController::class, 'search']);
+Route::get('/my-applications', [JobsController::class, 'myApplications']);
+
+// Offer routes
+Route::get('/offers', [OffersController::class, 'index']);
+Route::post('/offers', [OffersController::class, 'store']);
+Route::get('/offers/meta', [OffersController::class, 'meta']);
+Route::get('/offers/{id}', [OffersController::class, 'show']);
+Route::get('/offers/{id}/applications', [OffersController::class, 'applications']);
+Route::post('/offers/{id}/apply', [OffersController::class, 'apply']);
+
+// Offer menu routes
+Route::get('/offers/search', [OffersController::class, 'search']);
+Route::get('/my-offer-applications', [OffersController::class, 'myApplications']);
+
+// Friend routes
+Route::get('/friends', [FriendsController::class, 'index']);
+Route::get('/friends/search', [FriendsController::class, 'search']);
+Route::get('/friends/requests', [FriendsController::class, 'requests']);
+Route::post('/friends/send-request', [FriendsController::class, 'sendRequest']);
+Route::post('/friends/requests/{id}/accept', [FriendsController::class, 'acceptRequest']);
+Route::post('/friends/requests/{id}/decline', [FriendsController::class, 'declineRequest']);
+Route::delete('/friends/{id}', [FriendsController::class, 'removeFriend']);
+Route::post('/friends/{id}/block', [FriendsController::class, 'blockUser']);
+Route::post('/friends/{id}/unblock', [FriendsController::class, 'unblockUser']);
+Route::get('/friends/suggested', [FriendsController::class, 'suggested']);
+
+// Common Things routes
+Route::get('/common-things', [CommonThingsController::class, 'index']);
+Route::post('/common-things', [CommonThingsController::class, 'store']);
+Route::get('/common-things/{id}', [CommonThingsController::class, 'show']);
+Route::put('/common-things/{id}', [CommonThingsController::class, 'update']);
+Route::delete('/common-things/{id}', [CommonThingsController::class, 'destroy']);
+Route::get('/common-things/search', [CommonThingsController::class, 'search']);
+Route::get('/common-things/categories', [CommonThingsController::class, 'categories']);
+Route::get('/my-common-things', [CommonThingsController::class, 'myThings']);
+Route::get('/common-things/category/{categoryId}', [CommonThingsController::class, 'byCategory']);
+
+// Funding routes
+Route::get('/fundings', [FundingsController::class, 'index']);
+Route::post('/fundings', [FundingsController::class, 'store']);
+Route::get('/fundings/{id}', [FundingsController::class, 'show']);
+Route::put('/fundings/{id}', [FundingsController::class, 'update']);
+Route::delete('/fundings/{id}', [FundingsController::class, 'destroy']);
+Route::get('/fundings/search', [FundingsController::class, 'search']);
+Route::get('/fundings/categories', [FundingsController::class, 'categories']);
+Route::get('/my-fundings', [FundingsController::class, 'myFundings']);
+Route::get('/fundings/category/{categoryId}', [FundingsController::class, 'byCategory']);
+Route::post('/fundings/{id}/contribute', [FundingsController::class, 'contribute']);
+Route::get('/my-contributions', [FundingsController::class, 'myContributions']);
+Route::get('/fundings-debug', [FundingsController::class, 'debug']);
 
 

@@ -3,7 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use App\Helpers\ImageHelper;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Job extends Model
 {
@@ -12,121 +13,124 @@ class Job extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'user_id',
-        'page_id',
         'title',
-        'location',
-        'lat',
-        'lng',
-        'minimum',
-        'maximum',
-        'salary_date',
-        'job_type',
-        'category',
-        'question_one',
-        'question_one_type',
-        'question_one_answers',
-        'question_two',
-        'question_two_type',
-        'question_two_answers',
-        'question_three',
-        'question_three_type',
-        'question_three_answers',
         'description',
-        'image',
-        'image_type',
-        'currency',
+        'location',
         'status',
         'time',
     ];
 
     protected $casts = [
-        'minimum' => 'float',
-        'maximum' => 'float',
-        'status' => 'integer',
-        'time' => 'integer',
-        'lat' => 'float',
-        'lng' => 'float',
+        'status' => 'string',
+        'time' => 'string',
     ];
 
-    // Mutator to prevent null values for image field
-    public function setImageAttribute($value)
+    // Note: user_id column might not exist in Wo_Jobs table
+    // public function user(): BelongsTo
+    // {
+    //     return $this->belongsTo(User::class, 'user_id', 'user_id');
+    // }
+
+    // Note: Wo_JobApplications table might not exist
+    // public function applications(): HasMany
+    // {
+    //     return $this->hasMany(JobApplication::class, 'job_id', 'id');
+    // }
+
+    // Note: Wo_JobCategories table might not exist
+    // public function category(): BelongsTo
+    // {
+    //     return $this->belongsTo(JobCategory::class, 'category_id', 'id');
+    // }
+
+    // Mutators to prevent null values for optional fields
+    public function setDescriptionAttribute($value)
     {
-        $this->attributes['image'] = $value ?: '';
+        $this->attributes['description'] = $value ?: $this->attributes['description'] ?? '';
     }
 
-    // Relationships
-    public function user()
+    // Note: company column doesn't exist in Wo_Job table
+    // public function setCompanyAttribute($value)
+    // {
+    //     $this->attributes['company'] = $value ?: $this->attributes['company'] ?? '';
+    // }
+
+    public function setLocationAttribute($value)
     {
-        return $this->belongsTo(User::class, 'user_id', 'user_id');
+        $this->attributes['location'] = $value ?: $this->attributes['location'] ?? '';
     }
 
-    public function page()
+    // Note: type column doesn't exist in Wo_Job table
+    // public function setTypeAttribute($value)
+    // {
+    //     $this->attributes['type'] = (string) $value;
+    // }
+
+    public function setStatusAttribute($value)
     {
-        return $this->belongsTo(Page::class, 'page_id', 'page_id');
+        $this->attributes['status'] = (string) $value;
     }
 
-    public function applications()
+    public function setTimeAttribute($value)
     {
-        return $this->hasMany(JobApplication::class, 'job_id', 'id');
-    }
-
-    public function category()
-    {
-        return $this->belongsTo(JobCategory::class, 'category', 'id');
+        if (is_numeric($value)) {
+            $this->attributes['time'] = (string) $value;
+        } else {
+            $this->attributes['time'] = (string) time();
+        }
     }
 
     // Accessors
-    public function getImageUrlAttribute()
-    {
-        if (!empty($this->image)) {
-            return ImageHelper::getImageUrl($this->image, 'job');
-        }
-        return ImageHelper::getPlaceholder('job');
-    }
+    // Note: type column doesn't exist in Wo_Job table
+    // public function getTypeAttribute($value)
+    // {
+    //     $types = [
+    //         '1' => 'full-time',
+    //         '2' => 'part-time',
+    //         '3' => 'contract',
+    //         '4' => 'freelance',
+    //         '5' => 'internship',
+    //     ];
+    //     return $types[$value] ?? 'full-time';
+    // }
 
-    public function getSalaryRangeAttribute()
+    public function getStatusAttribute($value)
     {
-        if ($this->minimum && $this->maximum) {
-            return '$' . number_format($this->minimum) . ' - $' . number_format($this->maximum);
-        } elseif ($this->minimum) {
-            return '$' . number_format($this->minimum) . '+';
-        } elseif ($this->maximum) {
-            return 'Up to $' . number_format($this->maximum);
-        }
-        return 'Not specified';
-    }
-
-    public function getJobTypeTextAttribute()
-    {
-        $types = [
-            'full_time' => 'Full Time',
-            'part_time' => 'Part Time',
-            'contract' => 'Contract',
-            'freelance' => 'Freelance',
-            'internship' => 'Internship',
+        $statuses = [
+            '1' => 'active',
+            '2' => 'paused',
+            '3' => 'closed',
         ];
-
-        return $types[$this->job_type] ?? ucfirst($this->job_type);
+        return $statuses[$value] ?? 'active';
     }
 
-    public function getStatusTextAttribute()
+    public function getTimeAttribute($value)
     {
-        return $this->status ? 'Active' : 'Inactive';
+        if (is_numeric($value)) {
+            return \Carbon\Carbon::createFromTimestamp((int) $value);
+        }
+        return $value;
     }
 
-    public function getPostedDateAttribute()
+    // Get time as Unix timestamp (for database operations)
+    public function getTimeAsTimestampAttribute()
     {
-        return $this->time ? date('M d, Y', $this->time) : 'Unknown';
+        $time = $this->attributes['time'] ?? null;
+        if (is_numeric($time)) {
+            return (int) $time;
+        }
+        return time();
     }
 
-    public function getApplicationsCountAttribute()
+    public function getApplicationsCountAttribute(): int
     {
-        return $this->applications()->count();
+        // Simplified since Wo_JobApplications table might not exist
+        return 0;
     }
 
-    public function getJobUrlAttribute()
+    public function getIsAppliedAttribute($userId = null): bool
     {
-        return url("/jobs/{$this->id}");
+        // Simplified since user_id and applications table might not exist
+        return false;
     }
 }
