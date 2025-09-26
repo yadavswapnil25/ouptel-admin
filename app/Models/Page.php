@@ -23,14 +23,12 @@ class Page extends Model
         'website',
         'phone',
         'address',
-        'page_created',
         'active',
     ];
 
     protected $casts = [
         'verified' => 'boolean',
         'active' => 'boolean',
-        'page_created' => 'datetime',
     ];
 
     /**

@@ -169,8 +169,6 @@ class PagesController extends BaseController
         $page->website = $validated['website'] ?? '';
         $page->phone = $validated['phone'] ?? '';
         $page->address = $validated['address'] ?? '';
-        // Legacy schemas often store unix timestamp
-        $page->page_created = time();
         $page->save();
 
         return response()->json([
