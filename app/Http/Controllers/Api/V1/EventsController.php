@@ -12,6 +12,12 @@ class EventsController extends BaseController
 {
     private function mapEvent(Event $event): array
     {
+        // Determine if cover field contains an image path or text
+        $isImagePath = $event->cover && (
+            str_contains($event->cover, 'events/images/') || 
+            str_contains($event->cover, 'events/covers/')
+        );
+        
         return [
             'id' => $event->id,
             'name' => $event->name,
@@ -22,6 +28,8 @@ class EventsController extends BaseController
             'end_date' => $event->end_date?->format('Y-m-d'),
             'end_time' => $event->end_time?->format('H:i'),
             'cover_url' => $event->cover_url,
+            'image_url' => $isImagePath ? asset('storage/' . $event->cover) : null,
+            'cover_image_url' => null, // Since we store only one image in cover field
             'status' => $event->status_text,
             'counts' => [
                 'going' => $event->going_count,
