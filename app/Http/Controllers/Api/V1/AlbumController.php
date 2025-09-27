@@ -111,11 +111,19 @@ class AlbumController extends BaseController
         $paginator = $query->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (Post $post) {
+            // Get album images from AlbumMedia table
+            $albumImages = \App\Models\AlbumMedia::where('post_id', $post->id)->get();
+            $imageUrls = $albumImages->map(function($albumImage) {
+                return asset('storage/' . $albumImage->image);
+            })->toArray();
+
             return [
                 'id' => $post->id,
                 'post_id' => $post->post_id,
                 'album_name' => $post->album_name,
                 'cover_image' => $post->post_image_url,
+                'images_count' => $albumImages->count(),
+                'image_urls' => $imageUrls,
                 'created_at' => optional($post->time)->toIso8601String(),
                 'user' => [
                     'user_id' => optional($post->user)->user_id,
