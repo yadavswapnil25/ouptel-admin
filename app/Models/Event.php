@@ -54,8 +54,8 @@ class Event extends Model
         
         static::deleting(function ($event) {
             // Delete cover file when event is deleted
-            if ($event->cover && Storage::disk('public')->exists('events/covers/' . $event->cover)) {
-                Storage::disk('public')->delete('events/covers/' . $event->cover);
+            if ($event->cover && Storage::disk('public')->exists($event->cover)) {
+                Storage::disk('public')->delete($event->cover);
             }
         });
     }

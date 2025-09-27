@@ -97,7 +97,25 @@ class EventsController extends BaseController
             'end_date' => ['required', 'date_format:Y-m-d'],
             'end_time' => ['required', 'date_format:H:i'],
             'cover' => ['nullable', 'string'],
+            'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'], // 2MB max
+            'cover_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], // 5MB max
         ]);
+
+        // Handle image uploads
+        $imagePath = '';
+        $coverImagePath = '';
+        
+        if ($request->hasFile('image')) {
+            $imageFile = $request->file('image');
+            $imageName = 'event_' . time() . '_' . uniqid() . '.' . $imageFile->getClientOriginalExtension();
+            $imagePath = $imageFile->storeAs('events/images', $imageName, 'public');
+        }
+        
+        if ($request->hasFile('cover_image')) {
+            $coverFile = $request->file('cover_image');
+            $coverName = 'event_cover_' . time() . '_' . uniqid() . '.' . $coverFile->getClientOriginalExtension();
+            $coverImagePath = $coverFile->storeAs('events/covers', $coverName, 'public');
+        }
 
         $event = new Event();
         $event->name = $validated['name'];
@@ -108,7 +126,16 @@ class EventsController extends BaseController
         $event->end_date = $validated['end_date'];
         $event->end_time = $validated['end_time'];
         $event->poster_id = $userId;
-        $event->cover = $validated['cover'] ?? '';
+        
+        // Store the main image in cover field if uploaded, otherwise use cover text
+        if ($imagePath) {
+            $event->cover = $imagePath;
+        } elseif ($coverImagePath) {
+            $event->cover = $coverImagePath;
+        } else {
+            $event->cover = $validated['cover'] ?? '';
+        }
+        
         $event->save();
 
         return response()->json([
@@ -117,12 +144,18 @@ class EventsController extends BaseController
             'data' => [
                 'id' => $event->id,
                 'name' => $event->name,
+                'description' => $event->description,
+                'location' => $event->location,
                 'start_date' => $event->start_date?->format('Y-m-d'),
                 'start_time' => $event->start_time?->format('H:i'),
                 'end_date' => $event->end_date?->format('Y-m-d'),
                 'end_time' => $event->end_time?->format('H:i'),
+                'image_url' => $imagePath ? asset('storage/' . $imagePath) : null,
+                'cover_image_url' => $coverImagePath ? asset('storage/' . $coverImagePath) : null,
                 'cover_url' => $event->cover_url,
                 'status' => $event->status_text,
+                'is_owner' => true,
+                'created_at' => $event->created_at?->format('c'),
             ],
         ], 201);
     }
