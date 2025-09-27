@@ -1175,6 +1175,150 @@
           "query": [{"key":"per_page","value":"12"}]
         }
       }
+    },
+    {
+      "name": "New Feed - Update Order",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"hash\": \"c5193e31df80913244e6\",\n  \"type\": 0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/new-feed/update-order",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","new-feed","update-order"]
+        }
+      }
+    },
+    {
+      "name": "New Feed - Get Feed",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/new-feed?per_page=10",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","new-feed"],
+          "query": [{"key":"per_page","value":"10"}]
+        }
+      }
+    },
+    {
+      "name": "New Feed - Get Types",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/new-feed/types",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","new-feed","types"]
+        }
+      }
+    },
+    {
+      "name": "People Follow - Update Order",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"hash\": \"c5193e31df80913244e6\",\n  \"type\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/people-follow/update-order",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","people-follow","update-order"]
+        }
+      }
+    },
+    {
+      "name": "People Follow - Get Feed",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/people-follow/feed?per_page=10",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","people-follow","feed"],
+          "query": [{"key":"per_page","value":"10"}]
+        }
+      }
+    },
+    {
+      "name": "People Follow - Get Following",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/people-follow/following?per_page=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","people-follow","following"],
+          "query": [{"key":"per_page","value":"20"}]
+        }
+      }
+    },
+    {
+      "name": "People Follow - Get Types",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/people-follow/types",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","people-follow","types"]
+        }
+      }
+    },
+    {
+      "name": "People Follow - Follow User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": \"1234\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/people-follow/follow",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","people-follow","follow"]
+        }
+      }
+    },
+    {
+      "name": "People Follow - Unfollow User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/people-follow/1234/unfollow",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","people-follow","1234","unfollow"]
+        }
+      }
     }
   ],
   "variable": [

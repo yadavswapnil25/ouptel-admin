@@ -23,6 +23,8 @@ use App\Http\Controllers\Api\V1\OffersController;
 use App\Http\Controllers\Api\V1\FriendsController;
 use App\Http\Controllers\Api\V1\CommonThingsController;
 use App\Http\Controllers\Api\V1\FundingsController;
+use App\Http\Controllers\Api\V1\NewFeedController;
+use App\Http\Controllers\Api\V1\PeopleFollowController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -136,5 +138,18 @@ Route::get('/fundings/category/{categoryId}', [FundingsController::class, 'byCat
 Route::post('/fundings/{id}/contribute', [FundingsController::class, 'contribute']);
 Route::get('/my-contributions', [FundingsController::class, 'myContributions']);
 Route::get('/fundings-debug', [FundingsController::class, 'debug']);
+
+// New Feed routes (mimics WoWonder requests.php functionality)
+Route::post('/new-feed/update-order', [NewFeedController::class, 'updateOrderBy']);
+Route::get('/new-feed', [NewFeedController::class, 'getFeed']);
+Route::get('/new-feed/types', [NewFeedController::class, 'getFeedTypes']);
+
+// People Follow routes (mimics WoWonder requests.php?f=update_order_by&type=1)
+Route::post('/people-follow/update-order', [PeopleFollowController::class, 'updateOrderBy']);
+Route::get('/people-follow/feed', [PeopleFollowController::class, 'getPeopleFollowFeed']);
+Route::get('/people-follow/following', [PeopleFollowController::class, 'getFollowing']);
+Route::get('/people-follow/types', [PeopleFollowController::class, 'getPeopleFollowTypes']);
+Route::post('/people-follow/follow', [PeopleFollowController::class, 'followUser']);
+Route::post('/people-follow/{userId}/unfollow', [PeopleFollowController::class, 'unfollowUser']);
 
 
