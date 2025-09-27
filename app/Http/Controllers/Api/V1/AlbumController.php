@@ -26,7 +26,7 @@ class AlbumController extends BaseController
         $validated = $request->validate([
             'album_name' => ['required', 'string', 'max:255'],
             'images' => ['sometimes', 'array'],
-            'images.*' => ['string'],
+            'images.*' => ['image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'], // 2MB max per image
         ]);
 
         $post = new Post();
@@ -36,8 +36,19 @@ class AlbumController extends BaseController
         // Do not store concatenated images in Wo_Posts.multi_image; persist in Wo_Albums_Media
         // Some legacy schemas expect a string '0'/'1' here, not numeric
         $post->multi_image = $post->multi_image_post ? '1' : '0';
-        if (!empty($validated['images'])) {
-            $post->postPhoto = $validated['images'][0];
+        
+        // Handle file uploads and store paths
+        $imagePaths = [];
+        if ($request->hasFile('images')) {
+            foreach ($request->file('images') as $index => $imageFile) {
+                $imageName = 'album_' . time() . '_' . uniqid() . '_' . $index . '.' . $imageFile->getClientOriginalExtension();
+                $imagePath = $imageFile->storeAs('albums', $imageName, 'public');
+                $imagePaths[] = $imagePath;
+            }
+        }
+        
+        if (!empty($imagePaths)) {
+            $post->postPhoto = $imagePaths[0]; // First image as main photo
         }
         $post->postType = 'album';
         $post->active = 1;
@@ -52,8 +63,8 @@ class AlbumController extends BaseController
         }
 
         // Insert album media records
-        if (!empty($validated['images'])) {
-            foreach ($validated['images'] as $path) {
+        if (!empty($imagePaths)) {
+            foreach ($imagePaths as $path) {
                 \App\Models\AlbumMedia::create([
                     'post_id' => $post->id,
                     'image' => $path,
@@ -68,6 +79,10 @@ class AlbumController extends BaseController
                 'post_id' => $post->post_id,
                 'album_name' => $post->album_name,
                 'multi_image_post' => (bool) $post->multi_image_post,
+                'images_count' => count($imagePaths),
+                'image_urls' => array_map(function($path) {
+                    return asset('storage/' . $path);
+                }, $imagePaths),
                 'created_at' => optional($post->time)->toIso8601String(),
             ],
         ], 201);
