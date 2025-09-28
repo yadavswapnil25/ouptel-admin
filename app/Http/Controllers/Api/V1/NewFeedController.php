@@ -236,25 +236,80 @@ class NewFeedController extends Controller
         $posts = $query->limit($perPage)->get();
 
         return $posts->map(function ($post) use ($userId) {
+            // Get user information
+            $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
+            
+            // Get post reactions count
+            $reactionsCount = $this->getPostReactionsCount($post->id);
+            
+            // Get post comments count  
+            $commentsCount = $this->getPostCommentsCount($post->id);
+            
+            // Get album images if it's an album post
+            $albumImages = [];
+            if ($post->album_name && $post->multi_image_post) {
+                $albumImages = $this->getAlbumImages($post->id);
+            }
+            
             return [
                 'id' => $post->id,
+                'post_id' => $post->post_id ?? $post->id,
                 'user_id' => $post->user_id,
                 'post_text' => $post->postText ?? '',
+                'post_type' => $this->getPostType($post),
+                'post_privacy' => $post->postPrivacy ?? '0',
+                'post_privacy_text' => $this->getPostPrivacyText($post->postPrivacy ?? '0'),
+                
+                // Media content
+                'post_photo' => $post->postPhoto ?? '',
+                'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
                 'post_file' => $post->postFile ?? '',
-                'post_video' => $post->postVideo ?? '',
-                'post_likes' => $post->post_likes ?? 0,
-                'post_comments' => $post->post_comments ?? 0,
-                'post_shares' => $post->post_shares ?? 0,
-                'privacy' => 'public', // Default value since column doesn't exist
-                'active' => $post->active ?? '1',
+                'post_youtube' => $post->postYoutube ?? '',
+                'post_link' => $post->postLink ?? '',
+                'post_link_title' => $post->postLinkTitle ?? '',
+                'post_link_image' => $post->postLinkImage ?? '',
+                'post_link_content' => $post->postLinkContent ?? '',
+                
+                // Album data
+                'album_name' => $post->album_name ?? '',
+                'multi_image_post' => (bool) ($post->multi_image_post ?? false),
+                'album_images' => $albumImages,
+                'album_images_count' => count($albumImages),
+                
+                // Engagement metrics
+                'reactions_count' => $reactionsCount,
+                'comments_count' => $commentsCount,
+                'shares_count' => $post->postShare ?? 0,
+                'views_count' => $post->videoViews ?? 0,
+                
+                // User interaction
                 'is_liked' => $this->isPostLiked($post->id, $userId),
-                'is_owner' => $post->user_id === $userId,
+                'is_owner' => $post->user_id == $userId,
+                'is_boosted' => (bool) ($post->boosted ?? false),
+                'is_pinned' => false, // Would need additional field
+                
+                // Comments status
+                'comments_disabled' => (bool) ($post->comments_status ?? false),
+                
+                // Author information
                 'author' => [
                     'user_id' => $post->user_id,
-                    'username' => 'Unknown', // Would need to join with Wo_Users
-                    'avatar_url' => null,
+                    'username' => $user->username ?? 'Unknown',
+                    'name' => $user->name ?? $user->username ?? 'Unknown User',
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'verified' => (bool) ($user->verified ?? false),
+                    'is_admin' => (bool) ($user->admin ?? false),
                 ],
+                
+                // Page/Group context
+                'page_id' => $post->page_id ?? null,
+                'group_id' => $post->group_id ?? null,
+                'event_id' => $post->event_id ?? null,
+                
+                // Timestamps
                 'created_at' => $post->time ? date('c', $post->time) : null,
+                'created_at_human' => $post->time ? $this->getHumanTime($post->time) : null,
+                'time' => $post->time,
             ];
         })->toArray();
     }
@@ -291,5 +346,107 @@ class NewFeedController extends Controller
         ];
 
         return $types[$type] ?? 'Most Recent';
+    }
+
+    /**
+     * Get post type based on content
+     * 
+     * @param object $post
+     * @return string
+     */
+    private function getPostType($post): string
+    {
+        if (!empty($post->postPhoto)) return 'photo';
+        if (!empty($post->postYoutube)) return 'video';
+        if (!empty($post->postFile)) return 'file';
+        if (!empty($post->postLink)) return 'link';
+        if (!empty($post->postMap)) return 'location';
+        if (!empty($post->postRecord)) return 'audio';
+        if (!empty($post->postSticker)) return 'sticker';
+        if (!empty($post->album_name)) return 'album';
+        return 'text';
+    }
+
+    /**
+     * Get post privacy text
+     * 
+     * @param string $privacy
+     * @return string
+     */
+    private function getPostPrivacyText(string $privacy): string
+    {
+        return match($privacy) {
+            '0' => 'Public',
+            '1' => 'Friends',
+            '2' => 'Only Me',
+            '3' => 'Custom',
+            '4' => 'Group',
+            default => 'Public'
+        };
+    }
+
+    /**
+     * Get post reactions count
+     * 
+     * @param int $postId
+     * @return int
+     */
+    private function getPostReactionsCount(int $postId): int
+    {
+        // Note: Wo_PostReactions table might not exist
+        // In a real implementation, you would query this table
+        return 0;
+    }
+
+    /**
+     * Get post comments count
+     * 
+     * @param int $postId
+     * @return int
+     */
+    private function getPostCommentsCount(int $postId): int
+    {
+        // Note: Wo_Comments table might not exist
+        // In a real implementation, you would query this table
+        return 0;
+    }
+
+    /**
+     * Get album images for a post
+     * 
+     * @param int $postId
+     * @return array
+     */
+    private function getAlbumImages(int $postId): array
+    {
+        $albumImages = DB::table('Wo_Albums_Media')
+            ->where('post_id', $postId)
+            ->get();
+
+        return $albumImages->map(function($image) {
+            return [
+                'id' => $image->id,
+                'image_path' => $image->image,
+                'image_url' => asset('storage/' . $image->image),
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get human readable time
+     * 
+     * @param int $timestamp
+     * @return string
+     */
+    private function getHumanTime(int $timestamp): string
+    {
+        $time = time() - $timestamp;
+        
+        if ($time < 60) return 'Just now';
+        if ($time < 3600) return floor($time / 60) . 'm';
+        if ($time < 86400) return floor($time / 3600) . 'h';
+        if ($time < 2592000) return floor($time / 86400) . 'd';
+        if ($time < 31536000) return floor($time / 2592000) . 'mo';
+        return floor($time / 31536000) . 'y';
     }
 }

@@ -1319,6 +1319,254 @@
           "path": ["api","v1","people-follow","1234","unfollow"]
         }
       }
+    },
+    {
+      "name": "Posts - Create Text Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"postText","value":"This is a test text post!","type":"text"},
+            {"key":"postPrivacy","value":"0","type":"text"},
+            {"key":"postType","value":"text","type":"text"}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"]
+        },
+        "description": "Create a simple text post. Privacy: 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.data && json.data.post_id) {",
+              "    pm.collectionVariables.set('post_id', json.data.post_id);",
+              "  }",
+              "} catch (e) { }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Posts - Create Photo Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"postText","value":"Check out this amazing photo!","type":"text"},
+            {"key":"postPrivacy","value":"0","type":"text"},
+            {"key":"postType","value":"photo","type":"text"},
+            {"key":"postPhoto","type":"file","src":[]}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"]
+        },
+        "description": "Create a photo post with image upload. Supports jpeg, png, jpg, gif (max 10MB)"
+      }
+    },
+    {
+      "name": "Posts - Create Video Post (YouTube)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"postText","value":"Amazing video I found!","type":"text"},
+            {"key":"postPrivacy","value":"1","type":"text"},
+            {"key":"postType","value":"video","type":"text"},
+            {"key":"postYoutube","value":"https://www.youtube.com/watch?v=dQw4w9WgXcQ","type":"text"}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"]
+        },
+        "description": "Create a video post with YouTube link. Also supports Vimeo, Dailymotion, Facebook, Vine, SoundCloud, Playtube, Deepsound"
+      }
+    },
+    {
+      "name": "Posts - Create Link Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"postText","value":"Interesting article I found","type":"text"},
+            {"key":"postPrivacy","value":"0","type":"text"},
+            {"key":"postType","value":"link","type":"text"},
+            {"key":"postLink","value":"https://example.com/article","type":"text"},
+            {"key":"postLinkTitle","value":"Amazing Article Title","type":"text"},
+            {"key":"postLinkContent","value":"This is a great article about...","type":"text"}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"]
+        },
+        "description": "Create a link post with URL sharing and metadata"
+      }
+    },
+    {
+      "name": "Posts - Create File Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"postText","value":"Important document to share","type":"text"},
+            {"key":"postPrivacy","value":"1","type":"text"},
+            {"key":"postType","value":"file","type":"text"},
+            {"key":"postFile","type":"file","src":[]}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"]
+        },
+        "description": "Create a file post with document upload. Supports pdf, doc, docx, txt, zip, rar (max 50MB)"
+      }
+    },
+    {
+      "name": "Posts - Create Audio Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"postText","value":"My latest podcast episode","type":"text"},
+            {"key":"postPrivacy","value":"0","type":"text"},
+            {"key":"postType","value":"audio","type":"text"},
+            {"key":"postRecord","type":"file","src":[]}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"]
+        },
+        "description": "Create an audio post with audio file upload. Supports mp3, wav, ogg (max 50MB)"
+      }
+    },
+    {
+      "name": "Posts - Create Album Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"postText","value":"My vacation photos!","type":"text"},
+            {"key":"postPrivacy","value":"0","type":"text"},
+            {"key":"postType","value":"album","type":"text"},
+            {"key":"album_name","value":"Vacation 2024","type":"text"},
+            {"key":"album_images[]","type":"file","src":[]}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"]
+        },
+        "description": "Create an album post with multiple images"
+      }
+    },
+    {
+      "name": "Posts - Create Group Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"postText","value":"Group announcement!","type":"text"},
+            {"key":"postPrivacy","value":"4","type":"text"},
+            {"key":"postType","value":"text","type":"text"},
+            {"key":"group_id","value":"1","type":"text"}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"]
+        },
+        "description": "Create a post in a specific group"
+      }
+    },
+    {
+      "name": "Posts - Create Private Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"postText","value":"This is a private post","type":"text"},
+            {"key":"postPrivacy","value":"2","type":"text"},
+            {"key":"postType","value":"text","type":"text"}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"]
+        },
+        "description": "Create a private post (Only Me)"
+      }
+    },
+    {
+      "name": "Posts - Get Post by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}"]
+        },
+        "description": "Get a specific post by its ID"
+      }
     }
   ],
   "variable": [
@@ -1328,6 +1576,10 @@
     },
     {
       "key": "token",
+      "value": ""
+    },
+    {
+      "key": "post_id",
       "value": ""
     }
   ]

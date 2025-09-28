@@ -25,6 +25,7 @@ use App\Http\Controllers\Api\V1\CommonThingsController;
 use App\Http\Controllers\Api\V1\FundingsController;
 use App\Http\Controllers\Api\V1\NewFeedController;
 use App\Http\Controllers\Api\V1\PeopleFollowController;
+use App\Http\Controllers\Api\V1\PostController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -151,5 +152,9 @@ Route::get('/people-follow/following', [PeopleFollowController::class, 'getFollo
 Route::get('/people-follow/types', [PeopleFollowController::class, 'getPeopleFollowTypes']);
 Route::post('/people-follow/follow', [PeopleFollowController::class, 'followUser']);
 Route::post('/people-follow/{userId}/unfollow', [PeopleFollowController::class, 'unfollowUser']);
+
+// Post routes (mimics WoWonder requests.php?f=posts&s=insert_new_post)
+Route::post('/posts', [PostController::class, 'insertNewPost']);
+Route::get('/posts/{postId}', [PostController::class, 'getPost']);
 
 
