@@ -25,7 +25,7 @@ class SavedPostsController extends BaseController
         $perPage = (int) ($request->query('per_page', 12));
         $perPage = max(1, min($perPage, 50));
 
-        $savedPostIds = DB::table('Wo_Saved')
+        $savedPostIds = DB::table('Wo_SavedPosts')
             ->where('user_id', $userId)
             ->orderByDesc('id')
             ->pluck('post_id');

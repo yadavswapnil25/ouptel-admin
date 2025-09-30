@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Post;
+use App\Models\PostReaction;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -603,6 +604,689 @@ class PostController extends Controller
             'created_at' => date('c', $post->time),
             'created_at_human' => $this->getHumanTime($post->time),
             'time' => $post->time,
+        ];
+    }
+
+    /**
+     * Register a reaction on a post (mimics WoWonder requests.php?f=posts&s=register_reaction)
+     * 
+     * @param Request $request
+     * @param int $postId
+     * @return JsonResponse
+     */
+    public function registerReaction(Request $request, int $postId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        // Validate request parameters
+        $validator = Validator::make($request->all(), [
+            'reaction' => 'required|integer|in:1,2,3,4,5,6', // 1=Like, 2=Love, 3=Haha, 4=Wow, 5=Sad, 6=Angry
+            'hash' => 'nullable|string', // For compatibility with WoWonder hash system
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Check if post exists
+        $post = Post::where('id', $postId)->orWhere('post_id', $postId)->first();
+        if (!$post) {
+            return response()->json(['ok' => false, 'message' => 'Post not found'], 404);
+        }
+
+        // Check if user can react to this post
+        if (!$this->canViewPost($post, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Access denied'], 403);
+        }
+
+        $reactionType = $request->input('reaction');
+
+        try {
+            DB::beginTransaction();
+
+            // Check if user already reacted to this post
+            $existingReaction = PostReaction::where('post_id', $post->post_id)
+                ->where('user_id', $tokenUserId)
+                ->where('comment_id', 0) // Only post reactions, not comment reactions
+                ->first();
+
+            if ($existingReaction) {
+                if ($existingReaction->reaction == $reactionType) {
+                    // User is trying to react with the same reaction - remove it
+                    $existingReaction->delete();
+                    $action = 'removed';
+                } else {
+                    // User is changing reaction type
+                    $existingReaction->update(['reaction' => $reactionType]);
+                    $action = 'updated';
+                }
+            } else {
+                // Create new reaction
+                PostReaction::create([
+                    'user_id' => $tokenUserId,
+                    'post_id' => $post->post_id,
+                    'comment_id' => 0,
+                    'replay_id' => 0,
+                    'message_id' => 0,
+                    'story_id' => 0,
+                    'reaction' => $reactionType,
+                ]);
+                $action = 'added';
+            }
+
+            // Get updated reaction counts
+            $reactionCounts = $this->getPostReactionCounts($post->post_id);
+
+            DB::commit();
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Reaction ' . $action . ' successfully',
+                'data' => [
+                    'post_id' => $post->post_id,
+                    'action' => $action,
+                    'reaction_type' => $reactionType,
+                    'reaction_name' => $this->getReactionName($reactionType),
+                    'reaction_icon' => $this->getReactionIcon($reactionType),
+                    'reaction_counts' => $reactionCounts,
+                    'total_reactions' => array_sum($reactionCounts),
+                    'user_reaction' => $action === 'removed' ? null : $reactionType,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to register reaction',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get post reaction counts
+     * 
+     * @param int $postId
+     * @return JsonResponse
+     */
+    public function getPostReactions(Request $request, int $postId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        // Check if post exists
+        $post = Post::where('id', $postId)->orWhere('post_id', $postId)->first();
+        if (!$post) {
+            return response()->json(['ok' => false, 'message' => 'Post not found'], 404);
+        }
+
+        // Check if user can view this post
+        if (!$this->canViewPost($post, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Access denied'], 403);
+        }
+
+        try {
+            $reactionCounts = $this->getPostReactionCounts($post->post_id);
+            $userReaction = $this->getUserReaction($post->post_id, $tokenUserId);
+
+            return response()->json([
+                'ok' => true,
+                'data' => [
+                    'post_id' => $post->post_id,
+                    'reaction_counts' => $reactionCounts,
+                    'total_reactions' => array_sum($reactionCounts),
+                    'user_reaction' => $userReaction,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to get post reactions',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Remove user's reaction from a post
+     * 
+     * @param Request $request
+     * @param int $postId
+     * @return JsonResponse
+     */
+    public function removeReaction(Request $request, int $postId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        // Check if post exists
+        $post = Post::where('id', $postId)->orWhere('post_id', $postId)->first();
+        if (!$post) {
+            return response()->json(['ok' => false, 'message' => 'Post not found'], 404);
+        }
+
+        // Check if user can react to this post
+        if (!$this->canViewPost($post, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Access denied'], 403);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Find and remove user's reaction
+            $reaction = PostReaction::where('post_id', $post->post_id)
+                ->where('user_id', $tokenUserId)
+                ->where('comment_id', 0) // Only post reactions, not comment reactions
+                ->first();
+
+            if (!$reaction) {
+                return response()->json(['ok' => false, 'message' => 'No reaction found to remove'], 404);
+            }
+
+            $removedReactionType = $reaction->reaction;
+            $reaction->delete();
+
+            // Get updated reaction counts
+            $reactionCounts = $this->getPostReactionCounts($post->post_id);
+
+            DB::commit();
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Reaction removed successfully',
+                'data' => [
+                    'post_id' => $post->post_id,
+                    'action' => 'removed',
+                    'removed_reaction_type' => $removedReactionType,
+                    'removed_reaction_name' => $this->getReactionName($removedReactionType),
+                    'reaction_counts' => $reactionCounts,
+                    'total_reactions' => array_sum($reactionCounts),
+                    'user_reaction' => null,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to remove reaction',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get reaction counts for a post
+     * 
+     * @param int $postId
+     * @return array
+     */
+    private function getPostReactionCounts(int $postId): array
+    {
+        $reactions = PostReaction::where('post_id', $postId)
+            ->where('comment_id', 0)
+            ->selectRaw('reaction, COUNT(*) as count')
+            ->groupBy('reaction')
+            ->get();
+
+        $counts = [
+            1 => 0, // Like
+            2 => 0, // Love
+            3 => 0, // Haha
+            4 => 0, // Wow
+            5 => 0, // Sad
+            6 => 0, // Angry
+        ];
+
+        foreach ($reactions as $reaction) {
+            $counts[$reaction->reaction] = $reaction->count;
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Get user's reaction for a post
+     * 
+     * @param int $postId
+     * @param string $userId
+     * @return int|null
+     */
+    private function getUserReaction(int $postId, string $userId): ?int
+    {
+        $reaction = PostReaction::where('post_id', $postId)
+            ->where('user_id', $userId)
+            ->where('comment_id', 0)
+            ->first();
+
+        return $reaction ? $reaction->reaction : null;
+    }
+
+    /**
+     * Get reaction name by type
+     * 
+     * @param int $reactionType
+     * @return string
+     */
+    private function getReactionName(int $reactionType): string
+    {
+        $reactionNames = [
+            1 => 'Like',
+            2 => 'Love',
+            3 => 'Haha',
+            4 => 'Wow',
+            5 => 'Sad',
+            6 => 'Angry',
+        ];
+
+        return $reactionNames[$reactionType] ?? "Reaction {$reactionType}";
+    }
+
+    /**
+     * Get reaction icon by type
+     * 
+     * @param int $reactionType
+     * @return string
+     */
+    private function getReactionIcon(int $reactionType): string
+    {
+        $reactionIcons = [
+            1 => '👍',
+            2 => '❤️',
+            3 => '😂',
+            4 => '😮',
+            5 => '😢',
+            6 => '😠',
+        ];
+
+        return $reactionIcons[$reactionType] ?? '👍';
+    }
+
+    /**
+     * Save a post (mimics WoWonder requests.php?f=posts&s=save_post)
+     * 
+     * @param Request $request
+     * @param int $postId
+     * @return JsonResponse
+     */
+    public function savePost(Request $request, int $postId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        // Validate request parameters
+        $validator = Validator::make($request->all(), [
+            'hash' => 'nullable|string', // For compatibility with WoWonder hash system
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Check if post exists
+        $post = Post::where('id', $postId)->orWhere('post_id', $postId)->first();
+        if (!$post) {
+            return response()->json(['ok' => false, 'message' => 'Post not found'], 404);
+        }
+
+        // Check if user can view this post
+        if (!$this->canViewPost($post, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Access denied'], 403);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Check if post is already saved
+            $existingSave = DB::table('Wo_SavedPosts')
+                ->where('user_id', $tokenUserId)
+                ->where('post_id', $post->id)
+                ->first();
+
+            if ($existingSave) {
+                // Post is already saved - unsave it
+                DB::table('Wo_SavedPosts')
+                    ->where('user_id', $tokenUserId)
+                    ->where('post_id', $post->id)
+                    ->delete();
+                
+                $action = 'unsaved';
+                $message = 'Post removed from saved posts';
+            } else {
+                // Save the post
+                DB::table('Wo_SavedPosts')->insert([
+                    'user_id' => $tokenUserId,
+                    'post_id' => $post->id,
+                ]);
+                
+                $action = 'saved';
+                $message = 'Post saved successfully';
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'ok' => true,
+                'message' => $message,
+                'data' => [
+                    'post_id' => $post->id,
+                    'action' => $action,
+                    'is_saved' => $action === 'saved',
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to save post',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get saved posts for user
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getSavedPosts(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        try {
+            $perPage = $request->input('per_page', 12);
+            $perPage = max(1, min($perPage, 50));
+
+            // Get saved post IDs
+            $savedPostIds = DB::table('Wo_SavedPosts')
+                ->where('user_id', $tokenUserId)
+                ->orderByDesc('id')
+                ->pluck('post_id');
+
+            if ($savedPostIds->isEmpty()) {
+                return response()->json([
+                    'ok' => true,
+                    'data' => [
+                        'posts' => [],
+                        'pagination' => [
+                            'current_page' => 1,
+                            'last_page' => 1,
+                            'per_page' => $perPage,
+                            'total' => 0,
+                            'has_more' => false,
+                        ],
+                        'total_saved' => 0,
+                    ]
+                ]);
+            }
+
+            // Get posts with pagination
+            $query = Post::with('user')
+                ->whereIn('id', $savedPostIds)
+                ->orderByRaw('FIELD(id, ' . $savedPostIds->implode(',') . ')');
+
+            $posts = $query->paginate($perPage);
+
+            $formattedPosts = $posts->map(function ($post) use ($tokenUserId) {
+                return $this->formatSavedPostData($post, $tokenUserId);
+            });
+
+            return response()->json([
+                'ok' => true,
+                'data' => [
+                    'posts' => $formattedPosts,
+                    'pagination' => [
+                        'current_page' => $posts->currentPage(),
+                        'last_page' => $posts->lastPage(),
+                        'per_page' => $posts->perPage(),
+                        'total' => $posts->total(),
+                        'has_more' => $posts->hasMorePages(),
+                    ],
+                    'total_saved' => $savedPostIds->count(),
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to get saved posts',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Check if post is saved by user
+     * 
+     * @param Request $request
+     * @param int $postId
+     * @return JsonResponse
+     */
+    public function checkSavedPost(Request $request, int $postId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        // Check if post exists
+        $post = Post::where('id', $postId)->orWhere('post_id', $postId)->first();
+        if (!$post) {
+            return response()->json(['ok' => false, 'message' => 'Post not found'], 404);
+        }
+
+        try {
+            $isSaved = DB::table('Wo_SavedPosts')
+                ->where('user_id', $tokenUserId)
+                ->where('post_id', $post->id)
+                ->exists();
+
+            return response()->json([
+                'ok' => true,
+                'data' => [
+                    'post_id' => $post->id,
+                    'is_saved' => $isSaved,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to check saved status',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Unsave a post
+     * 
+     * @param Request $request
+     * @param int $postId
+     * @return JsonResponse
+     */
+    public function unsavePost(Request $request, int $postId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        // Check if post exists
+        $post = Post::where('id', $postId)->orWhere('post_id', $postId)->first();
+        if (!$post) {
+            return response()->json(['ok' => false, 'message' => 'Post not found'], 404);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Check if post is saved
+            $savedRecord = DB::table('Wo_SavedPosts')
+                ->where('user_id', $tokenUserId)
+                ->where('post_id', $post->id)
+                ->first();
+
+            if (!$savedRecord) {
+                return response()->json(['ok' => false, 'message' => 'Post is not saved'], 404);
+            }
+
+            // Remove from saved posts
+            DB::table('Wo_SavedPosts')
+                ->where('user_id', $tokenUserId)
+                ->where('post_id', $post->id)
+                ->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Post removed from saved posts',
+                'data' => [
+                    'post_id' => $post->id,
+                    'action' => 'unsaved',
+                    'is_saved' => false,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to unsave post',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Format saved post data for API response
+     * 
+     * @param Post $post
+     * @param string $userId
+     * @return array
+     */
+    private function formatSavedPostData(Post $post, string $userId): array
+    {
+        return [
+            'id' => $post->id,
+            'post_id' => $post->post_id,
+            'user_id' => $post->user_id,
+            'post_text' => $post->postText ?? '',
+            'post_text_preview' => $post->post_text_preview,
+            'post_type' => $post->postType,
+            'post_privacy' => $post->postPrivacy,
+            'post_privacy_text' => $post->post_privacy_text,
+            'post_photo' => $post->postPhoto,
+            'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
+            'post_file' => $post->postFile,
+            'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
+            'post_youtube' => $post->postYoutube,
+            'post_link' => $post->postLink,
+            'post_link_title' => $post->postLinkTitle,
+            'post_link_image' => $post->postLinkImage,
+            'post_link_content' => $post->postLinkContent,
+            'post_map' => $post->postMap,
+            'post_record' => $post->postRecord,
+            'post_record_url' => $post->postRecord ? asset('storage/' . $post->postRecord) : null,
+            'post_sticker' => $post->postSticker,
+            'album_name' => $post->album_name,
+            'multi_image_post' => (bool) $post->multi_image_post,
+            'is_owner' => $post->user_id == $userId,
+            'is_active' => $post->is_active,
+            'is_boosted' => $post->is_boosted,
+            'is_saved' => true, // All posts in this list are saved
+            'author' => [
+                'user_id' => $post->user->user_id ?? $post->user_id,
+                'username' => $post->user->username ?? 'Unknown',
+                'name' => $post->user->name ?? 'Unknown User',
+                'avatar_url' => $post->user->avatar ? asset('storage/' . $post->user->avatar) : null,
+            ],
+            'page_id' => $post->page_id,
+            'group_id' => $post->group_id,
+            'event_id' => $post->event_id,
+            'created_at' => date('c', $post->time),
+            'created_at_human' => $this->getHumanTime($post->time),
+            'time' => $post->time,
+            'reaction_counts' => $this->getPostReactionCounts($post->post_id),
+            'total_reactions' => array_sum($this->getPostReactionCounts($post->post_id)),
+            'user_reaction' => $this->getUserReaction($post->post_id, $userId),
         ];
     }
 }

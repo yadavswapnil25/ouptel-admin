@@ -26,11 +26,20 @@ use App\Http\Controllers\Api\V1\FundingsController;
 use App\Http\Controllers\Api\V1\NewFeedController;
 use App\Http\Controllers\Api\V1\PeopleFollowController;
 use App\Http\Controllers\Api\V1\PostController;
+use App\Http\Controllers\Api\V1\CommentController;
+use App\Http\Controllers\Api\V1\FollowController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
 Route::post('/create-album', [AlbumController::class, 'store']);
+
+// Authentication routes
 Route::post('/login', [AuthController::class, 'login']);
+Route::post('/signup', [AuthController::class, 'signup']);
+Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
+Route::post('/resend-verification', [AuthController::class, 'resendVerification']);
+Route::post('/check-username', [AuthController::class, 'checkUsername']);
+Route::post('/check-email', [AuthController::class, 'checkEmail']);
 Route::get('/debug-users', [AuthController::class, 'debugUsers']);
 Route::get('/watch', [WatchController::class, 'index']);
 Route::get('/reels', [ReelsController::class, 'index']);
@@ -140,12 +149,10 @@ Route::post('/fundings/{id}/contribute', [FundingsController::class, 'contribute
 Route::get('/my-contributions', [FundingsController::class, 'myContributions']);
 Route::get('/fundings-debug', [FundingsController::class, 'debug']);
 
-// New Feed routes (mimics WoWonder requests.php functionality)
 Route::post('/new-feed/update-order', [NewFeedController::class, 'updateOrderBy']);
 Route::get('/new-feed', [NewFeedController::class, 'getFeed']);
 Route::get('/new-feed/types', [NewFeedController::class, 'getFeedTypes']);
 
-// People Follow routes (mimics WoWonder requests.php?f=update_order_by&type=1)
 Route::post('/people-follow/update-order', [PeopleFollowController::class, 'updateOrderBy']);
 Route::get('/people-follow/feed', [PeopleFollowController::class, 'getPeopleFollowFeed']);
 Route::get('/people-follow/following', [PeopleFollowController::class, 'getFollowing']);
@@ -153,8 +160,31 @@ Route::get('/people-follow/types', [PeopleFollowController::class, 'getPeopleFol
 Route::post('/people-follow/follow', [PeopleFollowController::class, 'followUser']);
 Route::post('/people-follow/{userId}/unfollow', [PeopleFollowController::class, 'unfollowUser']);
 
-// Post routes (mimics WoWonder requests.php?f=posts&s=insert_new_post)
 Route::post('/posts', [PostController::class, 'insertNewPost']);
 Route::get('/posts/{postId}', [PostController::class, 'getPost']);
+
+Route::post('/posts/{postId}/reactions', [PostController::class, 'registerReaction']);
+Route::get('/posts/{postId}/reactions', [PostController::class, 'getPostReactions']);
+Route::delete('/posts/{postId}/reactions', [PostController::class, 'removeReaction']);
+
+Route::post('/posts/{postId}/comments', [CommentController::class, 'registerComment']);
+Route::get('/posts/{postId}/comments', [CommentController::class, 'getComments']);
+Route::put('/comments/{commentId}', [CommentController::class, 'updateComment']);
+Route::delete('/comments/{commentId}', [CommentController::class, 'deleteComment']);
+Route::post('/comments/{commentId}/reactions', [CommentController::class, 'registerCommentReaction']);
+
+Route::post('/posts/{postId}/save', [PostController::class, 'savePost']);
+Route::get('/posts/{postId}/saved', [PostController::class, 'checkSavedPost']);
+Route::delete('/posts/{postId}/save', [PostController::class, 'unsavePost']);
+Route::get('/saved-posts', [PostController::class, 'getSavedPosts']);
+
+Route::post('/users/{followingId}/follow', [FollowController::class, 'followUser']);
+Route::delete('/users/{followingId}/follow', [FollowController::class, 'unfollowUser']);
+Route::get('/users/{userId}/followers', [FollowController::class, 'getFollowers']);
+Route::get('/users/{userId}/following', [FollowController::class, 'getFollowing']);
+Route::get('/users/{userId}/follow-status', [FollowController::class, 'checkFollowStatus']);
+Route::get('/follow-requests', [FollowController::class, 'getFollowRequests']);
+Route::post('/users/{followerId}/accept-follow', [FollowController::class, 'acceptFollowRequest']);
+Route::post('/users/{followerId}/reject-follow', [FollowController::class, 'rejectFollowRequest']);
 
 

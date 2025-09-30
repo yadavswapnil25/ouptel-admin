@@ -1567,6 +1567,471 @@
         },
         "description": "Get a specific post by its ID"
       }
+    },
+    {
+      "name": "Signup - Create Account",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"swap_yadav\",\n  \"email\": \"swapnil2591997@gmail.com\",\n  \"password\": \"securepassword123\",\n  \"confirm_password\": \"securepassword123\",\n  \"first_name\": \"Swapnil\",\n  \"last_name\": \"Yadav\",\n  \"gender\": \"male\",\n  \"birthday\": \"1997-05-25\",\n  \"country_id\": 1,\n  \"timezone\": \"Asia/Kolkata\",\n  \"language\": \"english\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/signup",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","signup"]
+        },
+        "description": "Create a new user account with comprehensive validation"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.data && json.data.token) {",
+              "    pm.collectionVariables.set('token', json.data.token);",
+              "  }",
+              "} catch (e) { }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Signup - Verify Email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"john@example.com\",\n  \"code\": \"123456\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/verify-email",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","verify-email"]
+        },
+        "description": "Verify email address with 6-digit verification code"
+      }
+    },
+    {
+      "name": "Signup - Resend Verification",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"john@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/resend-verification",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","resend-verification"]
+        },
+        "description": "Resend verification email to user"
+      }
+    },
+    {
+      "name": "Signup - Check Username",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"john_doe\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/check-username",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","check-username"]
+        },
+        "description": "Check if username is available"
+      }
+    },
+    {
+      "name": "Signup - Check Email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"john@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/check-email",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","check-email"]
+        },
+        "description": "Check if email is available"
+      }
+    },
+    {
+      "name": "Posts - Like Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reaction\": 1,\n  \"hash\": \"8d7b7bd14327341ba2db\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/reactions",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","reactions"]
+        },
+        "description": "Like or react to a post. Reactions: 1=Like, 2=Love, 3=Haha, 4=Wow, 5=Sad, 6=Angry"
+      }
+    },
+    {
+      "name": "Posts - Get Post Reactions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/reactions?per_page=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","reactions"],
+          "query": [{"key":"per_page","value":"20"}]
+        },
+        "description": "Get all reactions for a specific post with pagination"
+      }
+    },
+    {
+      "name": "Posts - Remove Reaction",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/reactions",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","reactions"]
+        },
+        "description": "Remove user's reaction from a post"
+      }
+    },
+    {
+      "name": "Posts - Create Comment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"text","value":"This is a great post!","type":"text"},
+            {"key":"hash","value":"8d7b7bd14327341ba2db","type":"text"}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/comments",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","comments"]
+        },
+        "description": "Create a comment on a post"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.data && json.data.id) {",
+              "    pm.collectionVariables.set('comment_id', json.data.id);",
+              "  }",
+              "} catch (e) { }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Posts - Get Comments",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/comments?per_page=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","comments"],
+          "query": [{"key":"per_page","value":"20"}]
+        },
+        "description": "Get all comments for a specific post with pagination"
+      }
+    },
+    {
+      "name": "Comments - Update Comment",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"Updated comment text\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/comments/{{comment_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","comments","{{comment_id}}"]
+        },
+        "description": "Update an existing comment"
+      }
+    },
+    {
+      "name": "Comments - Delete Comment",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/comments/{{comment_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","comments","{{comment_id}}"]
+        },
+        "description": "Delete a comment"
+      }
+    },
+    {
+      "name": "Comments - React to Comment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reaction\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/comments/{{comment_id}}/reactions",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","comments","{{comment_id}}","reactions"]
+        },
+        "description": "React to a comment. Reactions: 1=Like, 2=Love, 3=Haha, 4=Wow, 5=Sad, 6=Angry"
+      }
+    },
+    {
+      "name": "Posts - Save Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"hash\": \"8d7b7bd14327341ba2db\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/save",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","save"]
+        },
+        "description": "Save a post to user's saved posts"
+      }
+    },
+    {
+      "name": "Posts - Check if Saved",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/saved",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","saved"]
+        },
+        "description": "Check if a post is saved by the current user"
+      }
+    },
+    {
+      "name": "Posts - Unsave Post",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/save",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","save"]
+        },
+        "description": "Remove a post from user's saved posts"
+      }
+    },
+    {
+      "name": "Posts - Get Saved Posts",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/saved-posts?per_page=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","saved-posts"],
+          "query": [{"key":"per_page","value":"20"}]
+        },
+        "description": "Get all saved posts for the current user with pagination"
+      }
+    },
+    {
+      "name": "Follow - Follow User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"hash\": \"49b85de05943327733d6\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/users/400869/follow",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","users","400869","follow"]
+        },
+        "description": "Follow a user (mimics WoWonder requests.php?f=follow_user&following_id=400869)"
+      }
+    },
+    {
+      "name": "Follow - Unfollow User",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/users/400869/follow",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","users","400869","follow"]
+        },
+        "description": "Unfollow a user"
+      }
+    },
+    {
+      "name": "Follow - Get User Followers",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/users/400869/followers?per_page=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","users","400869","followers"],
+          "query": [{"key":"per_page","value":"20"}]
+        },
+        "description": "Get followers list for a specific user"
+      }
+    },
+    {
+      "name": "Follow - Get User Following",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/users/400869/following?per_page=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","users","400869","following"],
+          "query": [{"key":"per_page","value":"20"}]
+        },
+        "description": "Get following list for a specific user"
+      }
+    },
+    {
+      "name": "Follow - Check Follow Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/users/400869/follow-status",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","users","400869","follow-status"]
+        },
+        "description": "Check follow relationship status between current user and target user"
+      }
+    },
+    {
+      "name": "Follow - Get Follow Requests",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/follow-requests?per_page=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","follow-requests"],
+          "query": [{"key":"per_page","value":"20"}]
+        },
+        "description": "Get pending follow requests for the current user"
+      }
+    },
+    {
+      "name": "Follow - Accept Follow Request",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/users/400869/accept-follow",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","users","400869","accept-follow"]
+        },
+        "description": "Accept a follow request from a user"
+      }
+    },
+    {
+      "name": "Follow - Reject Follow Request",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/users/400869/reject-follow",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","users","400869","reject-follow"]
+        },
+        "description": "Reject a follow request from a user"
+      }
     }
   ],
   "variable": [
@@ -1580,6 +2045,10 @@
     },
     {
       "key": "post_id",
+      "value": ""
+    },
+    {
+      "key": "comment_id",
       "value": ""
     }
   ]

@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class Post extends Model
 {
@@ -186,6 +188,114 @@ class Post extends Model
                !empty($this->postYoutube) || 
                !empty($this->postFile) || 
                !empty($this->postRecord);
+    }
+
+    public function reactions(): HasMany
+    {
+        return $this->hasMany(PostReaction::class, 'post_id', 'post_id')
+            ->where('comment_id', 0); // Only post reactions, not comment reactions
+    }
+
+    public function getReactionCountsAttribute(): array
+    {
+        $reactions = $this->reactions()
+            ->selectRaw('reaction, COUNT(*) as count')
+            ->groupBy('reaction')
+            ->get();
+
+        $counts = [
+            1 => 0, // Like
+            2 => 0, // Love
+            3 => 0, // Haha
+            4 => 0, // Wow
+            5 => 0, // Sad
+            6 => 0, // Angry
+        ];
+
+        foreach ($reactions as $reaction) {
+            $counts[$reaction->reaction] = $reaction->count;
+        }
+
+        return $counts;
+    }
+
+    public function getTotalReactionsAttribute(): int
+    {
+        return array_sum($this->reaction_counts);
+    }
+
+    public function getUserReaction(string $userId): ?int
+    {
+        $reaction = $this->reactions()
+            ->where('user_id', $userId)
+            ->first();
+
+        return $reaction ? $reaction->reaction : null;
+    }
+
+    public function comments(): HasMany
+    {
+        return $this->hasMany(Comment::class, 'post_id', 'post_id')
+            ->where('active', 1)
+            ->where('parent_id', 0) // Only main comments, not replies
+            ->orderBy('time', 'desc');
+    }
+
+    public function allComments(): HasMany
+    {
+        return $this->hasMany(Comment::class, 'post_id', 'post_id')
+            ->where('active', 1)
+            ->orderBy('time', 'desc');
+    }
+
+    public function getCommentsCountAttribute(): int
+    {
+        return $this->allComments()->count();
+    }
+
+    public function getMainCommentsCountAttribute(): int
+    {
+        return $this->comments()->count();
+    }
+
+    /**
+     * Check if post is saved by a specific user
+     * 
+     * @param string $userId
+     * @return bool
+     */
+    public function isSavedByUser(string $userId): bool
+    {
+        return DB::table('Wo_SavedPosts')
+            ->where('user_id', $userId)
+            ->where('post_id', $this->id)
+            ->exists();
+    }
+
+    /**
+     * Get saved post record for a specific user
+     * 
+     * @param string $userId
+     * @return object|null
+     */
+    public function getSavedRecord(string $userId): ?object
+    {
+        return DB::table('Wo_SavedPosts')
+            ->where('user_id', $userId)
+            ->where('post_id', $this->id)
+            ->first();
+    }
+
+    /**
+     * Get when post was saved by user
+     * 
+     * @param string $userId
+     * @return string|null
+     */
+    public function getSavedAtAttribute(string $userId): ?string
+    {
+        // Time field doesn't exist in Wo_SavedPosts table
+        return null;
     }
 }
 
