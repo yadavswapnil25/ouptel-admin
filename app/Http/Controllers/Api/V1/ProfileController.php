@@ -1,0 +1,569 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Http\Controllers\Controller;
+use App\Models\User;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
+
+class ProfileController extends Controller
+{
+    /**
+     * Non-allowed user data fields (sensitive information)
+     */
+    private $nonAllowed = [
+        'password',
+        'email_code',
+        'sms_code',
+        'src',
+        'ip_address',
+        'email_code',
+        'sms_code',
+        'password_reset_code',
+        'social_login',
+        'wallet',
+        'balance',
+        'ref_user_id',
+        'referrer',
+        'admin',
+        'verified',
+        'lastseen',
+        'showlastseen',
+        'androidM_device_id',
+        'iosM_device_id',
+        'androidN_device_id',
+        'iosN_device_id',
+        'web_device_id',
+        'start_up',
+        'start_up_info',
+        'startup_follow',
+        'startup_image',
+        'last_follow_id',
+        'last_login_data',
+        'two_factor',
+        'two_factor_verified',
+        'two_factor_method',
+        'social_login',
+        'new_email',
+        'new_phone',
+        'info_file',
+        'city',
+        'state',
+        'zip',
+        'school_completed',
+        'avatar_org',
+        'cover_org',
+        'cover_full',
+        'avatar_full',
+        'is_pro',
+        'pro_time',
+        'pro_type',
+        'joined',
+        'css_file',
+        'timezone',
+        'referrer',
+        'src',
+        'track',
+        'curr_time',
+        'time',
+    ];
+
+    /**
+     * Get user profile data (mimics WoWonder get_user_data.php)
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getUserData(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '5',
+                    'error_text' => 'No session sent.'
+                ]
+            ], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '6',
+                    'error_text' => 'Session id is wrong.'
+                ]
+            ], 401);
+        }
+
+        // Validate parameters
+        $validator = Validator::make($request->all(), [
+            'user_profile_id' => 'nullable|integer',
+            'fetch' => 'nullable|string', // Comma-separated: user_data,followers,following,liked_pages,joined_groups,family
+            'send_notify' => 'nullable|boolean',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => $validator->errors()->all()
+            ], 422);
+        }
+
+        try {
+            // Get profile user ID (default to logged-in user)
+            $profileUserId = $request->input('user_profile_id', $tokenUserId);
+            
+            // Get user data
+            $user = User::where('user_id', $profileUserId)->first();
+            if (!$user) {
+                return response()->json([
+                    'api_status' => '400',
+                    'api_text' => 'failed',
+                    'api_version' => '1.0',
+                    'errors' => [
+                        'error_id' => '6',
+                        'error_text' => 'User profile is not exists.'
+                    ]
+                ], 404);
+            }
+
+            // Parse fetch parameters
+            $fetch = $request->input('fetch', 'user_data');
+            $fetchItems = array_map('trim', explode(',', $fetch));
+            $fetchData = array_flip($fetchItems);
+
+            $responseData = [
+                'api_status' => '200',
+                'api_text' => 'success',
+                'api_version' => '1.0'
+            ];
+
+            // Send profile visit notification if requested
+            if ($request->input('send_notify') == 1 && $profileUserId != $tokenUserId) {
+                $this->sendProfileVisitNotification($tokenUserId, $profileUserId);
+            }
+
+            // Fetch user_data
+            if (isset($fetchData['user_data'])) {
+                $userData = $this->formatUserData($user, $tokenUserId);
+                $responseData['user_data'] = $userData;
+            }
+
+            // Fetch followers
+            if (isset($fetchData['followers'])) {
+                $responseData['followers'] = $this->getFollowers($profileUserId, $tokenUserId);
+            }
+
+            // Fetch following
+            if (isset($fetchData['following'])) {
+                $responseData['following'] = $this->getFollowing($profileUserId, $tokenUserId);
+            }
+
+            // Fetch liked pages
+            if (isset($fetchData['liked_pages'])) {
+                $responseData['liked_pages'] = $this->getLikedPages($profileUserId, $tokenUserId);
+            }
+
+            // Fetch joined groups
+            if (isset($fetchData['joined_groups'])) {
+                $responseData['joined_groups'] = $this->getJoinedGroups($profileUserId, $tokenUserId);
+            }
+
+            // Fetch family members
+            if (isset($fetchData['family'])) {
+                $responseData['family'] = $this->getFamilyMembers($profileUserId);
+            }
+
+            return response()->json($responseData);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => '500',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '7',
+                    'error_text' => 'Failed to get user data: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Format user data with additional metadata
+     */
+    private function formatUserData(User $user, int $loggedUserId): array
+    {
+        $userData = $user->toArray();
+
+        // Remove sensitive fields
+        foreach ($this->nonAllowed as $field) {
+            unset($userData[$field]);
+        }
+
+        // Add following/follower status
+        $userData['is_following'] = 0;
+        $userData['can_follow'] = 0;
+        $userData['is_following_me'] = 0;
+
+        // Check if logged user is following this profile
+        $isFollowing = DB::table('Wo_Followers')
+            ->where('following_id', $user->user_id)
+            ->where('follower_id', $loggedUserId)
+            ->exists();
+
+        if ($isFollowing) {
+            $userData['is_following'] = 1;
+            $userData['can_follow'] = 1;
+        } else {
+            // Check if follow request is pending (table may not exist)
+            $isPending = false;
+            try {
+                $isPending = DB::table('Wo_FollowRequests')
+                    ->where('recipient_id', $user->user_id)
+                    ->where('user_id', $loggedUserId)
+                    ->exists();
+            } catch (\Exception $e) {
+                // Table doesn't exist, assume no pending requests
+                $isPending = false;
+            }
+
+            if ($isPending) {
+                $userData['is_following'] = 2; // Pending request
+                $userData['can_follow'] = 1;
+            } else {
+                // Check follow privacy
+                if ($user->follow_privacy == 1) {
+                    // Only followers can send follow request
+                    $isFollower = DB::table('Wo_Followers')
+                        ->where('following_id', $loggedUserId)
+                        ->where('follower_id', $user->user_id)
+                        ->exists();
+                    if ($isFollower) {
+                        $userData['can_follow'] = 1;
+                    }
+                } else if ($user->follow_privacy == 0) {
+                    $userData['can_follow'] = 1;
+                }
+            }
+        }
+
+        // Check if this user is following the logged user
+        $isFollowingMe = DB::table('Wo_Followers')
+            ->where('following_id', $loggedUserId)
+            ->where('follower_id', $user->user_id)
+            ->exists();
+        $userData['is_following_me'] = $isFollowingMe ? 1 : 0;
+
+        // Add counts
+        $userData['post_count'] = DB::table('Wo_Posts')
+            ->where('user_id', $user->user_id)
+            ->where('active', 1)
+            ->count();
+
+        $userData['following_number'] = DB::table('Wo_Followers')
+            ->where('follower_id', $user->user_id)
+            ->count();
+
+        $userData['followers_number'] = DB::table('Wo_Followers')
+            ->where('following_id', $user->user_id)
+            ->count();
+
+        // Add formatted fields
+        $userData['gender_text'] = $user->gender == 'male' ? 'Male' : 'Female';
+        $userData['lastseen_time_text'] = $this->timeElapsedString($user->lastseen ?? time());
+        
+        // Check if blocked
+        $userData['is_blocked'] = $this->isBlocked($user->user_id, $loggedUserId);
+
+        // Add profile and cover URLs
+        $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/default-avatar.png');
+        $userData['cover_url'] = $user->cover ? asset('storage/' . $user->cover) : asset('images/default-cover.jpg');
+
+        return $userData;
+    }
+
+    /**
+     * Get user followers
+     */
+    private function getFollowers(int $userId, int $loggedUserId, int $limit = 50): array
+    {
+        $followers = DB::table('Wo_Followers')
+            ->join('Wo_Users', 'Wo_Followers.follower_id', '=', 'Wo_Users.user_id')
+            ->where('Wo_Followers.following_id', $userId)
+            ->select('Wo_Users.*')
+            ->limit($limit)
+            ->get()
+            ->toArray();
+
+        $result = [];
+        foreach ($followers as $follower) {
+            $followerData = (array) $follower;
+            
+            // Remove sensitive fields
+            foreach ($this->nonAllowed as $field) {
+                unset($followerData[$field]);
+            }
+
+            // Check if logged user is following this follower
+            $isFollowing = DB::table('Wo_Followers')
+                ->where('following_id', $follower->user_id)
+                ->where('follower_id', $loggedUserId)
+                ->exists();
+            $followerData['is_following'] = $isFollowing ? 1 : 0;
+
+            $followerData['avatar_url'] = $follower->avatar ? asset('storage/' . $follower->avatar) : asset('images/default-avatar.png');
+
+            $result[] = $followerData;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get users following
+     */
+    private function getFollowing(int $userId, int $loggedUserId, int $limit = 50): array
+    {
+        $following = DB::table('Wo_Followers')
+            ->join('Wo_Users', 'Wo_Followers.following_id', '=', 'Wo_Users.user_id')
+            ->where('Wo_Followers.follower_id', $userId)
+            ->select('Wo_Users.*')
+            ->limit($limit)
+            ->get()
+            ->toArray();
+
+        $result = [];
+        foreach ($following as $follow) {
+            $followData = (array) $follow;
+            
+            // Remove sensitive fields
+            foreach ($this->nonAllowed as $field) {
+                unset($followData[$field]);
+            }
+
+            // Check if logged user is following this user
+            $isFollowing = DB::table('Wo_Followers')
+                ->where('following_id', $follow->user_id)
+                ->where('follower_id', $loggedUserId)
+                ->exists();
+            $followData['is_following'] = $isFollowing ? 1 : 0;
+
+            $followData['avatar_url'] = $follow->avatar ? asset('storage/' . $follow->avatar) : asset('images/default-avatar.png');
+
+            $result[] = $followData;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get liked pages
+     */
+    private function getLikedPages(int $userId, int $loggedUserId, int $limit = 50): array
+    {
+        try {
+            $pages = DB::table('Wo_PageLikes')
+                ->join('Wo_Pages', 'Wo_PageLikes.page_id', '=', 'Wo_Pages.page_id')
+                ->where('Wo_PageLikes.user_id', $userId)
+                ->select('Wo_Pages.*')
+                ->limit($limit)
+                ->get()
+                ->toArray();
+
+            $result = [];
+            foreach ($pages as $page) {
+                $pageData = (array) $page;
+                
+                // Check if logged user has liked this page
+                $isLiked = DB::table('Wo_PageLikes')
+                    ->where('page_id', $page->page_id)
+                    ->where('user_id', $loggedUserId)
+                    ->exists();
+                $pageData['is_liked'] = $isLiked ? 1 : 0;
+
+                $pageData['avatar_url'] = $page->avatar ?? asset('images/default-page.png');
+
+                $result[] = $pageData;
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            // Table doesn't exist, return empty array
+            return [];
+        }
+    }
+
+    /**
+     * Get joined groups
+     */
+    private function getJoinedGroups(int $userId, int $loggedUserId, int $limit = 50): array
+    {
+        try {
+            $groups = DB::table('Wo_GroupMembers')
+                ->join('Wo_Groups', 'Wo_GroupMembers.group_id', '=', 'Wo_Groups.id')
+                ->where('Wo_GroupMembers.user_id', $userId)
+                ->select('Wo_Groups.*')
+                ->limit($limit)
+                ->get()
+                ->toArray();
+
+            $result = [];
+            foreach ($groups as $group) {
+                $groupData = (array) $group;
+                
+                // Check if logged user has joined this group
+                $isJoined = DB::table('Wo_GroupMembers')
+                    ->where('group_id', $group->id)
+                    ->where('user_id', $loggedUserId)
+                    ->exists();
+                $groupData['is_joined'] = $isJoined ? 1 : 0;
+
+                $groupData['avatar_url'] = $group->avatar ?? asset('images/default-group.png');
+
+                $result[] = $groupData;
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            // Tables don't exist, return empty array
+            return [];
+        }
+    }
+
+    /**
+     * Get family members
+     */
+    private function getFamilyMembers(int $userId): array
+    {
+        try {
+            $family = DB::table('Wo_Family')
+                ->join('Wo_Users', 'Wo_Family.member_id', '=', 'Wo_Users.user_id')
+                ->where('Wo_Family.user_id', $userId)
+                ->where('Wo_Family.active', 1)
+                ->select('Wo_Family.*', 'Wo_Users.*', 'Wo_Family.relationship_type')
+                ->get()
+                ->toArray();
+
+            $result = [];
+            foreach ($family as $member) {
+                $memberData = (array) $member;
+                
+                // Remove sensitive fields
+                foreach ($this->nonAllowed as $field) {
+                    unset($memberData[$field]);
+                }
+
+                $memberData['avatar_url'] = $member->avatar ?? asset('images/default-avatar.png');
+
+                $result[] = $memberData;
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            // Table doesn't exist, return empty array
+            return [];
+        }
+    }
+
+    /**
+     * Send profile visit notification
+     */
+    private function sendProfileVisitNotification(int $visitorId, int $profileOwnerId): void
+    {
+        // Check if profile visits are enabled in settings
+        try {
+            $profileVisitEnabled = DB::table('Wo_Config')->where('name', 'profileVisit')->value('value');
+            
+            if ($profileVisitEnabled != '1') {
+                return;
+            }
+        } catch (\Exception $e) {
+            // Config table doesn't exist, skip notification
+            return;
+        }
+
+        // Get visitor data
+        $visitor = User::where('user_id', $visitorId)->first();
+        if (!$visitor || $visitor->visit_privacy == 1) {
+            return;
+        }
+
+        // Get profile owner data
+        $profileOwner = User::where('user_id', $profileOwnerId)->first();
+        if (!$profileOwner || $profileOwner->visit_privacy == 1) {
+            return;
+        }
+
+        // Check if profile owner is pro and has profile visitors feature
+        $canNotify = false;
+        if ($profileOwner->is_pro == 1) {
+            $canNotify = true;
+        }
+
+        if (!$canNotify) {
+            return;
+        }
+
+        // Create notification
+        try {
+            DB::table('Wo_Notifications')->insert([
+                'notifier_id' => $visitorId,
+                'recipient_id' => $profileOwnerId,
+                'type' => 'visited_profile',
+                'url' => 'index.php?link1=timeline&u=' . $visitor->username,
+                'time' => time(),
+                'seen' => 0
+            ]);
+        } catch (\Exception $e) {
+            // Silently fail if notification insertion fails
+        }
+    }
+
+    /**
+     * Check if user is blocked
+     */
+    private function isBlocked(int $userId, int $loggedUserId): int
+    {
+        $blocked = DB::table('Wo_Blocks')
+            ->where(function($query) use ($userId, $loggedUserId) {
+                $query->where('blocker', $userId)->where('blocked', $loggedUserId);
+            })
+            ->orWhere(function($query) use ($userId, $loggedUserId) {
+                $query->where('blocker', $loggedUserId)->where('blocked', $userId);
+            })
+            ->exists();
+
+        return $blocked ? 1 : 0;
+    }
+
+    /**
+     * Format time elapsed string
+     */
+    private function timeElapsedString(int $timestamp): string
+    {
+        $time = time() - $timestamp;
+        
+        if ($time < 60) return 'Just now';
+        if ($time < 3600) return floor($time / 60) . ' minutes ago';
+        if ($time < 86400) return floor($time / 3600) . ' hours ago';
+        if ($time < 2592000) return floor($time / 86400) . ' days ago';
+        if ($time < 31536000) return floor($time / 2592000) . ' months ago';
+        return floor($time / 31536000) . ' years ago';
+    }
+}
+

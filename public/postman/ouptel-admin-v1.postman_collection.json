@@ -2,7 +2,7 @@
   "info": {
     "name": "Ouptel Admin API v1",
     "_postman_id": "c2a9ec9d-6d8b-4b1e-9d2e-ouptel-admin-v1",
-    "description": "API collection for login, ping, albums (list, create).",
+    "description": "Complete API collection for Ouptel Admin Panel - includes authentication, posts, comments, social features, and comprehensive settings management (12 setting categories). All APIs mimic old WoWonder API structure for backward compatibility.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -2031,6 +2031,609 @@
           "path": ["api","v1","users","400869","reject-follow"]
         },
         "description": "Reject a follow request from a user"
+      }
+    },
+    {
+      "name": "Settings - Get General Settings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/settings",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","settings"]
+        },
+        "description": "Get all general application settings (mimics old get_settings.php)"
+      }
+    },
+    {
+      "name": "Settings - Update User Data",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"general_settings\",\n  \"user_data\": \"{\\\"username\\\":\\\"johndoe\\\",\\\"email\\\":\\\"john@example.com\\\",\\\"gender\\\":\\\"male\\\"}\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/settings/update-user-data",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","settings","update-user-data"]
+        },
+        "description": "Update user settings - types: general_settings, password_settings, privacy_settings, online_status, profile_settings, custom_settings"
+      }
+    },
+    {
+      "name": "Profile - Get User Data",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/profile/user-data?user_profile_id=123&fetch=user_data,followers,following",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","profile","user-data"],
+          "query": [
+            {"key":"user_profile_id","value":"123"},
+            {"key":"fetch","value":"user_data,followers,following"}
+          ]
+        },
+        "description": "Get comprehensive user profile data (mimics old get_user_data.php)"
+      }
+    },
+    {
+      "name": "Privacy - Get Privacy Settings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/privacy/settings",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","privacy","settings"]
+        },
+        "description": "Get current user's privacy settings"
+      }
+    },
+    {
+      "name": "Privacy - Update Privacy Settings",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"message_privacy\": \"1\",\n  \"follow_privacy\": \"0\",\n  \"birth_privacy\": \"2\",\n  \"status\": \"1\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/privacy/settings",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","privacy","settings"]
+        },
+        "description": "Update privacy settings - message_privacy, follow_privacy, birth_privacy, status, etc."
+      }
+    },
+    {
+      "name": "Password - Change Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"current_password\": \"oldpassword123\",\n  \"new_password\": \"newpassword123\",\n  \"repeat_new_password\": \"newpassword123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/password/change",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","password","change"]
+        },
+        "description": "Change user password and logout all other sessions"
+      }
+    },
+    {
+      "name": "Password - Verify Current Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"password\": \"currentpassword123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/password/verify",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","password","verify"]
+        },
+        "description": "Verify if a password is correct (helper endpoint for UI validation)"
+      }
+    },
+    {
+      "name": "Sessions - Get All Sessions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/sessions",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","sessions"]
+        },
+        "description": "Get all active sessions for the authenticated user across all devices"
+      }
+    },
+    {
+      "name": "Sessions - Delete Session",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": 1235\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/sessions/delete",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","sessions","delete"]
+        },
+        "description": "Delete a specific session (log out from that device)"
+      }
+    },
+    {
+      "name": "Sessions - Delete All Other Sessions",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/sessions/delete-all",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","sessions","delete-all"]
+        },
+        "description": "Log out from all other devices (keep current session)"
+      }
+    },
+    {
+      "name": "Social Links - Get Social Links",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/social-links",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","social-links"]
+        },
+        "description": "Get user's social media profile links"
+      }
+    },
+    {
+      "name": "Social Links - Update Social Links",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"facebook\": \"https://facebook.com/johndoe\",\n  \"twitter\": \"https://twitter.com/johndoe\",\n  \"instagram\": \"https://instagram.com/johndoe\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/social-links",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","social-links"]
+        },
+        "description": "Update social media links - facebook, twitter, instagram, linkedin, youtube, google, vk"
+      }
+    },
+    {
+      "name": "Design - Get Design Settings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/design/settings",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","design","settings"]
+        },
+        "description": "Get current avatar and cover photo URLs"
+      }
+    },
+    {
+      "name": "Design - Update Avatar",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"image","type":"file","src":[]}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/design/avatar",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","design","avatar"]
+        },
+        "description": "Upload new profile picture (max 10MB, JPEG/PNG/JPG/GIF)"
+      }
+    },
+    {
+      "name": "Design - Update Cover",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"image","type":"file","src":[]}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/design/cover",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","design","cover"]
+        },
+        "description": "Upload new cover photo (max 20MB, JPEG/PNG/JPG/GIF)"
+      }
+    },
+    {
+      "name": "Design - Reset Avatar",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/design/avatar/reset",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","design","avatar","reset"]
+        },
+        "description": "Reset avatar to default based on gender"
+      }
+    },
+    {
+      "name": "Design - Reset Cover",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/design/cover/reset",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","design","cover","reset"]
+        },
+        "description": "Reset cover photo to default"
+      }
+    },
+    {
+      "name": "Blocked Users - Get Blocked List",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/blocked-users",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","blocked-users"]
+        },
+        "description": "Get list of all blocked users"
+      }
+    },
+    {
+      "name": "Blocked Users - Block User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"recipient_id\": 456,\n  \"block_type\": \"block\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/block-user",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","block-user"]
+        },
+        "description": "Block a user (also removes following/friend relationships)"
+      }
+    },
+    {
+      "name": "Blocked Users - Unblock User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"recipient_id\": 456,\n  \"block_type\": \"un-block\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/block-user",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","block-user"]
+        },
+        "description": "Unblock a previously blocked user"
+      }
+    },
+    {
+      "name": "Blocked Users - Check Block Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/users/456/block-status?user_id=456",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","users","456","block-status"],
+          "query": [{"key":"user_id","value":"456"}]
+        },
+        "description": "Check if a user is blocked (bidirectional check)"
+      }
+    },
+    {
+      "name": "Notifications - Get Notification Settings",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/settings",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","notifications","settings"]
+        },
+        "description": "Get all notification preferences (12 types)"
+      }
+    },
+    {
+      "name": "Notifications - Update Settings",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"e_liked\": 0,\n  \"e_commented\": 1,\n  \"e_followed\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/settings",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","notifications","settings"]
+        },
+        "description": "Update notification preferences - partial or complete update"
+      }
+    },
+    {
+      "name": "Notifications - Enable All",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/settings/enable-all",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","notifications","settings","enable-all"]
+        },
+        "description": "Enable all notification types at once"
+      }
+    },
+    {
+      "name": "Notifications - Disable All",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/settings/disable-all",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","notifications","settings","disable-all"]
+        },
+        "description": "Disable all notification types at once (Do Not Disturb)"
+      }
+    },
+    {
+      "name": "Addresses - Get All Addresses",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/addresses?limit=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","addresses"],
+          "query": [{"key":"limit","value":"20"}]
+        },
+        "description": "Get all saved delivery/shipping addresses"
+      }
+    },
+    {
+      "name": "Addresses - Get Address by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/addresses/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","addresses","1"]
+        },
+        "description": "Get a specific address by ID"
+      }
+    },
+    {
+      "name": "Addresses - Add Address",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"John Doe\",\n  \"phone\": \"+1234567890\",\n  \"country\": \"United States\",\n  \"city\": \"New York\",\n  \"zip\": \"10001\",\n  \"address\": \"123 Main Street, Apt 4B\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/addresses",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","addresses"]
+        },
+        "description": "Add a new delivery/shipping address"
+      }
+    },
+    {
+      "name": "Addresses - Update Address",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"John Doe - Home\",\n  \"phone\": \"+1987654321\",\n  \"country\": \"United States\",\n  \"city\": \"Brooklyn\",\n  \"zip\": \"11201\",\n  \"address\": \"456 New Street\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/addresses/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","addresses","1"]
+        },
+        "description": "Update an existing address"
+      }
+    },
+    {
+      "name": "Addresses - Delete Address",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/addresses/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","addresses","1"]
+        },
+        "description": "Delete a saved address"
+      }
+    },
+    {
+      "name": "My Information - Get Data (JSON)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"data\": \"my_information,posts,followers,following\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/my-information",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","my-information"]
+        },
+        "description": "Get comprehensive user information as JSON - Options: my_information, posts, pages, groups, followers, following, friends"
+      }
+    },
+    {
+      "name": "My Information - Download (HTML)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"data\": \"my_information,posts,pages,groups,followers,following,friends\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/my-information/download",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","my-information","download"]
+        },
+        "description": "Generate and download complete data export as HTML file (GDPR compliance)"
+      }
+    },
+    {
+      "name": "Delete Account - Immediate Deletion",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"password\": \"user_password\",\n  \"confirmation\": \"DELETE\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/account/delete",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","account","delete"]
+        },
+        "description": "⚠️ PERMANENTLY delete account immediately (cannot be undone!)"
+      }
+    },
+    {
+      "name": "Delete Account - Request Deletion (30-day grace)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"password\": \"user_password\",\n  \"reason\": \"No longer need the account\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/account/delete-request",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","account","delete-request"]
+        },
+        "description": "Schedule account deletion with 30-day grace period (recommended, can be cancelled by logging in)"
       }
     }
   ],

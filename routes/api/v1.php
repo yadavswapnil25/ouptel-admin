@@ -28,6 +28,18 @@ use App\Http\Controllers\Api\V1\PeopleFollowController;
 use App\Http\Controllers\Api\V1\PostController;
 use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\FollowController;
+use App\Http\Controllers\Api\V1\SettingsController;
+use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\PrivacyController;
+use App\Http\Controllers\Api\V1\PasswordController;
+use App\Http\Controllers\Api\V1\SessionController;
+use App\Http\Controllers\Api\V1\SocialLinksController;
+use App\Http\Controllers\Api\V1\DesignController;
+use App\Http\Controllers\Api\V1\BlockedUsersController;
+use App\Http\Controllers\Api\V1\NotificationSettingsController;
+use App\Http\Controllers\Api\V1\AddressController;
+use App\Http\Controllers\Api\V1\MyInformationController;
+use App\Http\Controllers\Api\V1\DeleteAccountController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -186,5 +198,71 @@ Route::get('/users/{userId}/follow-status', [FollowController::class, 'checkFoll
 Route::get('/follow-requests', [FollowController::class, 'getFollowRequests']);
 Route::post('/users/{followerId}/accept-follow', [FollowController::class, 'acceptFollowRequest']);
 Route::post('/users/{followerId}/reject-follow', [FollowController::class, 'rejectFollowRequest']);
+
+// Settings routes (mimics old WoWonder API)
+Route::get('/settings', [SettingsController::class, 'getSettings']);
+Route::post('/settings/update-user-data', [SettingsController::class, 'updateUserData']);
+
+// Profile routes (mimics old WoWonder API)
+Route::get('/profile/user-data', [ProfileController::class, 'getUserData']);
+Route::post('/profile/user-data', [ProfileController::class, 'getUserData']);
+
+// Privacy settings routes (mimics old WoWonder API)
+Route::get('/privacy/settings', [PrivacyController::class, 'getPrivacySettings']);
+Route::post('/privacy/settings', [PrivacyController::class, 'updatePrivacySettings']);
+Route::put('/privacy/settings', [PrivacyController::class, 'updatePrivacySettings']);
+
+// Password change routes (mimics old WoWonder API)
+Route::post('/password/change', [PasswordController::class, 'changePassword']);
+Route::post('/password/verify', [PasswordController::class, 'verifyCurrentPassword']);
+
+// Session management routes (mimics old WoWonder API)
+Route::get('/sessions', [SessionController::class, 'getSessions']);
+Route::post('/sessions/delete', [SessionController::class, 'deleteSession']);
+Route::post('/sessions/delete-all', [SessionController::class, 'deleteAllOtherSessions']);
+Route::delete('/sessions/{id}', [SessionController::class, 'deleteSession']);
+
+// Social links routes (mimics old WoWonder API)
+Route::get('/social-links', [SocialLinksController::class, 'getSocialLinks']);
+Route::post('/social-links', [SocialLinksController::class, 'updateSocialLinks']);
+Route::put('/social-links', [SocialLinksController::class, 'updateSocialLinks']);
+
+// Design settings routes (mimics old WoWonder API)
+Route::get('/design/settings', [DesignController::class, 'getDesignSettings']);
+Route::post('/design/avatar', [DesignController::class, 'updateAvatar']);
+Route::post('/design/cover', [DesignController::class, 'updateCover']);
+Route::post('/design/avatar/reset', [DesignController::class, 'resetAvatar']);
+Route::post('/design/cover/reset', [DesignController::class, 'resetCover']);
+Route::delete('/design/avatar', [DesignController::class, 'resetAvatar']);
+Route::delete('/design/cover', [DesignController::class, 'resetCover']);
+
+// Blocked users routes (mimics old WoWonder API)
+Route::get('/blocked-users', [BlockedUsersController::class, 'getBlockedUsers']);
+Route::post('/block-user', [BlockedUsersController::class, 'blockUser']);
+Route::post('/users/{userId}/block', [BlockedUsersController::class, 'blockUser']);
+Route::get('/users/{userId}/block-status', [BlockedUsersController::class, 'checkBlockStatus']);
+
+// Notification settings routes (mimics old WoWonder API)
+Route::get('/notifications/settings', [NotificationSettingsController::class, 'getNotificationSettings']);
+Route::post('/notifications/settings', [NotificationSettingsController::class, 'updateNotificationSettings']);
+Route::put('/notifications/settings', [NotificationSettingsController::class, 'updateNotificationSettings']);
+Route::post('/notifications/settings/enable-all', [NotificationSettingsController::class, 'enableAllNotifications']);
+Route::post('/notifications/settings/disable-all', [NotificationSettingsController::class, 'disableAllNotifications']);
+
+// Address management routes (mimics old WoWonder API)
+Route::get('/addresses', [AddressController::class, 'getAddresses']);
+Route::get('/addresses/{id}', [AddressController::class, 'getAddressById']);
+Route::post('/addresses', [AddressController::class, 'addAddress']);
+Route::put('/addresses/{id}', [AddressController::class, 'updateAddress']);
+Route::delete('/addresses/{id}', [AddressController::class, 'deleteAddress']);
+
+// My information routes (mimics old WoWonder API)
+Route::post('/my-information', [MyInformationController::class, 'getMyInformation']);
+Route::post('/my-information/download', [MyInformationController::class, 'downloadMyInformation']);
+
+// Delete account routes (mimics old WoWonder API)
+Route::post('/account/delete', [DeleteAccountController::class, 'deleteAccount']);
+Route::post('/account/delete-request', [DeleteAccountController::class, 'requestAccountDeletion']);
+Route::delete('/account', [DeleteAccountController::class, 'deleteAccount']);
 
 
