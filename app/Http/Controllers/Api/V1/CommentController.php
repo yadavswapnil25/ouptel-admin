@@ -297,21 +297,16 @@ class CommentController extends Controller
         try {
             DB::beginTransaction();
 
-            // Soft delete the comment
-            $comment->update(['active' => 0]);
-
-            // Update parent comment's reply count if this was a reply
-            if ($comment->parent_id > 0) {
-                Comment::where('id', $comment->parent_id)->decrement('replies');
-            }
-
-            // Clean up associated files
+            // Clean up associated files before deleting
             if ($comment->c_file) {
                 Storage::delete($comment->c_file);
             }
             if ($comment->record) {
                 Storage::delete($comment->record);
             }
+
+            // Delete the comment (hard delete since active field doesn't exist)
+            $comment->delete();
 
             DB::commit();
 
@@ -601,16 +596,15 @@ class CommentController extends Controller
         return [
             'id' => $comment->id,
             'post_id' => $comment->post_id,
-            'parent_id' => $comment->parent_id,
+            'page_id' => $comment->page_id ?? 0,
             'text' => $comment->text,
             'comment_type' => $comment->comment_type,
             'has_file' => $comment->has_file,
             'file_url' => $comment->file_url,
-            'c_file_name' => $comment->c_file_name,
-            'c_file_type' => $comment->c_file_type,
-            'is_reply' => $comment->is_reply,
-            'has_replies' => $comment->has_replies,
-            'is_active' => $comment->is_active,
+            'c_file' => $comment->c_file ?? '',
+            'record' => $comment->record ?? '',
+            'is_reply' => $comment->is_reply, // Always false - replies not supported
+            'has_replies' => $comment->has_replies, // Always false - replies not supported
             'is_owner' => $comment->user_id == $userId,
             'author' => [
                 'user_id' => $comment->user->user_id ?? $comment->user_id,
@@ -622,7 +616,7 @@ class CommentController extends Controller
             'created_at_human' => $comment->human_time,
             'reaction_counts' => $comment->reaction_counts,
             'total_reactions' => $comment->total_reactions,
-            'replies_count' => $comment->replies,
+            'replies_count' => 0, // Replies not supported
             'user_reaction' => $comment->getUserReaction($userId),
         ];
     }
@@ -649,6 +643,8 @@ class CommentController extends Controller
 
     /**
      * Increment comment reaction count
+     * Note: Reaction count fields don't exist in Wo_Comments table
+     * Counts are calculated from Wo_PostReactions table
      * 
      * @param Comment $comment
      * @param int $reactionType
@@ -656,23 +652,14 @@ class CommentController extends Controller
      */
     private function incrementCommentReactionCount(Comment $comment, int $reactionType): void
     {
-        $field = match($reactionType) {
-            1 => 'reaction_like_count',
-            2 => 'reaction_love_count',
-            3 => 'reaction_haha_count',
-            4 => 'reaction_wow_count',
-            5 => 'reaction_sad_count',
-            6 => 'reaction_angry_count',
-            default => null,
-        };
-
-        if ($field) {
-            $comment->increment($field);
-        }
+        // No-op: Reaction counts are calculated from Wo_PostReactions table
+        // No need to maintain denormalized counts in Wo_Comments
     }
 
     /**
      * Decrement comment reaction count
+     * Note: Reaction count fields don't exist in Wo_Comments table
+     * Counts are calculated from Wo_PostReactions table
      * 
      * @param Comment $comment
      * @param int $reactionType
@@ -680,19 +667,8 @@ class CommentController extends Controller
      */
     private function decrementCommentReactionCount(Comment $comment, int $reactionType): void
     {
-        $field = match($reactionType) {
-            1 => 'reaction_like_count',
-            2 => 'reaction_love_count',
-            3 => 'reaction_haha_count',
-            4 => 'reaction_wow_count',
-            5 => 'reaction_sad_count',
-            6 => 'reaction_angry_count',
-            default => null,
-        };
-
-        if ($field) {
-            $comment->decrement($field);
-        }
+        // No-op: Reaction counts are calculated from Wo_PostReactions table
+        // No need to maintain denormalized counts in Wo_Comments
     }
 
     /**

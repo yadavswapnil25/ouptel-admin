@@ -17,13 +17,17 @@ class Comment extends Model
 
     protected $fillable = [
         'user_id',
+        'page_id',
         'post_id',
         'text',
+        'c_file',
+        'record',
         'time',
     ];
 
     protected $casts = [
         'user_id' => 'integer',
+        'page_id' => 'integer',
         'post_id' => 'integer',
         'time' => 'integer',
     ];
@@ -53,17 +57,19 @@ class Comment extends Model
         return $this->belongsTo(Event::class, 'event_id', 'id');
     }
 
-    public function parentComment(): BelongsTo
-    {
-        return $this->belongsTo(Comment::class, 'parent_id', 'id');
-    }
+    // Note: parent_id field doesn't exist in Wo_Comments table
+    // Comment replies are not supported in this version
+    // public function parentComment(): BelongsTo
+    // {
+    //     return $this->belongsTo(Comment::class, 'parent_id', 'id');
+    // }
 
-    public function replies(): HasMany
-    {
-        return $this->hasMany(Comment::class, 'parent_id', 'id')
-            ->where('active', 1)
-            ->orderBy('time', 'asc');
-    }
+    // public function replies(): HasMany
+    // {
+    //     return $this->hasMany(Comment::class, 'parent_id', 'id')
+    //         ->where('active', 1)
+    //         ->orderBy('time', 'asc');
+    // }
 
     public function reactions(): HasMany
     {
@@ -79,15 +85,16 @@ class Comment extends Model
         return 'Unknown';
     }
 
-    public function getIsActiveAttribute(): bool
-    {
-        return $this->active == 1;
-    }
+    // Note: active and boosted fields don't exist in Wo_Comments table
+    // public function getIsActiveAttribute(): bool
+    // {
+    //     return $this->active == 1;
+    // }
 
-    public function getIsBoostedAttribute(): bool
-    {
-        return $this->boosted == 1;
-    }
+    // public function getIsBoostedAttribute(): bool
+    // {
+    //     return $this->boosted == 1;
+    // }
 
     public function getHasFileAttribute(): bool
     {
@@ -105,26 +112,37 @@ class Comment extends Model
         return null;
     }
 
+    // Note: Reaction count fields don't exist in Wo_Comments table
+    // Calculate from Wo_PostReactions table instead
     public function getTotalReactionsAttribute(): int
     {
-        return $this->reaction_like_count + 
-               $this->reaction_love_count + 
-               $this->reaction_haha_count + 
-               $this->reaction_wow_count + 
-               $this->reaction_sad_count + 
-               $this->reaction_angry_count;
+        return $this->reactions()
+            ->where('post_id', 0) // Only comment reactions
+            ->count();
     }
 
     public function getReactionCountsAttribute(): array
     {
-        return [
-            1 => $this->reaction_like_count,
-            2 => $this->reaction_love_count,
-            3 => $this->reaction_haha_count,
-            4 => $this->reaction_wow_count,
-            5 => $this->reaction_sad_count,
-            6 => $this->reaction_angry_count,
+        $reactions = $this->reactions()
+            ->selectRaw('reaction, COUNT(*) as count')
+            ->where('post_id', 0) // Only comment reactions
+            ->groupBy('reaction')
+            ->get();
+
+        $counts = [
+            1 => 0, // Like
+            2 => 0, // Love
+            3 => 0, // Haha
+            4 => 0, // Wow
+            5 => 0, // Sad
+            6 => 0, // Angry
         ];
+
+        foreach ($reactions as $reaction) {
+            $counts[$reaction->reaction] = $reaction->count;
+        }
+
+        return $counts;
     }
 
     public function getHumanTimeAttribute(): string
@@ -165,21 +183,23 @@ class Comment extends Model
 
     /**
      * Check if comment has replies
+     * Note: parent_id and replies fields don't exist in Wo_Comments table
      * 
      * @return bool
      */
     public function getHasRepliesAttribute(): bool
     {
-        return $this->replies > 0;
+        return false; // Comment replies not supported
     }
 
     /**
      * Check if this is a reply to another comment
+     * Note: parent_id field doesn't exist in Wo_Comments table
      * 
      * @return bool
      */
     public function getIsReplyAttribute(): bool
     {
-        return $this->parent_id > 0;
+        return false; // Comment replies not supported
     }
 }
