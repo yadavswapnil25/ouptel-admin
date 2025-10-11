@@ -89,8 +89,7 @@ class DesignController extends Controller
 
             // Update user avatar
             DB::table('Wo_Users')->where('user_id', $tokenUserId)->update([
-                'avatar' => $path,
-                'avatar_org' => $path
+                'avatar' => $path
             ]);
 
             // Get updated user data
@@ -194,8 +193,7 @@ class DesignController extends Controller
 
             // Update user cover
             DB::table('Wo_Users')->where('user_id', $tokenUserId)->update([
-                'cover' => $path,
-                'cover_org' => $path
+                'cover' => $path
             ]);
 
             return response()->json([
@@ -280,8 +278,7 @@ class DesignController extends Controller
 
             // Update user avatar to default
             DB::table('Wo_Users')->where('user_id', $tokenUserId)->update([
-                'avatar' => $defaultAvatar,
-                'avatar_org' => $defaultAvatar
+                'avatar' => $defaultAvatar
             ]);
 
             return response()->json([
@@ -366,8 +363,7 @@ class DesignController extends Controller
 
             // Update user cover to default
             DB::table('Wo_Users')->where('user_id', $tokenUserId)->update([
-                'cover' => $defaultCover,
-                'cover_org' => $defaultCover
+                'cover' => $defaultCover
             ]);
 
             return response()->json([
