@@ -48,11 +48,8 @@ class NotificationSettingsController extends Controller
         }
 
         try {
-            // Get user's notification settings
-            $user = DB::table('Wo_Users')
-                ->where('user_id', $tokenUserId)
-                ->select('notification_settings')
-                ->first();
+            // Get user's notification settings (individual columns)
+            $user = User::where('user_id', $tokenUserId)->first();
 
             if (!$user) {
                 return response()->json([
@@ -66,23 +63,20 @@ class NotificationSettingsController extends Controller
                 ], 404);
             }
 
-            // Decode notification settings JSON
-            $notificationSettings = json_decode($user->notification_settings ?? '{}', true);
-
-            // Ensure all settings have default values
+            // Get notification settings from individual columns
             $settings = [
-                'e_liked' => (int) ($notificationSettings['e_liked'] ?? 1),
-                'e_shared' => (int) ($notificationSettings['e_shared'] ?? 1),
-                'e_wondered' => (int) ($notificationSettings['e_wondered'] ?? 1),
-                'e_commented' => (int) ($notificationSettings['e_commented'] ?? 1),
-                'e_followed' => (int) ($notificationSettings['e_followed'] ?? 1),
-                'e_accepted' => (int) ($notificationSettings['e_accepted'] ?? 1),
-                'e_mentioned' => (int) ($notificationSettings['e_mentioned'] ?? 1),
-                'e_joined_group' => (int) ($notificationSettings['e_joined_group'] ?? 1),
-                'e_liked_page' => (int) ($notificationSettings['e_liked_page'] ?? 1),
-                'e_visited' => (int) ($notificationSettings['e_visited'] ?? 1),
-                'e_profile_wall_post' => (int) ($notificationSettings['e_profile_wall_post'] ?? 1),
-                'e_memory' => (int) ($notificationSettings['e_memory'] ?? 1),
+                'e_liked' => (int) ($user->e_liked ?? 1),
+                'e_shared' => (int) ($user->e_shared ?? 1),
+                'e_wondered' => (int) ($user->e_wondered ?? 1),
+                'e_commented' => (int) ($user->e_commented ?? 1),
+                'e_followed' => (int) ($user->e_followed ?? 1),
+                'e_accepted' => (int) ($user->e_accepted ?? 1),
+                'e_mentioned' => (int) ($user->e_mentioned ?? 1),
+                'e_joined_group' => (int) ($user->e_joined_group ?? 1),
+                'e_liked_page' => (int) ($user->e_liked_page ?? 1),
+                'e_visited' => (int) ($user->e_visited ?? 1),
+                'e_profile_wall_post' => (int) ($user->e_profile_wall_post ?? 1),
+                'e_memory' => (int) ($user->e_memory ?? 1),
             ];
 
             // Add human-readable labels
@@ -245,30 +239,42 @@ class NotificationSettingsController extends Controller
                 ], 404);
             }
 
-            // Get current notification settings
-            $currentSettings = json_decode($user->notification_settings ?? '{}', true);
+            // Build update data for only the provided settings
+            $updateData = [];
+            if ($request->has('e_liked')) $updateData['e_liked'] = (string) $request->input('e_liked');
+            if ($request->has('e_shared')) $updateData['e_shared'] = (string) $request->input('e_shared');
+            if ($request->has('e_wondered')) $updateData['e_wondered'] = (string) $request->input('e_wondered');
+            if ($request->has('e_commented')) $updateData['e_commented'] = (string) $request->input('e_commented');
+            if ($request->has('e_followed')) $updateData['e_followed'] = (string) $request->input('e_followed');
+            if ($request->has('e_accepted')) $updateData['e_accepted'] = (string) $request->input('e_accepted');
+            if ($request->has('e_mentioned')) $updateData['e_mentioned'] = (string) $request->input('e_mentioned');
+            if ($request->has('e_joined_group')) $updateData['e_joined_group'] = (string) $request->input('e_joined_group');
+            if ($request->has('e_liked_page')) $updateData['e_liked_page'] = (string) $request->input('e_liked_page');
+            if ($request->has('e_visited')) $updateData['e_visited'] = (string) $request->input('e_visited');
+            if ($request->has('e_profile_wall_post')) $updateData['e_profile_wall_post'] = (string) $request->input('e_profile_wall_post');
+            if ($request->has('e_memory')) $updateData['e_memory'] = (string) $request->input('e_memory');
 
-            // Update only provided settings
-            $updatedSettings = [
-                'e_liked' => (int) ($request->has('e_liked') ? $request->input('e_liked') : ($currentSettings['e_liked'] ?? 1)),
-                'e_shared' => (int) ($request->has('e_shared') ? $request->input('e_shared') : ($currentSettings['e_shared'] ?? 1)),
-                'e_wondered' => (int) ($request->has('e_wondered') ? $request->input('e_wondered') : ($currentSettings['e_wondered'] ?? 1)),
-                'e_commented' => (int) ($request->has('e_commented') ? $request->input('e_commented') : ($currentSettings['e_commented'] ?? 1)),
-                'e_followed' => (int) ($request->has('e_followed') ? $request->input('e_followed') : ($currentSettings['e_followed'] ?? 1)),
-                'e_accepted' => (int) ($request->has('e_accepted') ? $request->input('e_accepted') : ($currentSettings['e_accepted'] ?? 1)),
-                'e_mentioned' => (int) ($request->has('e_mentioned') ? $request->input('e_mentioned') : ($currentSettings['e_mentioned'] ?? 1)),
-                'e_joined_group' => (int) ($request->has('e_joined_group') ? $request->input('e_joined_group') : ($currentSettings['e_joined_group'] ?? 1)),
-                'e_liked_page' => (int) ($request->has('e_liked_page') ? $request->input('e_liked_page') : ($currentSettings['e_liked_page'] ?? 1)),
-                'e_visited' => (int) ($request->has('e_visited') ? $request->input('e_visited') : ($currentSettings['e_visited'] ?? 1)),
-                'e_profile_wall_post' => (int) ($request->has('e_profile_wall_post') ? $request->input('e_profile_wall_post') : ($currentSettings['e_profile_wall_post'] ?? 1)),
-                'e_memory' => (int) ($request->has('e_memory') ? $request->input('e_memory') : ($currentSettings['e_memory'] ?? 1)),
-            ];
-
-            // Encode as JSON and save
-            $notificationSettingsJson = json_encode($updatedSettings);
+            // Update individual columns
             DB::table('Wo_Users')
                 ->where('user_id', $tokenUserId)
-                ->update(['notification_settings' => $notificationSettingsJson]);
+                ->update($updateData);
+
+            // Get updated settings
+            $user = User::where('user_id', $tokenUserId)->first();
+            $updatedSettings = [
+                'e_liked' => (int) ($user->e_liked ?? 1),
+                'e_shared' => (int) ($user->e_shared ?? 1),
+                'e_wondered' => (int) ($user->e_wondered ?? 1),
+                'e_commented' => (int) ($user->e_commented ?? 1),
+                'e_followed' => (int) ($user->e_followed ?? 1),
+                'e_accepted' => (int) ($user->e_accepted ?? 1),
+                'e_mentioned' => (int) ($user->e_mentioned ?? 1),
+                'e_joined_group' => (int) ($user->e_joined_group ?? 1),
+                'e_liked_page' => (int) ($user->e_liked_page ?? 1),
+                'e_visited' => (int) ($user->e_visited ?? 1),
+                'e_profile_wall_post' => (int) ($user->e_profile_wall_post ?? 1),
+                'e_memory' => (int) ($user->e_memory ?? 1),
+            ];
 
             return response()->json([
                 'api_status' => '200',
@@ -328,7 +334,24 @@ class NotificationSettingsController extends Controller
         }
 
         try {
-            // Enable all notifications
+            // Enable all notifications (update individual columns)
+            DB::table('Wo_Users')
+                ->where('user_id', $tokenUserId)
+                ->update([
+                    'e_liked' => '1',
+                    'e_shared' => '1',
+                    'e_wondered' => '1',
+                    'e_commented' => '1',
+                    'e_followed' => '1',
+                    'e_accepted' => '1',
+                    'e_mentioned' => '1',
+                    'e_joined_group' => '1',
+                    'e_liked_page' => '1',
+                    'e_visited' => '1',
+                    'e_profile_wall_post' => '1',
+                    'e_memory' => '1',
+                ]);
+
             $settings = [
                 'e_liked' => 1,
                 'e_shared' => 1,
@@ -343,10 +366,6 @@ class NotificationSettingsController extends Controller
                 'e_profile_wall_post' => 1,
                 'e_memory' => 1,
             ];
-
-            DB::table('Wo_Users')
-                ->where('user_id', $tokenUserId)
-                ->update(['notification_settings' => json_encode($settings)]);
 
             return response()->json([
                 'api_status' => '200',
@@ -406,7 +425,24 @@ class NotificationSettingsController extends Controller
         }
 
         try {
-            // Disable all notifications
+            // Disable all notifications (update individual columns)
+            DB::table('Wo_Users')
+                ->where('user_id', $tokenUserId)
+                ->update([
+                    'e_liked' => '0',
+                    'e_shared' => '0',
+                    'e_wondered' => '0',
+                    'e_commented' => '0',
+                    'e_followed' => '0',
+                    'e_accepted' => '0',
+                    'e_mentioned' => '0',
+                    'e_joined_group' => '0',
+                    'e_liked_page' => '0',
+                    'e_visited' => '0',
+                    'e_profile_wall_post' => '0',
+                    'e_memory' => '0',
+                ]);
+
             $settings = [
                 'e_liked' => 0,
                 'e_shared' => 0,
@@ -421,10 +457,6 @@ class NotificationSettingsController extends Controller
                 'e_profile_wall_post' => 0,
                 'e_memory' => 0,
             ];
-
-            DB::table('Wo_Users')
-                ->where('user_id', $tokenUserId)
-                ->update(['notification_settings' => json_encode($settings)]);
 
             return response()->json([
                 'api_status' => '200',
