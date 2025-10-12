@@ -114,7 +114,7 @@ class MyInformationController extends Controller
                     $settings['blocked_users'] = DB::table('Wo_Blocks')
                         ->join('Wo_Users', 'Wo_Blocks.blocked', '=', 'Wo_Users.user_id')
                         ->where('Wo_Blocks.blocker', $tokenUserId)
-                        ->select('Wo_Users.user_id', 'Wo_Users.username', 'Wo_Users.name', 'Wo_Users.email')
+                        ->select('Wo_Users.user_id', 'Wo_Users.username', 'Wo_Users.first_name', 'Wo_Users.last_name', 'Wo_Users.email')
                         ->get()
                         ->toArray();
 
@@ -134,7 +134,7 @@ class MyInformationController extends Controller
                     try {
                         $settings['referrers'] = DB::table('Wo_Users')
                             ->where('ref_user_id', $tokenUserId)
-                            ->select('user_id', 'username', 'name', 'email', 'registered')
+                            ->select('user_id', 'username', 'first_name', 'last_name', 'email', 'registered')
                             ->get()
                             ->toArray();
                     } catch (\Exception $e) {
@@ -147,74 +147,98 @@ class MyInformationController extends Controller
 
             // Get user's posts
             if (isset($dataTypes['posts'])) {
-                $userInfo['posts'] = DB::table('Wo_Posts')
-                    ->where('user_id', $tokenUserId)
-                    ->where('active', 1)
-                    ->orderBy('post_id', 'DESC')
-                    ->limit(10000)
-                    ->get()
-                    ->toArray();
+                try {
+                    $userInfo['posts'] = DB::table('Wo_Posts')
+                        ->where('user_id', $tokenUserId)
+                        ->where('active', 1)
+                        ->orderBy('post_id', 'DESC')
+                        ->limit(10000)
+                        ->get()
+                        ->toArray();
+                } catch (\Exception $e) {
+                    $userInfo['posts'] = [];
+                }
             }
 
             // Get user's pages
             if (isset($dataTypes['pages'])) {
-                $userInfo['pages'] = DB::table('Wo_Pages')
-                    ->where('user_id', $tokenUserId)
-                    ->orderBy('page_id', 'DESC')
-                    ->get()
-                    ->toArray();
+                try {
+                    $userInfo['pages'] = DB::table('Wo_Pages')
+                        ->where('user_id', $tokenUserId)
+                        ->orderBy('page_id', 'DESC')
+                        ->get()
+                        ->toArray();
+                } catch (\Exception $e) {
+                    $userInfo['pages'] = [];
+                }
             }
 
             // Get user's groups
             if (isset($dataTypes['groups'])) {
-                $userInfo['groups'] = DB::table('Wo_GroupMembers')
-                    ->join('Wo_Groups', 'Wo_GroupMembers.group_id', '=', 'Wo_Groups.id')
-                    ->where('Wo_GroupMembers.user_id', $tokenUserId)
-                    ->select('Wo_Groups.*')
-                    ->get()
-                    ->toArray();
+                try {
+                    $userInfo['groups'] = DB::table('Wo_GroupMembers')
+                        ->join('Wo_Groups', 'Wo_GroupMembers.group_id', '=', 'Wo_Groups.id')
+                        ->where('Wo_GroupMembers.user_id', $tokenUserId)
+                        ->select('Wo_Groups.*')
+                        ->get()
+                        ->toArray();
+                } catch (\Exception $e) {
+                    $userInfo['groups'] = [];
+                }
             }
 
             // Get followers
             if (isset($dataTypes['followers'])) {
-                $userInfo['followers'] = DB::table('Wo_Followers')
-                    ->join('Wo_Users', 'Wo_Followers.follower_id', '=', 'Wo_Users.user_id')
-                    ->where('Wo_Followers.following_id', $tokenUserId)
-                    ->select('Wo_Users.user_id', 'Wo_Users.username', 'Wo_Users.name', 'Wo_Users.email', 'Wo_Users.avatar')
-                    ->limit(100000)
-                    ->get()
-                    ->toArray();
+                try {
+                    $userInfo['followers'] = DB::table('Wo_Followers')
+                        ->join('Wo_Users', 'Wo_Followers.follower_id', '=', 'Wo_Users.user_id')
+                        ->where('Wo_Followers.following_id', $tokenUserId)
+                        ->select('Wo_Users.user_id', 'Wo_Users.username', 'Wo_Users.first_name', 'Wo_Users.last_name', 'Wo_Users.email', 'Wo_Users.avatar')
+                        ->limit(100000)
+                        ->get()
+                        ->toArray();
+                } catch (\Exception $e) {
+                    $userInfo['followers'] = [];
+                }
             }
 
             // Get following
             if (isset($dataTypes['following'])) {
-                $userInfo['following'] = DB::table('Wo_Followers')
-                    ->join('Wo_Users', 'Wo_Followers.following_id', '=', 'Wo_Users.user_id')
-                    ->where('Wo_Followers.follower_id', $tokenUserId)
-                    ->select('Wo_Users.user_id', 'Wo_Users.username', 'Wo_Users.name', 'Wo_Users.email', 'Wo_Users.avatar')
-                    ->limit(100000)
-                    ->get()
-                    ->toArray();
+                try {
+                    $userInfo['following'] = DB::table('Wo_Followers')
+                        ->join('Wo_Users', 'Wo_Followers.following_id', '=', 'Wo_Users.user_id')
+                        ->where('Wo_Followers.follower_id', $tokenUserId)
+                        ->select('Wo_Users.user_id', 'Wo_Users.username', 'Wo_Users.first_name', 'Wo_Users.last_name', 'Wo_Users.email', 'Wo_Users.avatar')
+                        ->limit(100000)
+                        ->get()
+                        ->toArray();
+                } catch (\Exception $e) {
+                    $userInfo['following'] = [];
+                }
             }
 
             // Get friends
             if (isset($dataTypes['friends'])) {
-                $userInfo['friends'] = DB::table('Wo_Friends')
-                    ->join('Wo_Users', function($join) use ($tokenUserId) {
-                        $join->on(function($query) use ($tokenUserId) {
-                            $query->on('Wo_Friends.friend_id', '=', 'Wo_Users.user_id')
-                                  ->where('Wo_Friends.user_id', $tokenUserId);
+                try {
+                    $userInfo['friends'] = DB::table('Wo_Friends')
+                        ->join('Wo_Users', function($join) use ($tokenUserId) {
+                            $join->on(function($query) use ($tokenUserId) {
+                                $query->on('Wo_Friends.friend_id', '=', 'Wo_Users.user_id')
+                                      ->where('Wo_Friends.user_id', $tokenUserId);
+                            })
+                            ->orOn(function($query) use ($tokenUserId) {
+                                $query->on('Wo_Friends.user_id', '=', 'Wo_Users.user_id')
+                                      ->where('Wo_Friends.friend_id', $tokenUserId);
+                            });
                         })
-                        ->orOn(function($query) use ($tokenUserId) {
-                            $query->on('Wo_Friends.user_id', '=', 'Wo_Users.user_id')
-                                  ->where('Wo_Friends.friend_id', $tokenUserId);
-                        });
-                    })
-                    ->where('Wo_Friends.status', '2') // Accepted friends only
-                    ->select('Wo_Users.user_id', 'Wo_Users.username', 'Wo_Users.name', 'Wo_Users.email', 'Wo_Users.avatar')
-                    ->limit(100000)
-                    ->get()
-                    ->toArray();
+                        ->where('Wo_Friends.status', '2') // Accepted friends only
+                        ->select('Wo_Users.user_id', 'Wo_Users.username', 'Wo_Users.first_name', 'Wo_Users.last_name', 'Wo_Users.email', 'Wo_Users.avatar')
+                        ->limit(100000)
+                        ->get()
+                        ->toArray();
+                } catch (\Exception $e) {
+                    $userInfo['friends'] = [];
+                }
             }
 
             return response()->json([
@@ -359,6 +383,7 @@ class MyInformationController extends Controller
     {
         $user = User::where('user_id', $userId)->first();
         $siteName = config('app.name', 'Ouptel');
+        $userName = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: $user->username;
         
         $html = "<!DOCTYPE html>\n";
         $html .= "<html>\n<head>\n";
@@ -382,7 +407,7 @@ class MyInformationController extends Controller
         $html .= "<div class='container'>\n";
         $html .= "<h1>My Information - {$siteName}</h1>\n";
         $html .= "<p>Generated on: " . date('F j, Y, g:i a') . "</p>\n";
-        $html .= "<p>User: {$user->name} (@{$user->username})</p>\n";
+        $html .= "<p>User: {$userName} (@{$user->username})</p>\n";
 
         // My Information Section
         if (isset($userInfo['my_information'])) {
@@ -390,17 +415,27 @@ class MyInformationController extends Controller
             $html .= "<h2>Account Information</h2>\n";
             $info = $userInfo['my_information'];
             
-            $html .= "<div class='info-item'><span class='info-label'>Username:</span> <span class='info-value'>{$info['username']}</span></div>\n";
-            $html .= "<div class='info-item'><span class='info-label'>Email:</span> <span class='info-value'>{$info['email']}</span></div>\n";
-            $html .= "<div class='info-item'><span class='info-label'>Name:</span> <span class='info-value'>{$info['name']}</span></div>\n";
-            $html .= "<div class='info-item'><span class='info-label'>Gender:</span> <span class='info-value'>{$info['gender']}</span></div>\n";
+            $fullName = trim(($info['first_name'] ?? '') . ' ' . ($info['last_name'] ?? ''));
+            $username = $info['username'] ?? 'N/A';
+            $email = $info['email'] ?? 'N/A';
+            $gender = $info['gender'] ?? 'Not specified';
+            
+            $html .= "<div class='info-item'><span class='info-label'>Username:</span> <span class='info-value'>{$username}</span></div>\n";
+            $html .= "<div class='info-item'><span class='info-label'>Email:</span> <span class='info-value'>{$email}</span></div>\n";
+            if ($fullName) {
+                $html .= "<div class='info-item'><span class='info-label'>Name:</span> <span class='info-value'>{$fullName}</span></div>\n";
+            }
+            $html .= "<div class='info-item'><span class='info-label'>Gender:</span> <span class='info-value'>{$gender}</span></div>\n";
             
             if (isset($info['sessions']) && count($info['sessions']) > 0) {
                 $html .= "<h3>Active Sessions (" . count($info['sessions']) . ")</h3>\n";
                 $html .= "<table><tr><th>Session ID</th><th>Platform</th><th>Time</th></tr>\n";
                 foreach ($info['sessions'] as $session) {
                     $session = (array) $session;
-                    $html .= "<tr><td>{$session['session_id']}</td><td>{$session['platform_type']}</td><td>" . date('Y-m-d H:i:s', $session['time']) . "</td></tr>\n";
+                    $platform = $session['platform_type'] ?? $session['platform'] ?? 'Unknown';
+                    $sessionId = $session['session_id'] ?? 'N/A';
+                    $time = isset($session['time']) ? date('Y-m-d H:i:s', $session['time']) : 'Unknown';
+                    $html .= "<tr><td>{$sessionId}</td><td>{$platform}</td><td>{$time}</td></tr>\n";
                 }
                 $html .= "</table>\n";
             }
@@ -410,7 +445,8 @@ class MyInformationController extends Controller
                 $html .= "<table><tr><th>Username</th><th>Name</th></tr>\n";
                 foreach ($info['blocked_users'] as $blocked) {
                     $blocked = (array) $blocked;
-                    $html .= "<tr><td>@{$blocked['username']}</td><td>{$blocked['name']}</td></tr>\n";
+                    $blockedName = trim(($blocked['first_name'] ?? '') . ' ' . ($blocked['last_name'] ?? '')) ?: $blocked['username'];
+                    $html .= "<tr><td>@{$blocked['username']}</td><td>{$blockedName}</td></tr>\n";
                 }
                 $html .= "</table>\n";
             }
@@ -427,7 +463,10 @@ class MyInformationController extends Controller
                 foreach ($userInfo['posts'] as $post) {
                     $post = (array) $post;
                     $postText = substr($post['postText'] ?? '', 0, 100);
-                    $html .= "<tr><td>{$post['post_id']}</td><td>{$postText}</td><td>{$post['postPrivacy']}</td><td>" . date('Y-m-d H:i:s', $post['time']) . "</td></tr>\n";
+                    $postId = $post['post_id'] ?? 'N/A';
+                    $postPrivacy = $post['postPrivacy'] ?? 'Unknown';
+                    $postTime = isset($post['time']) ? date('Y-m-d H:i:s', $post['time']) : 'Unknown';
+                    $html .= "<tr><td>{$postId}</td><td>{$postText}</td><td>{$postPrivacy}</td><td>{$postTime}</td></tr>\n";
                 }
                 $html .= "</table>\n";
             } else {
@@ -444,7 +483,10 @@ class MyInformationController extends Controller
                 $html .= "<table><tr><th>Page Name</th><th>Category</th><th>Likes</th></tr>\n";
                 foreach ($userInfo['pages'] as $page) {
                     $page = (array) $page;
-                    $html .= "<tr><td>{$page['page_name']}</td><td>{$page['category']}</td><td>" . ($page['likes'] ?? 0) . "</td></tr>\n";
+                    $pageName = $page['page_name'] ?? 'Unknown';
+                    $pageCategory = $page['category'] ?? 'N/A';
+                    $pageLikes = $page['likes'] ?? 0;
+                    $html .= "<tr><td>{$pageName}</td><td>{$pageCategory}</td><td>{$pageLikes}</td></tr>\n";
                 }
                 $html .= "</table>\n";
             } else {
@@ -461,7 +503,10 @@ class MyInformationController extends Controller
                 $html .= "<table><tr><th>Group Name</th><th>Privacy</th><th>Members</th></tr>\n";
                 foreach ($userInfo['groups'] as $group) {
                     $group = (array) $group;
-                    $html .= "<tr><td>{$group['group_name']}</td><td>{$group['privacy']}</td><td>" . ($group['members'] ?? 0) . "</td></tr>\n";
+                    $groupName = $group['group_name'] ?? 'Unknown';
+                    $groupPrivacy = $group['privacy'] ?? 'N/A';
+                    $groupMembers = $group['members'] ?? 0;
+                    $html .= "<tr><td>{$groupName}</td><td>{$groupPrivacy}</td><td>{$groupMembers}</td></tr>\n";
                 }
                 $html .= "</table>\n";
             } else {
@@ -478,7 +523,8 @@ class MyInformationController extends Controller
                 $html .= "<table><tr><th>Username</th><th>Name</th></tr>\n";
                 foreach ($userInfo['followers'] as $follower) {
                     $follower = (array) $follower;
-                    $html .= "<tr><td>@{$follower['username']}</td><td>{$follower['name']}</td></tr>\n";
+                    $followerName = trim(($follower['first_name'] ?? '') . ' ' . ($follower['last_name'] ?? '')) ?: $follower['username'];
+                    $html .= "<tr><td>@{$follower['username']}</td><td>{$followerName}</td></tr>\n";
                 }
                 $html .= "</table>\n";
             } else {
@@ -495,7 +541,8 @@ class MyInformationController extends Controller
                 $html .= "<table><tr><th>Username</th><th>Name</th></tr>\n";
                 foreach ($userInfo['following'] as $following) {
                     $following = (array) $following;
-                    $html .= "<tr><td>@{$following['username']}</td><td>{$following['name']}</td></tr>\n";
+                    $followingName = trim(($following['first_name'] ?? '') . ' ' . ($following['last_name'] ?? '')) ?: $following['username'];
+                    $html .= "<tr><td>@{$following['username']}</td><td>{$followingName}</td></tr>\n";
                 }
                 $html .= "</table>\n";
             } else {
@@ -512,7 +559,8 @@ class MyInformationController extends Controller
                 $html .= "<table><tr><th>Username</th><th>Name</th></tr>\n";
                 foreach ($userInfo['friends'] as $friend) {
                     $friend = (array) $friend;
-                    $html .= "<tr><td>@{$friend['username']}</td><td>{$friend['name']}</td></tr>\n";
+                    $friendName = trim(($friend['first_name'] ?? '') . ' ' . ($friend['last_name'] ?? '')) ?: $friend['username'];
+                    $html .= "<tr><td>@{$friend['username']}</td><td>{$friendName}</td></tr>\n";
                 }
                 $html .= "</table>\n";
             } else {

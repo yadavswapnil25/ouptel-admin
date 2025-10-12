@@ -525,7 +525,7 @@ class User extends Authenticatable
             ->where('f.following_id', $this->user_id)
             ->where('f.active', '1')
             ->where('u.active', '1')
-            ->select('u.user_id', 'u.username', 'u.name', 'u.avatar', 'u.verified', 'f.time as followed_at')
+            ->select('u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified', 'f.time as followed_at')
             ->orderBy('f.time', 'desc')
             ->paginate($perPage);
     }
@@ -543,7 +543,7 @@ class User extends Authenticatable
             ->where('f.follower_id', $this->user_id)
             ->where('f.active', '1')
             ->where('u.active', '1')
-            ->select('u.user_id', 'u.username', 'u.name', 'u.avatar', 'u.verified', 'f.time as followed_at')
+            ->select('u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified', 'f.time as followed_at')
             ->orderBy('f.time', 'desc')
             ->paginate($perPage);
     }
@@ -561,7 +561,7 @@ class User extends Authenticatable
             ->where('f.following_id', $this->user_id)
             ->where('f.active', '0')
             ->where('u.active', '1')
-            ->select('u.user_id', 'u.username', 'u.name', 'u.avatar', 'u.verified', 'f.time as requested_at')
+            ->select('u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified', 'f.time as requested_at')
             ->orderBy('f.time', 'desc')
             ->paginate($perPage);
     }
@@ -582,7 +582,7 @@ class User extends Authenticatable
             ->where('f1.active', '1')
             ->where('f2.active', '1')
             ->where('u.active', '1')
-            ->select('u.user_id', 'u.username', 'u.name', 'u.avatar', 'u.verified')
+            ->select('u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified')
             ->orderBy('u.username')
             ->get()
             ->toArray();
@@ -611,8 +611,8 @@ class User extends Authenticatable
                     ->whereRaw('f3.follower_id = ?', [$this->user_id])
                     ->whereRaw('f3.following_id = u.user_id');
             })
-            ->select('u.user_id', 'u.username', 'u.name', 'u.avatar', 'u.verified')
-            ->groupBy('u.user_id', 'u.username', 'u.name', 'u.avatar', 'u.verified')
+            ->select('u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified')
+            ->groupBy('u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified')
             ->orderByRaw('COUNT(f2.following_id) DESC')
             ->limit($limit)
             ->get()
@@ -629,7 +629,7 @@ class User extends Authenticatable
                         ->whereRaw('f.follower_id = ?', [$this->user_id])
                         ->whereRaw('f.following_id = Wo_Users.user_id');
                 })
-                ->select('user_id', 'username', 'name', 'avatar', 'verified')
+                ->select('user_id', 'username', 'first_name', 'last_name', 'avatar', 'verified')
                 ->inRandomOrder()
                 ->limit($limit - count($suggested))
                 ->get()

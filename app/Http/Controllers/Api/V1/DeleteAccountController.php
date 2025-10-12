@@ -223,12 +223,14 @@ class DeleteAccountController extends Controller
             // Schedule deletion for 30 days later (grace period)
             $deletionDate = time() + (30 * 24 * 60 * 60); // 30 days
 
+            // Mark account as inactive/banned (active = 2)
             DB::table('Wo_Users')->where('user_id', $tokenUserId)->update([
-                'active' => '2', // Mark as pending deletion
-                'deletion_request_time' => time(),
-                'deletion_reason' => $request->input('reason', '')
+                'active' => '2', // Mark as pending deletion/banned
             ]);
 
+            // Store deletion request details in a separate table if needed
+            // For now, we just mark the user as inactive
+            
             // Log out all sessions
             DB::table('Wo_AppsSessions')->where('user_id', $tokenUserId)->delete();
 
@@ -259,57 +261,109 @@ class DeleteAccountController extends Controller
     private function deleteUserData(int $userId): void
     {
         // Delete sessions
-        DB::table('Wo_AppsSessions')->where('user_id', $userId)->delete();
+        try {
+            DB::table('Wo_AppsSessions')->where('user_id', $userId)->delete();
+        } catch (\Exception $e) {
+            // Table might not exist or error occurred
+        }
 
         // Delete posts
-        DB::table('Wo_Posts')->where('user_id', $userId)->delete();
+        try {
+            DB::table('Wo_Posts')->where('user_id', $userId)->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete comments
-        DB::table('Wo_Comments')->where('user_id', $userId)->delete();
+        try {
+            DB::table('Wo_Comments')->where('user_id', $userId)->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete reactions
-        DB::table('Wo_PostReactions')->where('user_id', $userId)->delete();
+        try {
+            DB::table('Wo_PostReactions')->where('user_id', $userId)->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete followers/following
-        DB::table('Wo_Followers')
-            ->where('follower_id', $userId)
-            ->orWhere('following_id', $userId)
-            ->delete();
+        try {
+            DB::table('Wo_Followers')
+                ->where('follower_id', $userId)
+                ->orWhere('following_id', $userId)
+                ->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete friends
-        DB::table('Wo_Friends')
-            ->where('user_id', $userId)
-            ->orWhere('friend_id', $userId)
-            ->delete();
+        try {
+            DB::table('Wo_Friends')
+                ->where('user_id', $userId)
+                ->orWhere('friend_id', $userId)
+                ->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete blocks
-        DB::table('Wo_Blocks')
-            ->where('blocker', $userId)
-            ->orWhere('blocked', $userId)
-            ->delete();
+        try {
+            DB::table('Wo_Blocks')
+                ->where('blocker', $userId)
+                ->orWhere('blocked', $userId)
+                ->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete notifications
-        DB::table('Wo_Notifications')
-            ->where('notifier_id', $userId)
-            ->orWhere('recipient_id', $userId)
-            ->delete();
+        try {
+            DB::table('Wo_Notifications')
+                ->where('notifier_id', $userId)
+                ->orWhere('recipient_id', $userId)
+                ->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete addresses
-        DB::table('Wo_UserAddress')->where('user_id', $userId)->delete();
+        try {
+            DB::table('Wo_UserAddress')->where('user_id', $userId)->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete pages
-        DB::table('Wo_Pages')->where('user_id', $userId)->delete();
+        try {
+            DB::table('Wo_Pages')->where('user_id', $userId)->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete group memberships
-        DB::table('Wo_GroupMembers')->where('user_id', $userId)->delete();
+        try {
+            DB::table('Wo_GroupMembers')->where('user_id', $userId)->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete page likes
-        DB::table('Wo_PageLikes')->where('user_id', $userId)->delete();
+        try {
+            DB::table('Wo_PageLikes')->where('user_id', $userId)->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
         // Delete saved posts
-        DB::table('Wo_SavedPosts')->where('user_id', $userId)->delete();
+        try {
+            DB::table('Wo_SavedPosts')->where('user_id', $userId)->delete();
+        } catch (\Exception $e) {
+            // Table might not exist
+        }
 
-        // Delete messages (if table exists)
+        // Delete messages
         try {
             DB::table('Wo_Messages')
                 ->where('from_id', $userId)

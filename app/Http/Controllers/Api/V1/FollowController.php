@@ -244,15 +244,16 @@ class FollowController extends Controller
                 ->where('f.following_id', $userId)
                 ->where('f.active', '1')
                 ->where('u.active', '1')
-                ->select('u.user_id', 'u.username', 'u.name', 'u.avatar', 'u.verified', 'f.time as followed_at')
+                ->select('u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified', 'f.time as followed_at')
                 ->orderBy('f.time', 'desc')
                 ->paginate($perPage);
 
             $formattedFollowers = $followers->map(function ($follower) use ($tokenUserId) {
+                $fullName = trim(($follower->first_name ?? '') . ' ' . ($follower->last_name ?? '')) ?: $follower->username;
                 return [
                     'user_id' => $follower->user_id,
                     'username' => $follower->username,
-                    'name' => $follower->name,
+                    'name' => $fullName,
                     'avatar_url' => $follower->avatar ? asset('storage/' . $follower->avatar) : null,
                     'verified' => $follower->verified === '1',
                     'followed_at' => date('c', $follower->followed_at),
@@ -323,15 +324,16 @@ class FollowController extends Controller
                 ->where('f.follower_id', $userId)
                 ->where('f.active', '1')
                 ->where('u.active', '1')
-                ->select('u.user_id', 'u.username', 'u.name', 'u.avatar', 'u.verified', 'f.time as followed_at')
+                ->select('u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified', 'f.time as followed_at')
                 ->orderBy('f.time', 'desc')
                 ->paginate($perPage);
 
             $formattedFollowing = $following->map(function ($followed) use ($tokenUserId) {
+                $fullName = trim(($followed->first_name ?? '') . ' ' . ($followed->last_name ?? '')) ?: $followed->username;
                 return [
                     'user_id' => $followed->user_id,
                     'username' => $followed->username,
-                    'name' => $followed->name,
+                    'name' => $fullName,
                     'avatar_url' => $followed->avatar ? asset('storage/' . $followed->avatar) : null,
                     'verified' => $followed->verified === '1',
                     'followed_at' => date('c', $followed->followed_at),
@@ -442,15 +444,16 @@ class FollowController extends Controller
                 ->where('f.following_id', $tokenUserId)
                 ->where('f.active', '0')
                 ->where('u.active', '1')
-                ->select('u.user_id', 'u.username', 'u.name', 'u.avatar', 'u.verified', 'f.time as requested_at')
+                ->select('u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified', 'f.time as requested_at')
                 ->orderBy('f.time', 'desc')
                 ->paginate($perPage);
 
             $formattedRequests = $requests->map(function ($request) {
+                $fullName = trim(($request->first_name ?? '') . ' ' . ($request->last_name ?? '')) ?: $request->username;
                 return [
                     'user_id' => $request->user_id,
                     'username' => $request->username,
-                    'name' => $request->name,
+                    'name' => $fullName,
                     'avatar_url' => $request->avatar ? asset('storage/' . $request->avatar) : null,
                     'verified' => $request->verified === '1',
                     'requested_at' => date('c', $request->requested_at),
