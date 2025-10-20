@@ -1,11 +1,10 @@
 <?php
-
 return [
-    'paths' => ['api/*', 'sanctum/csrf-cookie'],
+    'paths' => ['api/v1/*'],
 
-    'allowed_methods' => ['*'],
+    'allowed_methods' => ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
 
-    'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', '*')),
+    'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS')),
 
     'allowed_origins_patterns' => [],
 
@@ -17,5 +16,3 @@ return [
 
     'supports_credentials' => false,
 ];
-
-
