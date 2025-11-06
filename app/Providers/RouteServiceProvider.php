@@ -10,18 +10,8 @@ use Illuminate\Support\Facades\Route;
 
 class RouteServiceProvider extends ServiceProvider
 {
-    /**
-     * The path to your application's "home" route.
-     *
-     * Typically, users are redirected here after authentication.
-     *
-     * @var string
-     */
     public const HOME = '/admin';
 
-    /**
-     * Define your route model bindings, pattern filters, and other route configuration.
-     */
     public function boot(): void
     {
         RateLimiter::for('api', function (Request $request) {
@@ -35,10 +25,10 @@ class RouteServiceProvider extends ServiceProvider
 
             Route::middleware('web')
                 ->group(base_path('routes/web.php'));
-                
-            // Admin routes disabled - using Filament instead
-            // Route::middleware('web')
-            //     ->group(base_path('routes/admin.php'));
+
+            // ✅ Filament custom routes
+            Route::middleware('web')
+                ->group(base_path('routes/filament.php'));
         });
     }
 }
