@@ -13,7 +13,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         return view('admin.settings.index');
@@ -23,7 +23,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         return view('admin.settings.website-mode');
@@ -33,7 +33,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         return view('admin.settings.general');
@@ -43,7 +43,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         return view('admin.settings.website-info');
@@ -53,7 +53,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         return view('admin.settings.file-upload');
@@ -63,7 +63,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         return view('admin.settings.email-sms');
@@ -73,7 +73,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         return view('admin.settings.chat-video-audio');
@@ -83,7 +83,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         return view('admin.settings.social-login');
@@ -93,7 +93,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         return view('admin.settings.nodejs');
@@ -103,7 +103,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         return view('admin.settings.posts');
@@ -113,7 +113,7 @@ class SettingsController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
 
         $validator = Validator::make($request->all(), $this->getValidationRules($group));

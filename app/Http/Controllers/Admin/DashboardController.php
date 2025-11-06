@@ -15,7 +15,7 @@ class DashboardController extends Controller
         // Get current user from session
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
         
         $user = User::find($userId);

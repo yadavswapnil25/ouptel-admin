@@ -14,7 +14,7 @@ class UserController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
         
         $query = User::query();
@@ -57,7 +57,7 @@ class UserController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
         
         $user = User::findOrFail($id);
@@ -68,7 +68,7 @@ class UserController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
         
         return view('admin.user-create');
@@ -78,7 +78,7 @@ class UserController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
         
         $validator = Validator::make($request->all(), [
@@ -104,7 +104,7 @@ class UserController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
         
         $user = User::findOrFail($id);
@@ -115,7 +115,7 @@ class UserController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
         
         $user = User::findOrFail($id);
@@ -148,7 +148,7 @@ class UserController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
         
         $user = User::findOrFail($id);
@@ -167,7 +167,7 @@ class UserController extends Controller
     {
         $userId = session('admin_user_id');
         if (!$userId) {
-            return redirect('/admin/login');
+            return redirect('/admin/Postlogin');
         }
         
         $user = User::findOrFail($id);
