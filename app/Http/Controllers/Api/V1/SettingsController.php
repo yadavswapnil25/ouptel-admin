@@ -450,6 +450,20 @@ class SettingsController extends Controller
             if (isset($userData['email'])) $updateData['email'] = $userData['email'];
             if (isset($userData['phone_number'])) $updateData['phone_number'] = $userData['phone_number'];
             if (isset($userData['gender'])) $updateData['gender'] = $userData['gender'] == 'female' ? 'female' : 'male';
+            if (isset($userData['birthday'])) {
+                $birthdayRaw = trim((string) $userData['birthday']);
+                if ($birthdayRaw !== '') {
+                    $ts = strtotime($birthdayRaw);
+                    if ($ts !== false) {
+                        $updateData['birthday'] = date('Y-m-d', $ts);
+                    } else {
+                        $errors[] = 'Birthday format is invalid. Use YYYY-MM-DD.';
+                    }
+                } else {
+                    // Allow clearing birthday
+                    $updateData['birthday'] = null;
+                }
+            }
 
             if (!empty($updateData)) {
                 DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
