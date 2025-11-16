@@ -40,6 +40,7 @@ use App\Http\Controllers\Api\V1\NotificationSettingsController;
 use App\Http\Controllers\Api\V1\AddressController;
 use App\Http\Controllers\Api\V1\MyInformationController;
 use App\Http\Controllers\Api\V1\DeleteAccountController;
+use App\Http\Controllers\Api\V1\SearchController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -265,4 +266,6 @@ Route::post('/account/delete', [DeleteAccountController::class, 'deleteAccount']
 Route::post('/account/delete-request', [DeleteAccountController::class, 'requestAccountDeletion']);
 Route::delete('/account', [DeleteAccountController::class, 'deleteAccount']);
 
+// Explore Search
+Route::get('/search/explore', [SearchController::class, 'explore']);
 

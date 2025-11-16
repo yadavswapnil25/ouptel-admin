@@ -2635,6 +2635,38 @@
         },
         "description": "Schedule account deletion with 30-day grace period (recommended, can be cancelled by logging in)"
       }
+    },
+    {
+      "name": "Search - Explore",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text",
+            "disabled": true
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/search/explore?verified=all&status=all&image=all&filterbyage=no&query=test&country=all&age_from=18&age_to=50&per_page=20&page=1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","search","explore"],
+          "query": [
+            {"key":"verified","value":"all"},
+            {"key":"status","value":"all"},
+            {"key":"image","value":"all"},
+            {"key":"filterbyage","value":"no"},
+            {"key":"query","value":"test"},
+            {"key":"country","value":"all"},
+            {"key":"age_from","value":"18"},
+            {"key":"age_to","value":"50"},
+            {"key":"per_page","value":"20"},
+            {"key":"page","value":"1"}
+          ]
+        },
+        "description": "Explore search for users, pages, and groups mirroring the site search filters like on https://ouptel.com/search?... Parameters: verified=all|verified|unverified, status=all|online|offline, image=all|yes|no, filterbyage=yes|no, age_from, age_to, query, country, per_page, page."
+      }
     }
   ],
   "variable": [
