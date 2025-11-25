@@ -1207,7 +1207,141 @@
           "host": ["{{base_url}}"],
           "path": ["api","v1","new-feed"],
           "query": [{"key":"per_page","value":"10"}]
-        }
+        },
+        "description": "Get feed posts. Optional filter parameter: image, file, jobs, audio, video, blogs, articles"
+      }
+    },
+    {
+      "name": "New Feed - Filter by Image",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/new-feed?filter=image&per_page=10",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","new-feed"],
+          "query": [
+            {"key":"filter","value":"image"},
+            {"key":"per_page","value":"10"}
+          ]
+        },
+        "description": "Get feed posts filtered to show only image posts (postType=photo or has postPhoto)"
+      }
+    },
+    {
+      "name": "New Feed - Filter by File",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/new-feed?filter=file&per_page=10",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","new-feed"],
+          "query": [
+            {"key":"filter","value":"file"},
+            {"key":"per_page","value":"10"}
+          ]
+        },
+        "description": "Get feed posts filtered to show only file posts (postType=file or has postFile)"
+      }
+    },
+    {
+      "name": "New Feed - Filter by Jobs",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/new-feed?filter=jobs&per_page=10",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","new-feed"],
+          "query": [
+            {"key":"filter","value":"jobs"},
+            {"key":"per_page","value":"10"}
+          ]
+        },
+        "description": "Get feed posts filtered to show only job posts (postType=job or has job_id > 0)"
+      }
+    },
+    {
+      "name": "New Feed - Filter by Audio",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/new-feed?filter=audio&per_page=10",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","new-feed"],
+          "query": [
+            {"key":"filter","value":"audio"},
+            {"key":"per_page","value":"10"}
+          ]
+        },
+        "description": "Get feed posts filtered to show only audio posts (postType=audio or has postRecord)"
+      }
+    },
+    {
+      "name": "New Feed - Filter by Video",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/new-feed?filter=video&per_page=10",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","new-feed"],
+          "query": [
+            {"key":"filter","value":"video"},
+            {"key":"per_page","value":"10"}
+          ]
+        },
+        "description": "Get feed posts filtered to show only video posts (postType=video or has postYoutube/postVimeo/postFacebook/postPlaytube/postDeepsound)"
+      }
+    },
+    {
+      "name": "New Feed - Filter by Blogs",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/new-feed?filter=blogs&per_page=10",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","new-feed"],
+          "query": [
+            {"key":"filter","value":"blogs"},
+            {"key":"per_page","value":"10"}
+          ]
+        },
+        "description": "Get feed posts filtered to show only blog posts (postType=blog or has blog_id > 0)"
+      }
+    },
+    {
+      "name": "New Feed - Filter by Articles",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/new-feed?filter=articles&per_page=10",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","new-feed"],
+          "query": [
+            {"key":"filter","value":"articles"},
+            {"key":"per_page","value":"10"}
+          ]
+        },
+        "description": "Get feed posts filtered to show only article posts (postType=blog or has blog_id > 0, same as blogs)"
       }
     },
     {
@@ -1903,6 +2037,92 @@
           "query": [{"key":"per_page","value":"20"}]
         },
         "description": "Get all saved posts for the current user with pagination"
+      }
+    },
+    {
+      "name": "Polls - Create Poll",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"postText\": \"What's your favorite programming language?\",\n  \"postPrivacy\": \"0\",\n  \"options\": [\n    \"JavaScript\",\n    \"Python\",\n    \"PHP\",\n    \"Java\"\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/polls",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","polls"]
+        },
+        "description": "Create a new poll with 2-10 options. Returns poll_id and post_id. postPrivacy: 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.data && json.data.poll_id) {",
+              "    pm.collectionVariables.set('poll_id', json.data.poll_id);",
+              "  }",
+              "} catch (e) { }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Polls - Get Poll Details",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/polls/{{poll_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","polls","{{poll_id}}"]
+        },
+        "description": "Get poll details including options, vote counts, percentages, and user's vote status"
+      }
+    },
+    {
+      "name": "Polls - Vote on Poll",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"option_id\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/polls/{{poll_id}}/vote",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","polls","{{poll_id}}","vote"]
+        },
+        "description": "Vote on a poll option. If user already voted, the vote will be updated to the new option. Returns updated poll results with percentages."
+      }
+    },
+    {
+      "name": "Polls - Get Poll Results",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/polls/{{poll_id}}/results",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","polls","{{poll_id}}","results"]
+        },
+        "description": "Get poll results with vote counts and percentages for each option"
       }
     },
     {
@@ -2684,6 +2904,10 @@
     },
     {
       "key": "comment_id",
+      "value": ""
+    },
+    {
+      "key": "poll_id",
       "value": ""
     }
   ]

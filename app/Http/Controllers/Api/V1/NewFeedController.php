@@ -80,11 +80,21 @@ class NewFeedController extends Controller
         $perPage = (int) ($request->query('per_page', 10));
         $perPage = max(1, min($perPage, 50));
 
+        // Get filter parameter (Image, File, Jobs, Audio, Video, Blogs, Articles)
+        $filter = $request->query('filter');
+        $validFilters = ['image', 'file', 'jobs', 'audio', 'video', 'blogs', 'articles'];
+        if ($filter && !in_array(strtolower($filter), $validFilters)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Invalid filter. Valid filters are: ' . implode(', ', $validFilters)
+            ], 400);
+        }
+
         // Get user's current feed order preference
         $feedOrder = $this->getUserFeedOrder($tokenUserId);
 
-        // Get posts based on feed order
-        $posts = $this->getPostsByFeedOrder($tokenUserId, $feedOrder, $perPage);
+        // Get posts based on feed order and filter
+        $posts = $this->getPostsByFeedOrder($tokenUserId, $feedOrder, $perPage, $filter);
 
         return response()->json([
             'ok' => true,
@@ -92,6 +102,7 @@ class NewFeedController extends Controller
             'meta' => [
                 'current_feed_type' => $feedOrder,
                 'feed_type_name' => $this->getFeedTypeName($feedOrder),
+                'filter' => $filter ? ucfirst(strtolower($filter)) : null,
                 'per_page' => $perPage,
                 'total' => count($posts)
             ]
@@ -184,9 +195,10 @@ class NewFeedController extends Controller
      * @param string $userId
      * @param int $feedOrder
      * @param int $perPage
+     * @param string|null $filter
      * @return array
      */
-    private function getPostsByFeedOrder(string $userId, int $feedOrder, int $perPage): array
+    private function getPostsByFeedOrder(string $userId, int $feedOrder, int $perPage, ?string $filter = null): array
     {
         // Note: This is a simplified implementation since Wo_Posts table structure may vary
         // In a real implementation, you'd need to adjust based on your actual database schema
@@ -194,6 +206,100 @@ class NewFeedController extends Controller
         $query = DB::table('Wo_Posts')
             ->where('active', '1');
             // Note: privacy column doesn't exist in Wo_Posts table
+
+        // Apply filter if provided
+        if ($filter) {
+            $filter = strtolower($filter);
+            switch ($filter) {
+                case 'image':
+                    $query->where(function($q) {
+                        $q->where('postType', 'photo')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postPhoto')
+                                 ->where('postPhoto', '!=', '');
+                          });
+                    });
+                    break;
+                
+                case 'file':
+                    $query->where(function($q) {
+                        $q->where('postType', 'file')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postFile')
+                                 ->where('postFile', '!=', '');
+                          });
+                    });
+                    break;
+                
+                case 'jobs':
+                    $query->where(function($q) {
+                        $q->where('postType', 'job')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('job_id')
+                                 ->where('job_id', '>', 0);
+                          });
+                    });
+                    break;
+                
+                case 'audio':
+                    $query->where(function($q) {
+                        $q->where('postType', 'audio')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postRecord')
+                                 ->where('postRecord', '!=', '');
+                          });
+                    });
+                    break;
+                
+                case 'video':
+                    $query->where(function($q) {
+                        $q->where('postType', 'video')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postYoutube')
+                                 ->where('postYoutube', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postVimeo')
+                                 ->where('postVimeo', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postFacebook')
+                                 ->where('postFacebook', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postPlaytube')
+                                 ->where('postPlaytube', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postDeepsound')
+                                 ->where('postDeepsound', '!=', '');
+                          });
+                    });
+                    break;
+                
+                case 'blogs':
+                    $query->where(function($q) {
+                        $q->where('postType', 'blog')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('blog_id')
+                                 ->where('blog_id', '>', 0);
+                          });
+                    });
+                    break;
+                
+                case 'articles':
+                    // Articles are stored in Wo_Blog table and linked via blog_id
+                    // Same as blogs for now, but kept separate for future distinction
+                    $query->where(function($q) {
+                        $q->where('postType', 'blog')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('blog_id')
+                                 ->where('blog_id', '>', 0);
+                          });
+                    });
+                    break;
+            }
+        }
 
         switch ($feedOrder) {
             case 0: // Top Stories - Most popular
@@ -294,11 +400,11 @@ class NewFeedController extends Controller
                 // Author information
                 'author' => [
                     'user_id' => $post->user_id,
-                    'username' => $user->username ?? 'Unknown',
-                    'name' => $user->name ?? $user->username ?? 'Unknown User',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                    'verified' => (bool) ($user->verified ?? false),
-                    'is_admin' => (bool) ($user->admin ?? false),
+                    'username' => $user?->username ?? 'Unknown',
+                    'name' => $user?->name ?? $user?->username ?? 'Unknown User',
+                    'avatar_url' => ($user?->avatar) ? asset('storage/' . $user?->avatar) : null,
+                    'verified' => (bool) ($user?->verified ?? false),
+                    'is_admin' => (bool) ($user?->admin ?? false),
                 ],
                 
                 // Page/Group context
@@ -356,8 +462,24 @@ class NewFeedController extends Controller
      */
     private function getPostType($post): string
     {
+        // Check postType field first if it exists
+        if (!empty($post->postType)) {
+            return $post->postType;
+        }
+        
+        // Check for job_id
+        if (!empty($post->job_id) && $post->job_id > 0) {
+            return 'job';
+        }
+        
+        // Check for blog_id (articles/blogs)
+        if (!empty($post->blog_id) && $post->blog_id > 0) {
+            return 'blog';
+        }
+        
+        // Check media types
         if (!empty($post->postPhoto)) return 'photo';
-        if (!empty($post->postYoutube)) return 'video';
+        if (!empty($post->postYoutube) || !empty($post->postVimeo) || !empty($post->postFacebook)) return 'video';
         if (!empty($post->postFile)) return 'file';
         if (!empty($post->postLink)) return 'link';
         if (!empty($post->postMap)) return 'location';
