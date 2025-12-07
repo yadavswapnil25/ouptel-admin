@@ -41,6 +41,10 @@ use App\Http\Controllers\Api\V1\AddressController;
 use App\Http\Controllers\Api\V1\MyInformationController;
 use App\Http\Controllers\Api\V1\DeleteAccountController;
 use App\Http\Controllers\Api\V1\SearchController;
+use App\Http\Controllers\Api\V1\PollController;
+use App\Http\Controllers\Api\V1\StoriesController;
+use App\Http\Controllers\Api\V1\NotificationsController;
+use App\Http\Controllers\Api\V1\ShareController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -136,6 +140,7 @@ Route::delete('/friends/{id}', [FriendsController::class, 'removeFriend']);
 Route::post('/friends/{id}/block', [FriendsController::class, 'blockUser']);
 Route::post('/friends/{id}/unblock', [FriendsController::class, 'unblockUser']);
 Route::get('/friends/suggested', [FriendsController::class, 'suggested']);
+Route::post('/friends/update-sidebar-users', [FriendsController::class, 'updateSidebarUsers']); // Old API: requests.php?f=update_sidebar_users
 
 // Common Things routes
 Route::get('/common-things', [CommonThingsController::class, 'index']);
@@ -175,6 +180,7 @@ Route::post('/people-follow/{userId}/unfollow', [PeopleFollowController::class, 
 
 Route::post('/posts', [PostController::class, 'insertNewPost']);
 Route::get('/posts/{postId}', [PostController::class, 'getPost']);
+Route::post('/posts/get-data', [PostController::class, 'getPostData']); // Get post data for new tab (old API: get-post-data.php)
 
 Route::post('/posts/{postId}/reactions', [PostController::class, 'registerReaction']);
 Route::get('/posts/{postId}/reactions', [PostController::class, 'getPostReactions']);
@@ -190,6 +196,27 @@ Route::post('/posts/{postId}/save', [PostController::class, 'savePost']);
 Route::get('/posts/{postId}/saved', [PostController::class, 'checkSavedPost']);
 Route::delete('/posts/{postId}/save', [PostController::class, 'unsavePost']);
 Route::get('/saved-posts', [PostController::class, 'getSavedPosts']);
+Route::post('/posts/disable-comment', [PostController::class, 'disableComment']); // Disable/enable comments (old API: requests.php?f=posts&s=disable_comment)
+Route::post('/posts/hide', [PostController::class, 'hidePost']); // Hide post (old API: requests.php?f=posts&s=hide_post)
+
+// Poll routes (matching old API structure: requests.php?f=posts&s=insert_new_post with answer array)
+Route::post('/polls/create', [PollController::class, 'createPoll']); // Create poll post (like insert_new_post with answer array)
+Route::post('/polls/vote', [PollController::class, 'voteUp']); // Vote on poll (like vote_up.php)
+Route::get('/polls/{postId}', [PollController::class, 'getPollDetails']); // Get poll details with percentages
+
+// Stories routes (matching old API structure: requests.php?f=view_all_stories)
+// IMPORTANT: Specific routes must come before routes with parameters to avoid route conflicts
+Route::post('/stories/view-all', [StoriesController::class, 'viewAllStories']); // View all stories (old API: view_all_stories)
+Route::post('/stories/user-stories', [StoriesController::class, 'getUserStories']); // Get user stories grouped (old API: get-user-stories.php)
+Route::post('/stories/create', [StoriesController::class, 'create']); // Create story (old API: create-story.php)
+Route::post('/stories/delete', [StoriesController::class, 'delete']); // Delete story (old API: delete-story.php)
+Route::post('/stories/react', [StoriesController::class, 'react']); // React to story (old API: react_story.php)
+Route::post('/stories/mute', [StoriesController::class, 'mute']); // Mute/unmute story (old API: mute_story.php)
+Route::post('/stories/views', [StoriesController::class, 'getStoryViews']); // Get story views (old API: get_story_views.php)
+Route::post('/stories/{id}', [StoriesController::class, 'getStoryById']); // Get story by ID (old API: get_story_by_id.php) - Must be last to avoid matching specific routes
+
+// Share routes (matching old API structure: requests.php?f=share_post_on)
+Route::post('/share/post', [ShareController::class, 'sharePostOn']); // Share post on timeline/page/group (old API: share_post_on)
 
 Route::post('/users/{followingId}/follow', [FollowController::class, 'followUser']);
 Route::delete('/users/{followingId}/follow', [FollowController::class, 'unfollowUser']);
@@ -250,6 +277,11 @@ Route::put('/notifications/settings', [NotificationSettingsController::class, 'u
 Route::post('/notifications/settings/enable-all', [NotificationSettingsController::class, 'enableAllNotifications']);
 Route::post('/notifications/settings/disable-all', [NotificationSettingsController::class, 'disableAllNotifications']);
 
+// Notifications routes (matching old API structure: requests.php?f=get_notifications)
+Route::post('/notifications/get', [NotificationsController::class, 'getNotifications']); // Get notifications (old API: get_notifications)
+Route::post('/notifications/delete', [NotificationsController::class, 'delete']); // Delete notification (old API: notifications.php?type=delete)
+Route::post('/notifications/stop-notify', [NotificationsController::class, 'stopNotify']); // Stop notify from user (old API: stop_notify.php)
+
 // Address management routes (mimics old WoWonder API)
 Route::get('/addresses', [AddressController::class, 'getAddresses']);
 Route::get('/addresses/{id}', [AddressController::class, 'getAddressById']);
@@ -266,6 +298,9 @@ Route::post('/account/delete', [DeleteAccountController::class, 'deleteAccount']
 Route::post('/account/delete-request', [DeleteAccountController::class, 'requestAccountDeletion']);
 Route::delete('/account', [DeleteAccountController::class, 'deleteAccount']);
 
-// Explore Search
-Route::get('/search/explore', [SearchController::class, 'explore']);
+// Search routes (matching old API structure: search.php, search_for_posts.php, recent_search.php)
+Route::post('/search', [SearchController::class, 'search']); // Main search (old API: search.php)
+Route::post('/search/posts', [SearchController::class, 'searchForPosts']); // Search for posts (old API: search_for_posts.php)
+Route::get('/search/recent', [SearchController::class, 'recentSearches']); // Recent searches (old API: recent_search.php)
+Route::get('/search/explore', [SearchController::class, 'explore']); // Explore search (alternative endpoint)
 

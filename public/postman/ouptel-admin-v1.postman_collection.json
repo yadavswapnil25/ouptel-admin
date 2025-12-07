@@ -885,11 +885,32 @@
         "method": "GET",
         "header": [{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],
         "url": {
-          "raw": "{{base_url}}/api/v1/friends/suggested?per_page=12",
+          "raw": "{{base_url}}/api/v1/friends/suggested?limit=12",
           "host": ["{{base_url}}"],
           "path": ["api","v1","friends","suggested"],
-          "query": [{"key":"per_page","value":"12"}]
-        }
+          "query": [{"key":"limit","value":"12"}]
+        },
+        "description": "Get friend suggestions (matching old API: get-user-suggestions.php). Uses 'limit' parameter (not per_page)."
+      }
+    },
+    {
+      "name": "Friends - Update Sidebar Users (Old API Style)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"limit\": 12,\n  \"contacts\": [\n    {\"Key\": \"John Doe\", \"Value\": \"+1234567890\"},\n    {\"Key\": \"Jane Smith\", \"Value\": \"+0987654321\"}\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/friends/update-sidebar-users",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","friends","update-sidebar-users"]
+        },
+        "description": "Get sidebar user suggestions (matching old API: requests.php?f=update_sidebar_users). Optional 'contacts' array for contact-based suggestions. Returns 'suggestions' and optionally 'contacts_suggestions'."
       }
     },
     {
@@ -1903,6 +1924,62 @@
       ]
     },
     {
+      "name": "Posts - Get Post Data (Open in New Tab)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"post_id\": {{post_id}},\n  \"fetch\": \"post_data,post_comments,post_liked_users,post_wondered_users\",\n  \"add_view\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/get-data",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","get-data"]
+        },
+        "description": "Get post data for opening in new tab (matching old API: get-post-data.php). post_id: post ID. fetch: comma-separated list (post_data, post_comments, post_liked_users, post_wondered_users). add_view: optional (1 to increment video view count)."
+      }
+    },
+    {
+      "name": "Posts - Share Post (Old API Style)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"s\": \"page\",\n  \"type_id\": 0,\n  \"post_id\": {{post_id}},\n  \"text\": \"Test\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/share/post",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","share","post"]
+        },
+        "description": "Share a post on timeline, page, or group (matching old API: requests.php?f=share_post_on). s: 'timeline' (or 'user'), 'page', or 'group'. type_id: user_id, page_id, or group_id (0 = current user for timeline). post_id: post to share. text: optional text to add to the share."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.data && json.data.id) {",
+              "    pm.collectionVariables.set('post_id', json.data.id);",
+              "  }",
+              "} catch (e) { }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
       "name": "Posts - Get Comments",
       "request": {
         "method": "GET",
@@ -1974,6 +2051,46 @@
       }
     },
     {
+      "name": "Posts - Disable/Enable Comments (Old API Style)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"post_id\": {{post_id}},\n  \"type\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/disable-comment",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","disable-comment"]
+        },
+        "description": "Disable or enable comments on a post (matching old API: requests.php?f=posts&s=disable_comment). post_id: post ID. type: optional (0 = disable, 1 = enable). If type is not provided, toggles the current status. Only post owner, page admin, or group admin can disable/enable comments."
+      }
+    },
+    {
+      "name": "Posts - Hide Post (Old API Style)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"post_id\": {{post_id}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/hide",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","hide"]
+        },
+        "description": "Hide a post from user's feed (matching old API: requests.php?f=posts&s=hide_post / hide_post.php). Uses 'post_id' or 'post' parameter. Hidden posts won't appear in the user's feed. Returns success even if post is already hidden."
+      }
+    },
+    {
       "name": "Posts - Save Post",
       "request": {
         "method": "POST",
@@ -2040,7 +2157,7 @@
       }
     },
     {
-      "name": "Polls - Create Poll",
+      "name": "Polls - Create Poll (Old API Style)",
       "request": {
         "method": "POST",
         "header": [
@@ -2049,14 +2166,14 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"postText\": \"What's your favorite programming language?\",\n  \"postPrivacy\": \"0\",\n  \"options\": [\n    \"JavaScript\",\n    \"Python\",\n    \"PHP\",\n    \"Java\"\n  ]\n}"
+          "raw": "{\n  \"postText\": \"What's your favorite programming language?\",\n  \"postPrivacy\": \"0\",\n  \"answer\": [\n    \"JavaScript\",\n    \"Python\",\n    \"PHP\",\n    \"Java\"\n  ]\n}"
         },
         "url": {
-          "raw": "{{base_url}}/api/v1/polls",
+          "raw": "{{base_url}}/api/v1/polls/create",
           "host": ["{{base_url}}"],
-          "path": ["api","v1","polls"]
+          "path": ["api","v1","polls","create"]
         },
-        "description": "Create a new poll with 2-10 options. Returns poll_id and post_id. postPrivacy: 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group"
+        "description": "Create a poll post (matching old API: requests.php?f=posts&s=insert_new_post with answer array). Uses 'answer' array instead of 'options'. postPrivacy: 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group"
       },
       "event": [
         {
@@ -2065,8 +2182,11 @@
             "exec": [
               "try {",
               "  var json = pm.response.json();",
-              "  if (json && json.data && json.data.poll_id) {",
-              "    pm.collectionVariables.set('poll_id', json.data.poll_id);",
+              "  if (json && json.post_data && json.post_data.id) {",
+              "    pm.collectionVariables.set('post_id', json.post_data.id);",
+              "  }",
+              "  if (json && json.poll_id) {",
+              "    pm.collectionVariables.set('poll_id', json.poll_id);",
               "  }",
               "} catch (e) { }"
             ],
@@ -2076,22 +2196,7 @@
       ]
     },
     {
-      "name": "Polls - Get Poll Details",
-      "request": {
-        "method": "GET",
-        "header": [
-          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
-        ],
-        "url": {
-          "raw": "{{base_url}}/api/v1/polls/{{poll_id}}",
-          "host": ["{{base_url}}"],
-          "path": ["api","v1","polls","{{poll_id}}"]
-        },
-        "description": "Get poll details including options, vote counts, percentages, and user's vote status"
-      }
-    },
-    {
-      "name": "Polls - Vote on Poll",
+      "name": "Polls - Vote on Poll (Old API Style)",
       "request": {
         "method": "POST",
         "header": [
@@ -2100,29 +2205,226 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"option_id\": 1\n}"
+          "raw": "{\n  \"id\": 1\n}"
         },
         "url": {
-          "raw": "{{base_url}}/api/v1/polls/{{poll_id}}/vote",
+          "raw": "{{base_url}}/api/v1/polls/vote",
           "host": ["{{base_url}}"],
-          "path": ["api","v1","polls","{{poll_id}}","vote"]
+          "path": ["api","v1","polls","vote"]
         },
-        "description": "Vote on a poll option. If user already voted, the vote will be updated to the new option. Returns updated poll results with percentages."
+        "description": "Vote on a poll option (matching old API: vote_up.php). Uses 'id' parameter which is the option_id. Returns vote percentages. Users can only vote once."
       }
     },
     {
-      "name": "Polls - Get Poll Results",
+      "name": "Polls - Get Poll Details",
       "request": {
         "method": "GET",
         "header": [
           {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
         ],
         "url": {
-          "raw": "{{base_url}}/api/v1/polls/{{poll_id}}/results",
+          "raw": "{{base_url}}/api/v1/polls/{{post_id}}",
           "host": ["{{base_url}}"],
-          "path": ["api","v1","polls","{{poll_id}}","results"]
+          "path": ["api","v1","polls","{{post_id}}"]
         },
-        "description": "Get poll results with vote counts and percentages for each option"
+        "description": "Get poll details including options, vote counts, percentages, and user's vote status. Uses post_id (not poll_id)."
+      }
+    },
+    {
+      "name": "Stories - View All Stories (Old API Style)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"limit\": 35\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/stories/view-all",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","stories","view-all"]
+        },
+        "description": "View all stories from friends (matching old API: requests.php?f=view_all_stories / get-stories.php). Returns stories from friends (excluding muted users)."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.stories && json.stories.length > 0) {",
+              "    pm.collectionVariables.set('story_id', json.stories[0].id);",
+              "  }",
+              "} catch (e) { }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stories - Get User Stories (Grouped)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"limit\": 20,\n  \"offset\": 0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/stories/user-stories",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","stories","user-stories"]
+        },
+        "description": "Get user stories grouped by user (matching old API: get-user-stories.php). Returns stories grouped by user with view counts."
+      }
+    },
+    {
+      "name": "Stories - Create Story",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"file","type":"file","src":[]},
+            {"key":"file_type","value":"image","type":"text"},
+            {"key":"story_title","value":"My Story Title","type":"text"},
+            {"key":"story_description","value":"Story description here","type":"text"},
+            {"key":"cover","type":"file","src":[],"disabled":true}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/stories/create",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","stories","create"]
+        },
+        "description": "Create a story (matching old API: create-story.php). file_type: 'image' or 'video'. For videos, include 'cover' image. story_title max 100 chars, story_description max 300 chars."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.story_id) {",
+              "    pm.collectionVariables.set('story_id', json.story_id);",
+              "  }",
+              "} catch (e) { }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Stories - Get Story by ID",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": ""
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/stories/{{story_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","stories","{{story_id}}"]
+        },
+        "description": "Get story by ID (matching old API: get_story_by_id.php). Automatically marks story as viewed if not already viewed."
+      }
+    },
+    {
+      "name": "Stories - Delete Story",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"story_id\": {{story_id}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/stories/delete",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","stories","delete"]
+        },
+        "description": "Delete a story (matching old API: delete-story.php). Only story owner can delete their story."
+      }
+    },
+    {
+      "name": "Stories - React to Story",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": {{story_id}},\n  \"reaction\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/stories/react",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","stories","react"]
+        },
+        "description": "React to a story (matching old API: react_story.php). Reactions: 1=Like, 2=Love, 3=Haha, 4=Wow, 5=Sad, 6=Angry. Calling again removes reaction."
+      }
+    },
+    {
+      "name": "Stories - Mute/Unmute Story",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": 123456,\n  \"type\": \"mute\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/stories/mute",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","stories","mute"]
+        },
+        "description": "Mute or unmute a user's stories (matching old API: mute_story.php). type: 'mute' or 'unmute'. Cannot mute your own stories."
+      }
+    },
+    {
+      "name": "Stories - Get Story Views",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"story_id\": {{story_id}},\n  \"limit\": 20,\n  \"offset\": 0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/stories/views",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","stories","views"]
+        },
+        "description": "Get story views/users who viewed the story (matching old API: get_story_views.php). Only story owner can view the list of viewers."
       }
     },
     {
@@ -2691,6 +2993,66 @@
       }
     },
     {
+      "name": "Notifications - Get Notifications (Old API Style)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"seen\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/get",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","notifications","get"]
+        },
+        "description": "Get notifications (matching old API: requests.php?f=get_notifications / get_notifications.php). Optional 'seen' parameter (1) to mark notifications as seen. Returns notifications, counts, friend requests, and message count."
+      }
+    },
+    {
+      "name": "Notifications - Delete Notification",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"id\": 123\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/delete",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","notifications","delete"]
+        },
+        "description": "Delete a notification (matching old API: notifications.php?type=delete). Only notification owner can delete their notifications."
+      }
+    },
+    {
+      "name": "Notifications - Stop Notify from User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": 123456\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/stop-notify",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","notifications","stop-notify"]
+        },
+        "description": "Stop/start receiving notifications from a user (matching old API: stop_notify.php). Toggles notify status. Returns code: 0=stopped, 1=enabled. Only works if you're following the user."
+      }
+    },
+    {
       "name": "Addresses - Get All Addresses",
       "request": {
         "method": "GET",
@@ -2857,6 +3219,61 @@
       }
     },
     {
+      "name": "Search - Main Search (Old API Style)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"search_key\": \"Test\",\n  \"limit\": 35,\n  \"gender\": \"\",\n  \"status\": \"\",\n  \"image\": \"\",\n  \"country\": \"\",\n  \"verified\": \"\",\n  \"filterbyage\": \"\",\n  \"age_from\": 0,\n  \"age_to\": 0,\n  \"user_offset\": 0,\n  \"page_offset\": 0,\n  \"group_offset\": 0,\n  \"channels_offset\": 0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/search",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","search"]
+        },
+        "description": "Main search API (matching old API: search.php). Searches for users, pages, groups, and channels. Uses 'search_key' parameter (or 'query' as alternative). Supports filters: gender, status, image, country, verified, filterbyage, age_from, age_to. Uses offsets for pagination."
+      }
+    },
+    {
+      "name": "Search - Search for Posts",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"user\",\n  \"id\": 123456,\n  \"search_query\": \"Test\",\n  \"limit\": 20\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/search/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","search","posts"]
+        },
+        "description": "Search for posts (matching old API: search_for_posts.php). type: 'user', 'page', or 'group'. id: user_id, page_id, or group_id. search_query: search term. limit: max 50."
+      }
+    },
+    {
+      "name": "Search - Recent Searches",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/search/recent",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","search","recent"]
+        },
+        "description": "Get recent searches (matching old API: recent_search.php). Returns last 20 recent search queries."
+      }
+    },
+    {
       "name": "Search - Explore",
       "request": {
         "method": "GET",
@@ -2908,6 +3325,10 @@
     },
     {
       "key": "poll_id",
+      "value": ""
+    },
+    {
+      "key": "story_id",
       "value": ""
     }
   ]

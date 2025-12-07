@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -1288,5 +1289,651 @@ class PostController extends Controller
             'total_reactions' => array_sum($this->getPostReactionCounts($post->post_id)),
             'user_reaction' => $this->getUserReaction($post->post_id, $userId),
         ];
+    }
+
+    /**
+     * Get post data for opening in new tab (mimics old API: get-post-data.php)
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getPostData(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
+        }
+
+        // Validate request
+        if (empty($request->input('post_id'))) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 3,
+                    'error_text' => 'post_id (POST) is missing'
+                ]
+            ], 400);
+        }
+
+        if (empty($request->input('fetch'))) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 3,
+                    'error_text' => 'fetch (POST) is missing'
+                ]
+            ], 400);
+        }
+
+        $postId = (int) $request->input('post_id');
+        $fetch = $request->input('fetch');
+        $addView = (int) ($request->input('add_view', 0));
+
+        // Get post
+        $post = DB::table('Wo_Posts')->where('id', $postId)->first();
+        if (!$post) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Post not found'
+                ]
+            ], 404);
+        }
+
+        // Add view if requested
+        if ($addView == 1) {
+            // Increment video views if it's a video post
+            if (in_array($post->postType ?? '', ['video', 'postYoutube', 'postVimeo', 'postPlaytube'])) {
+                DB::table('Wo_Posts')
+                    ->where('id', $postId)
+                    ->increment('videoViews', 1);
+            }
+        }
+
+        // Parse fetch parameter (comma-separated list)
+        $fetchArray = explode(',', $fetch);
+        $fetchData = [];
+        foreach ($fetchArray as $value) {
+            $fetchData[trim($value)] = trim($value);
+        }
+
+        $responseData = ['api_status' => 200];
+
+        // Get post data
+        if (!empty($fetchData['post_data'])) {
+            $postData = $this->getFormattedPostData($postId, $tokenUserId);
+            if ($postData) {
+                $responseData['post_data'] = $postData;
+            }
+        }
+
+        // Get post comments
+        if (!empty($fetchData['post_comments'])) {
+            $comments = $this->getPostComments($postId, $tokenUserId);
+            $responseData['post_comments'] = $comments;
+        }
+
+        // Get post liked users
+        if (!empty($fetchData['post_liked_users'])) {
+            $likedUsers = $this->getPostLikedUsers($postId);
+            $responseData['post_liked_users'] = $likedUsers;
+        }
+
+        // Get post wondered users
+        if (!empty($fetchData['post_wondered_users'])) {
+            $wonderedUsers = $this->getPostWonderedUsers($postId);
+            $responseData['post_wondered_users'] = $wonderedUsers;
+        }
+
+        return response()->json($responseData);
+    }
+
+    /**
+     * Get formatted post data
+     * 
+     * @param int $postId
+     * @param string $tokenUserId
+     * @return array|null
+     */
+    private function getFormattedPostData(int $postId, string $tokenUserId): ?array
+    {
+        $post = DB::table('Wo_Posts')->where('id', $postId)->first();
+        if (!$post) {
+            return null;
+        }
+
+        // Get publisher/user data
+        $publisher = null;
+        if ($post->user_id) {
+            $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
+            if ($user) {
+                $publisher = [
+                    'user_id' => $user->user_id,
+                    'username' => $user->username ?? 'Unknown',
+                    'name' => $user->name ?? $user->username ?? 'Unknown User',
+                    'email' => $user->email ?? '',
+                    'avatar' => $user->avatar ?? '',
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'cover' => $user->cover ?? '',
+                    'cover_url' => $user->cover ? asset('storage/' . $user->cover) : null,
+                    'verified' => (bool) ($user->verified ?? false),
+                    'is_following' => $this->isFollowing($tokenUserId, $user->user_id),
+                ];
+            }
+        }
+
+        // Get page data if exists
+        $page = null;
+        if ($post->page_id) {
+            $pageData = DB::table('Wo_Pages')->where('page_id', $post->page_id)->first();
+            if ($pageData) {
+                $page = [
+                    'page_id' => $pageData->page_id,
+                    'page_name' => $pageData->page_name ?? '',
+                    'page_title' => $pageData->page_title ?? '',
+                    'avatar' => $pageData->avatar ?? '',
+                    'avatar_url' => $pageData->avatar ? asset('storage/' . $pageData->avatar) : null,
+                    'verified' => (bool) ($pageData->verified ?? false),
+                ];
+            }
+        }
+
+        // Get group data if exists
+        $group = null;
+        if ($post->group_id) {
+            $groupData = DB::table('Wo_Groups')->where('id', $post->group_id)->first();
+            if ($groupData) {
+                $group = [
+                    'id' => $groupData->id,
+                    'group_name' => $groupData->group_name ?? '',
+                    'avatar' => $groupData->avatar ?? '',
+                    'avatar_url' => $groupData->avatar ? asset('storage/' . $groupData->avatar) : null,
+                ];
+            }
+        }
+
+        // Get shared post info if exists
+        $sharedFrom = null;
+        if ($post->parent_id) {
+            $sharedPost = DB::table('Wo_Posts')->where('id', $post->parent_id)->first();
+            if ($sharedPost) {
+                $sharedUser = DB::table('Wo_Users')->where('user_id', $sharedPost->user_id)->first();
+                $sharedFrom = [
+                    'id' => $sharedPost->id,
+                    'postText' => $sharedPost->postText ?? '',
+                    'postType' => $sharedPost->postType ?? 'post',
+                    'publisher' => $sharedUser ? [
+                        'user_id' => $sharedUser->user_id,
+                        'username' => $sharedUser->username ?? 'Unknown',
+                        'name' => $sharedUser->name ?? $sharedUser->username ?? 'Unknown User',
+                        'avatar_url' => $sharedUser->avatar ? asset('storage/' . $sharedUser->avatar) : null,
+                    ] : null,
+                ];
+            }
+        }
+
+        // Get blog data if exists
+        $blog = null;
+        if ($post->blog_id) {
+            $blogData = DB::table('Wo_Blogs')->where('id', $post->blog_id)->first();
+            if ($blogData) {
+                $blogAuthor = DB::table('Wo_Users')->where('user_id', $blogData->user_id)->first();
+                $blog = [
+                    'id' => $blogData->id,
+                    'title' => $blogData->title ?? '',
+                    'content' => $blogData->content ?? '',
+                    'thumbnail' => $blogData->thumbnail ?? '',
+                    'author' => $blogAuthor ? [
+                        'user_id' => $blogAuthor->user_id,
+                        'username' => $blogAuthor->username ?? 'Unknown',
+                        'name' => $blogAuthor->name ?? $blogAuthor->username ?? 'Unknown User',
+                    ] : null,
+                ];
+            }
+        }
+
+        // Get event data if exists
+        $event = null;
+        if ($post->event_id) {
+            $eventData = DB::table('Wo_Events')->where('id', $post->event_id)->first();
+            if ($eventData) {
+                $eventUser = DB::table('Wo_Users')->where('user_id', $eventData->user_id)->first();
+                $event = [
+                    'id' => $eventData->id,
+                    'name' => $eventData->name ?? '',
+                    'location' => $eventData->location ?? '',
+                    'start_date' => $eventData->start_date ?? '',
+                    'user_data' => $eventUser ? [
+                        'user_id' => $eventUser->user_id,
+                        'username' => $eventUser->username ?? 'Unknown',
+                        'name' => $eventUser->name ?? $eventUser->username ?? 'Unknown User',
+                    ] : null,
+                ];
+            }
+        }
+
+        return [
+            'id' => $post->id,
+            'post_id' => $post->id,
+            'user_id' => $post->user_id,
+            'postText' => $post->postText ?? '',
+            'postType' => $post->postType ?? 'post',
+            'postPrivacy' => $post->postPrivacy ?? '0',
+            'postFile' => $post->postFile ? asset('storage/' . $post->postFile) : null,
+            'postFileThumb' => $post->postFileThumb ? asset('storage/' . $post->postFileThumb) : null,
+            'postLink' => $post->postLink ?? '',
+            'postLinkTitle' => $post->postLinkTitle ?? '',
+            'postLinkImage' => $post->postLinkImage ?? '',
+            'postLinkContent' => $post->postLinkContent ?? '',
+            'postYoutube' => $post->postYoutube ?? '',
+            'postPlaytube' => $post->postPlaytube ?? '',
+            'postPhoto' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
+            'time' => $post->time ?? time(),
+            'publisher' => $publisher,
+            'page' => $page,
+            'group' => $group,
+            'blog' => $blog,
+            'event' => $event,
+            'shared_from' => $sharedFrom,
+            'page_id' => $post->page_id ?? 0,
+            'group_id' => $post->group_id ?? 0,
+            'event_id' => $post->event_id ?? 0,
+            'parent_id' => $post->parent_id ?? null,
+            'comments_status' => $post->comments_status ?? 1,
+            'videoViews' => $post->videoViews ?? 0,
+        ];
+    }
+
+    /**
+     * Get post comments
+     * 
+     * @param int $postId
+     * @param string $tokenUserId
+     * @return array
+     */
+    private function getPostComments(int $postId, string $tokenUserId): array
+    {
+        $comments = DB::table('Wo_Comments')
+            ->where('post_id', $postId)
+            ->orderBy('id', 'asc')
+            ->get();
+
+        $formatted = [];
+        foreach ($comments as $comment) {
+            $commentUser = DB::table('Wo_Users')->where('user_id', $comment->user_id)->first();
+            
+            $formatted[] = [
+                'id' => $comment->id,
+                'user_id' => $comment->user_id,
+                'post_id' => $comment->post_id,
+                'text' => $comment->text ?? '',
+                'time' => $comment->time ?? time(),
+                'publisher' => $commentUser ? [
+                    'user_id' => $commentUser->user_id,
+                    'username' => $commentUser->username ?? 'Unknown',
+                    'name' => $commentUser->name ?? $commentUser->username ?? 'Unknown User',
+                    'avatar' => $commentUser->avatar ?? '',
+                    'avatar_url' => $commentUser->avatar ? asset('storage/' . $commentUser->avatar) : null,
+                    'verified' => (bool) ($commentUser->verified ?? false),
+                ] : null,
+            ];
+        }
+
+        return $formatted;
+    }
+
+    /**
+     * Get post liked users
+     * 
+     * @param int $postId
+     * @return array
+     */
+    private function getPostLikedUsers(int $postId): array
+    {
+        $likes = DB::table('Wo_Reactions')
+            ->where('post_id', $postId)
+            ->where('reaction', 1) // 1 = Like
+            ->where('comment_id', 0)
+            ->orderBy('id', 'desc')
+            ->limit(50)
+            ->get();
+
+        $users = [];
+        foreach ($likes as $like) {
+            $user = DB::table('Wo_Users')->where('user_id', $like->user_id)->first();
+            if ($user) {
+                $users[] = [
+                    'user_id' => $user->user_id,
+                    'username' => $user->username ?? 'Unknown',
+                    'name' => $user->name ?? $user->username ?? 'Unknown User',
+                    'avatar' => $user->avatar ?? '',
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'verified' => (bool) ($user->verified ?? false),
+                ];
+            }
+        }
+
+        return $users;
+    }
+
+    /**
+     * Get post wondered users
+     * 
+     * @param int $postId
+     * @return array
+     */
+    private function getPostWonderedUsers(int $postId): array
+    {
+        $wonders = DB::table('Wo_Reactions')
+            ->where('post_id', $postId)
+            ->where('reaction', 2) // 2 = Wonder/Dislike
+            ->where('comment_id', 0)
+            ->orderBy('id', 'desc')
+            ->limit(50)
+            ->get();
+
+        $users = [];
+        foreach ($wonders as $wonder) {
+            $user = DB::table('Wo_Users')->where('user_id', $wonder->user_id)->first();
+            if ($user) {
+                $users[] = [
+                    'user_id' => $user->user_id,
+                    'username' => $user->username ?? 'Unknown',
+                    'name' => $user->name ?? $user->username ?? 'Unknown User',
+                    'avatar' => $user->avatar ?? '',
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'verified' => (bool) ($user->verified ?? false),
+                ];
+            }
+        }
+
+        return $users;
+    }
+
+    /**
+     * Check if user is following another user
+     * 
+     * @param string $followerId
+     * @param string $followingId
+     * @return bool
+     */
+    private function isFollowing(string $followerId, string $followingId): bool
+    {
+        return DB::table('Wo_Followers')
+            ->where('follower_id', $followerId)
+            ->where('following_id', $followingId)
+            ->exists();
+    }
+
+    /**
+     * Disable or enable comments on a post (mimics old API: requests.php?f=posts&s=disable_comment)
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function disableComment(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
+        }
+
+        // Validate request
+        $validator = Validator::make($request->all(), [
+            'post_id' => 'required|integer|min:1',
+            'type' => 'nullable|integer|in:0,1', // 0 = disable, 1 = enable (optional - if not provided, toggles)
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 5,
+                    'error_text' => 'post_id must be numeric and greater than 0'
+                ]
+            ], 400);
+        }
+
+        $postId = (int) $request->input('post_id');
+        $type = $request->has('type') ? (int) $request->input('type') : null;
+
+        // Get post
+        $post = DB::table('Wo_Posts')->where('id', $postId)->first();
+        if (!$post) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'Post not found'
+                ]
+            ], 404);
+        }
+
+        // Check if user is post owner
+        $isOwner = false;
+        
+        // Check if user is the post owner
+        if ($post->user_id == $tokenUserId) {
+            $isOwner = true;
+        }
+        
+        // Check if post belongs to a page and user is page owner/admin
+        if (!$isOwner && !empty($post->page_id)) {
+            $page = DB::table('Wo_Pages')->where('page_id', $post->page_id)->first();
+            if ($page) {
+                if ($page->user_id == $tokenUserId) {
+                    $isOwner = true;
+                } else {
+                    $isAdmin = DB::table('Wo_PageAdmins')
+                        ->where('page_id', $post->page_id)
+                        ->where('user_id', $tokenUserId)
+                        ->exists();
+                    if ($isAdmin) {
+                        $isOwner = true;
+                    }
+                }
+            }
+        }
+        
+        // Check if post belongs to a group and user is group creator/admin
+        if (!$isOwner && !empty($post->group_id)) {
+            $group = DB::table('Wo_Groups')->where('id', $post->group_id)->first();
+            if ($group) {
+                if ($group->user_id == $tokenUserId) {
+                    $isOwner = true;
+                } else {
+                    $isAdmin = DB::table('Wo_GroupAdmins')
+                        ->where('group_id', $post->group_id)
+                        ->where('user_id', $tokenUserId)
+                        ->exists();
+                    if ($isAdmin) {
+                        $isOwner = true;
+                    }
+                }
+            }
+        }
+
+        if (!$isOwner) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 7,
+                    'error_text' => 'You are not the post owner'
+                ]
+            ], 403);
+        }
+
+        // Get current comments status (default to 1 if not set)
+        $currentStatus = $post->comments_status ?? 1;
+        
+        // Determine new status
+        if ($type !== null) {
+            // Explicitly set status based on type parameter
+            $newStatus = $type;
+            $action = $type == 1 ? 'post comments enabled' : 'post comments disabled';
+        } else {
+            // Toggle status (matching old API behavior)
+            if ($currentStatus == 1) {
+                $newStatus = 0;
+                $action = 'post comments disabled';
+            } else {
+                $newStatus = 1;
+                $action = 'post comments enabled';
+            }
+        }
+
+        // Update post
+        DB::table('Wo_Posts')
+            ->where('id', $postId)
+            ->update(['comments_status' => $newStatus]);
+
+        return response()->json([
+            'api_status' => 200,
+            'action' => $action,
+            'code' => $newStatus
+        ]);
+    }
+
+    /**
+     * Hide post (mimics old API: requests.php?f=posts&s=hide_post / hide_post.php)
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function hidePost(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
+        }
+
+        // Validate request - accept both 'post_id' and 'post' parameters (matching old API)
+        $postId = (int) ($request->input('post_id', $request->input('post', 0)));
+
+        if (empty($postId) || $postId <= 0) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'post_id can not be empty'
+                ]
+            ], 400);
+        }
+
+        // Check if post exists
+        $post = DB::table('Wo_Posts')->where('id', $postId)->first();
+        if (!$post) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Post not found'
+                ]
+            ], 404);
+        }
+
+        try {
+            // Check if post is already hidden
+            $isHidden = DB::table('Wo_HiddenPosts')
+                ->where('user_id', $tokenUserId)
+                ->where('post_id', $postId)
+                ->exists();
+
+            if ($isHidden) {
+                // Post is already hidden, return success
+                return response()->json([
+                    'api_status' => 200,
+                    'message' => 'post hidden'
+                ]);
+            }
+
+            // Hide the post
+            // Check if table exists and what columns it has
+            $insertData = [
+                'user_id' => $tokenUserId,
+                'post_id' => $postId,
+            ];
+            
+            // Only add time column if it exists in the table
+            if (Schema::hasColumn('Wo_HiddenPosts', 'time')) {
+                $insertData['time'] = time();
+            } elseif (Schema::hasColumn('Wo_HiddenPosts', 'created_at')) {
+                $insertData['created_at'] = now();
+            }
+            
+            DB::table('Wo_HiddenPosts')->insert($insertData);
+
+            return response()->json([
+                'api_status' => 200,
+                'message' => 'post hidden'
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 5,
+                    'error_text' => 'something went wrong'
+                ]
+            ], 500);
+        }
     }
 }
