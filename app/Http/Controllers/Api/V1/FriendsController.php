@@ -130,23 +130,139 @@ class FriendsController extends Controller
         // Auth via Wo_AppsSessions
         $authHeader = $request->header('Authorization');
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
         }
         $token = substr($authHeader, 7);
         $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         if (!$tokenUserId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
         }
 
+        // Validate user_id parameter (matching old API: follow-user.php)
         $validated = $request->validate([
             'user_id' => ['required', 'string'],
         ]);
 
-        // Note: Wo_Friends and Wo_FriendRequests tables don't exist, so return error
-        return response()->json([
-            'ok' => false,
-            'message' => 'Friend requests feature is currently unavailable. Please try again later.'
-        ], 503);
+        $recipientId = $validated['user_id'];
+
+        // Check if user is trying to follow themselves
+        if ($tokenUserId == $recipientId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 3,
+                    'error_text' => 'Cannot follow yourself'
+                ]
+            ], 400);
+        }
+
+        // Check if recipient user exists
+        $recipientData = DB::table('Wo_Users')
+            ->where('user_id', $recipientId)
+            ->first();
+
+        if (empty($recipientData)) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Recipient user not found'
+                ]
+            ], 404);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            $followMessage = 'invalid';
+
+            // Check if already following or has pending request (matching old API logic)
+            $isFollowing = DB::table('Wo_Followers')
+                ->where('follower_id', $tokenUserId)
+                ->where('following_id', $recipientId)
+                ->where('active', '1')
+                ->exists();
+
+            $isFollowRequested = DB::table('Wo_Followers')
+                ->where('follower_id', $tokenUserId)
+                ->where('following_id', $recipientId)
+                ->where('active', '0')
+                ->exists();
+
+            // If already following or has pending request, unfollow/remove request
+            if ($isFollowing || $isFollowRequested) {
+                $deleted = DB::table('Wo_Followers')
+                    ->where('follower_id', $tokenUserId)
+                    ->where('following_id', $recipientId)
+                    ->delete();
+
+                if ($deleted) {
+                    $followMessage = 'unfollowed';
+                    // Update follow counts
+                    $this->updateFollowCounts($tokenUserId, $recipientId);
+                }
+            } else {
+                // Check if recipient requires follow approval
+                $requiresApproval = false;
+                if ($recipientData->confirm_followers === '1') {
+                    $requiresApproval = true;
+                } elseif ($recipientData->follow_privacy === '2') {
+                    // Only friends can follow - check if they're friends
+                    $requiresApproval = !$this->isFriend($tokenUserId, $recipientId);
+                }
+
+                // Register follow (matching old API: Wo_RegisterFollow)
+                $followData = [
+                    'follower_id' => $tokenUserId,
+                    'following_id' => $recipientId,
+                    'active' => $requiresApproval ? '0' : '1', // 0 = pending, 1 = accepted
+                    'time' => time(),
+                ];
+
+                DB::table('Wo_Followers')->insert($followData);
+
+                // Update follow counts
+                $this->updateFollowCounts($tokenUserId, $recipientId);
+
+                // Check if it's a request or direct follow
+                if ($requiresApproval) {
+                    $followMessage = 'requested';
+                } else {
+                    $followMessage = 'followed';
+                }
+            }
+
+            DB::commit();
+
+            // Return response matching old API format
+            return response()->json([
+                'api_status' => 200,
+                'follow_status' => $followMessage
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Failed to process follow request: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
     }
 
     public function acceptRequest(Request $request, $id): JsonResponse
@@ -154,19 +270,107 @@ class FriendsController extends Controller
         // Auth via Wo_AppsSessions
         $authHeader = $request->header('Authorization');
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
         }
         $token = substr($authHeader, 7);
         $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         if (!$tokenUserId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
         }
 
-        // Note: Wo_FriendRequests and Wo_Friends tables might not exist, so return error
-        return response()->json([
-            'ok' => false,
-            'message' => 'Friend requests feature is currently unavailable. Please try again later.'
-        ], 503);
+        // $id is the follower_id (the person who sent the request)
+        // $tokenUserId is the following_id (the person accepting the request)
+        // Matching old API: Wo_AcceptFollowRequest($recipient_id, $wo['user']['user_id'])
+        $followerId = $id; // The person who sent the request
+        $followingId = $tokenUserId; // The person accepting
+
+        // Check if follower user exists (matching old API validation)
+        $followerData = DB::table('Wo_Users')
+            ->where('user_id', $followerId)
+            ->first();
+
+        if (empty($followerData)) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Recipient user not found'
+                ]
+            ], 404);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Find pending follow request (matching old API: Wo_AcceptFollowRequest)
+            // follower_id = person who sent request, following_id = person accepting
+            $followRequest = DB::table('Wo_Followers')
+                ->where('follower_id', $followerId)
+                ->where('following_id', $followingId)
+                ->where('active', '0') // Pending request
+                ->first();
+
+            if (!$followRequest) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 6,
+                        'error_text' => 'Follow request not found'
+                    ]
+                ], 404);
+            }
+
+            // Accept the request by setting active = '1' (matching old API logic)
+            $updated = DB::table('Wo_Followers')
+                ->where('follower_id', $followerId)
+                ->where('following_id', $followingId)
+                ->where('active', '0')
+                ->update(['active' => '1']);
+
+            if ($updated) {
+                // Update follow counts
+                $this->updateFollowCounts($followerId, $followingId);
+
+                DB::commit();
+
+                // Return response matching old API format
+                return response()->json([
+                    'api_status' => 200
+                ]);
+            } else {
+                DB::rollBack();
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 500,
+                        'error_text' => 'Failed to accept follow request'
+                    ]
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Failed to accept follow request: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
     }
 
     public function declineRequest(Request $request, $id): JsonResponse
@@ -174,19 +378,104 @@ class FriendsController extends Controller
         // Auth via Wo_AppsSessions
         $authHeader = $request->header('Authorization');
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
         }
         $token = substr($authHeader, 7);
         $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         if (!$tokenUserId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
         }
 
-        // Note: Wo_FriendRequests table might not exist, so return error
-        return response()->json([
-            'ok' => false,
-            'message' => 'Friend requests feature is currently unavailable. Please try again later.'
-        ], 503);
+        // $id is the follower_id (the person who sent the request)
+        // $tokenUserId is the following_id (the person declining the request)
+        // Matching old API: Wo_DeleteFollowRequest($recipient_id, $wo['user']['user_id'])
+        $followerId = $id; // The person who sent the request
+        $followingId = $tokenUserId; // The person declining
+
+        // Check if follower user exists (matching old API validation)
+        $followerData = DB::table('Wo_Users')
+            ->where('user_id', $followerId)
+            ->first();
+
+        if (empty($followerData)) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Recipient user not found'
+                ]
+            ], 404);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Find pending follow request (matching old API: Wo_DeleteFollowRequest)
+            // follower_id = person who sent request, following_id = person declining
+            $followRequest = DB::table('Wo_Followers')
+                ->where('follower_id', $followerId)
+                ->where('following_id', $followingId)
+                ->where('active', '0') // Pending request
+                ->first();
+
+            if (!$followRequest) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 6,
+                        'error_text' => 'Follow request not found'
+                    ]
+                ], 404);
+            }
+
+            // Decline the request by deleting it (matching old API logic)
+            $deleted = DB::table('Wo_Followers')
+                ->where('follower_id', $followerId)
+                ->where('following_id', $followingId)
+                ->where('active', '0')
+                ->delete();
+
+            if ($deleted) {
+                DB::commit();
+
+                // Return response matching old API format
+                return response()->json([
+                    'api_status' => 200
+                ]);
+            } else {
+                DB::rollBack();
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 500,
+                        'error_text' => 'Failed to decline follow request'
+                    ]
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Failed to decline follow request: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
     }
 
     public function removeFriend(Request $request, $id): JsonResponse
@@ -194,19 +483,123 @@ class FriendsController extends Controller
         // Auth via Wo_AppsSessions
         $authHeader = $request->header('Authorization');
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
         }
         $token = substr($authHeader, 7);
         $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         if (!$tokenUserId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
         }
 
-        // Note: Wo_Friends table might not exist, so return error
-        return response()->json([
-            'ok' => false,
-            'message' => 'Friends feature is currently unavailable. Please try again later.'
-        ], 503);
+        // $id is the following_id (the friend to remove)
+        // $tokenUserId is the follower_id (the current user)
+        // Matching old API: Wo_DeleteFollow($recipient_id, $wo['user']['user_id'])
+        $followingId = $id; // The friend to remove
+        $followerId = $tokenUserId; // The current user
+
+        // Check if user is trying to remove themselves
+        if ($followerId == $followingId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 3,
+                    'error_text' => 'Cannot remove yourself'
+                ]
+            ], 400);
+        }
+
+        // Check if friend user exists (matching old API validation)
+        $friendData = DB::table('Wo_Users')
+            ->where('user_id', $followingId)
+            ->first();
+
+        if (empty($friendData)) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'User not found'
+                ]
+            ], 404);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Check if following relationship exists (matching old API: Wo_IsFollowing or Wo_IsFollowRequested)
+            $isFollowing = DB::table('Wo_Followers')
+                ->where('follower_id', $followerId)
+                ->where('following_id', $followingId)
+                ->where('active', '1')
+                ->exists();
+
+            $isFollowRequested = DB::table('Wo_Followers')
+                ->where('follower_id', $followerId)
+                ->where('following_id', $followingId)
+                ->where('active', '0')
+                ->exists();
+
+            if (!$isFollowing && !$isFollowRequested) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 6,
+                        'error_text' => 'Not following this user'
+                    ]
+                ], 404);
+            }
+
+            // Delete follow relationship (matching old API: Wo_DeleteFollow)
+            $deleted = DB::table('Wo_Followers')
+                ->where('follower_id', $followerId)
+                ->where('following_id', $followingId)
+                ->delete();
+
+            if ($deleted) {
+                // Update follow counts
+                $this->updateFollowCounts($followerId, $followingId);
+
+                DB::commit();
+
+                // Return response matching old API format
+                return response()->json([
+                    'api_status' => 200,
+                    'message' => 'Friend removed successfully'
+                ]);
+            } else {
+                DB::rollBack();
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 500,
+                        'error_text' => 'Failed to remove friend'
+                    ]
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Failed to remove friend: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
     }
 
     public function blockUser(Request $request, $id): JsonResponse
@@ -214,19 +607,152 @@ class FriendsController extends Controller
         // Auth via Wo_AppsSessions
         $authHeader = $request->header('Authorization');
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '5',
+                    'error_text' => 'No session sent.'
+                ]
+            ], 401);
         }
         $token = substr($authHeader, 7);
         $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         if (!$tokenUserId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '6',
+                    'error_text' => 'Session id is wrong.'
+                ]
+            ], 401);
         }
 
-        // Note: Wo_Friends table might not exist, so return error
-        return response()->json([
-            'ok' => false,
-            'message' => 'Blocking feature is currently unavailable. Please try again later.'
-        ], 503);
+        // $id is the recipient_id (the user to block)
+        // $tokenUserId is the current user (blocker)
+        // Matching old API: Wo_RegisterBlock($recipient_id)
+        $recipientId = $id; // The user to block
+        $blockerId = $tokenUserId; // The current user
+
+        // Check if user is trying to block themselves
+        if ($blockerId == $recipientId) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '6',
+                    'error_text' => 'Cannot block yourself.'
+                ]
+            ], 400);
+        }
+
+        // Check if recipient user exists (matching old API validation)
+        $recipientData = DB::table('Wo_Users')
+            ->where('user_id', $recipientId)
+            ->first();
+
+        if (empty($recipientData)) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '6',
+                    'error_text' => 'User Profile is not exists.'
+                ]
+            ], 404);
+        }
+
+        // Check if recipient is admin (cannot block admins) - matching old API: Wo_IsAdmin
+        if ($recipientData->admin == '1' || $recipientData->admin == 1) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '6',
+                    'error_text' => 'Cannot block admin users.'
+                ]
+            ], 403);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Check if already blocked (matching old API: Wo_IsBlocked)
+            $isBlocked = DB::table('Wo_Blocks')
+                ->where('blocker', $blockerId)
+                ->where('blocked', $recipientId)
+                ->exists();
+
+            $blocked = '';
+
+            if (!$isBlocked) {
+                // Block user (matching old API: Wo_RegisterBlock)
+                DB::table('Wo_Blocks')->insert([
+                    'blocker' => $blockerId,
+                    'blocked' => $recipientId
+                ]);
+
+                // Remove following relationships (both ways) - matching old API behavior
+                DB::table('Wo_Followers')
+                    ->where(function($query) use ($blockerId, $recipientId) {
+                        $query->where('follower_id', $blockerId)
+                              ->where('following_id', $recipientId);
+                    })
+                    ->orWhere(function($query) use ($blockerId, $recipientId) {
+                        $query->where('follower_id', $recipientId)
+                              ->where('following_id', $blockerId);
+                    })
+                    ->delete();
+
+                // Remove friend relationship if exists (if Wo_Friends table exists)
+                if (Schema::hasTable('Wo_Friends')) {
+                    DB::table('Wo_Friends')
+                        ->where(function($query) use ($blockerId, $recipientId) {
+                            $query->where('from_id', $blockerId)
+                                  ->where('to_id', $recipientId);
+                        })
+                        ->orWhere(function($query) use ($blockerId, $recipientId) {
+                            $query->where('from_id', $recipientId)
+                                  ->where('to_id', $blockerId);
+                        })
+                        ->delete();
+                }
+
+                $blocked = 'blocked';
+            } else {
+                // Already blocked
+                $blocked = 'already_blocked';
+            }
+
+            DB::commit();
+
+            // Return response matching old API format
+            return response()->json([
+                'api_status' => '200',
+                'api_text' => 'success',
+                'api_version' => '1.0',
+                'blocked' => $blocked
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '500',
+                    'error_text' => 'Failed to block user: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
     }
 
     public function unblockUser(Request $request, $id): JsonResponse
@@ -234,19 +760,102 @@ class FriendsController extends Controller
         // Auth via Wo_AppsSessions
         $authHeader = $request->header('Authorization');
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '5',
+                    'error_text' => 'No session sent.'
+                ]
+            ], 401);
         }
         $token = substr($authHeader, 7);
         $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         if (!$tokenUserId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '6',
+                    'error_text' => 'Session id is wrong.'
+                ]
+            ], 401);
         }
 
-        // Note: Wo_Friends table might not exist, so return error
-        return response()->json([
-            'ok' => false,
-            'message' => 'Unblocking feature is currently unavailable. Please try again later.'
-        ], 503);
+        // $id is the recipient_id (the user to unblock)
+        // $tokenUserId is the current user (blocker)
+        // Matching old API: Wo_RemoveBlock($recipient_id)
+        $recipientId = $id; // The user to unblock
+        $blockerId = $tokenUserId; // The current user
+
+        // Check if recipient user exists (matching old API validation)
+        $recipientData = DB::table('Wo_Users')
+            ->where('user_id', $recipientId)
+            ->first();
+
+        if (empty($recipientData)) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '6',
+                    'error_text' => 'User Profile is not exists.'
+                ]
+            ], 404);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Check if blocked (matching old API: Wo_IsBlocked)
+            $isBlocked = DB::table('Wo_Blocks')
+                ->where('blocker', $blockerId)
+                ->where('blocked', $recipientId)
+                ->exists();
+
+            $blocked = '';
+
+            if ($isBlocked) {
+                // Unblock user (matching old API: Wo_RemoveBlock)
+                $deleted = DB::table('Wo_Blocks')
+                    ->where('blocker', $blockerId)
+                    ->where('blocked', $recipientId)
+                    ->delete();
+
+                if ($deleted) {
+                    $blocked = 'unblocked';
+                }
+            } else {
+                // Not blocked
+                $blocked = 'not_blocked';
+            }
+
+            DB::commit();
+
+            // Return response matching old API format
+            return response()->json([
+                'api_status' => '200',
+                'api_text' => 'success',
+                'api_version' => '1.0',
+                'blocked' => $blocked
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '500',
+                    'error_text' => 'Failed to unblock user: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
     }
 
     public function suggested(Request $request): JsonResponse
@@ -679,5 +1288,37 @@ class FriendsController extends Controller
         if ($time < 2592000) return floor($time / 86400) . ' days ago';
         if ($time < 31536000) return floor($time / 2592000) . ' months ago';
         return floor($time / 31536000) . ' years ago';
+    }
+
+    /**
+     * Update follow counts for both users
+     * 
+     * @param string $followerId
+     * @param string $followingId
+     * @return void
+     */
+    private function updateFollowCounts(string $followerId, string $followingId): void
+    {
+        // Update following count for follower
+        $followingCount = DB::table('Wo_Followers')
+            ->where('follower_id', $followerId)
+            ->where('active', '1')
+            ->count();
+
+        // Update followers count for following user
+        $followersCount = DB::table('Wo_Followers')
+            ->where('following_id', $followingId)
+            ->where('active', '1')
+            ->count();
+
+        // Update user records (if these columns exist)
+        // Note: These columns might not exist in Wo_Users table
+        try {
+            DB::table('Wo_Users')->where('user_id', $followerId)->update(['following' => $followingCount]);
+            DB::table('Wo_Users')->where('user_id', $followingId)->update(['followers' => $followersCount]);
+        } catch (\Exception $e) {
+            // Columns don't exist, skip update
+            // Silently fail if columns don't exist
+        }
     }
 }
