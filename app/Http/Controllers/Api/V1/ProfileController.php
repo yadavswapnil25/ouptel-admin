@@ -633,35 +633,40 @@ class ProfileController extends Controller
 
             // Get popup notification (unread, seen_pop = 0, from last 60 seconds, limit 1)
             // This mimics the old Wo_GetNotifications with type_2 = 'popunder'
-            $timepopunder = time() - 60; // Last 60 seconds
-            $popupNotification = DB::table('Wo_Notifications')
-                ->where('recipient_id', $tokenUserId)
-                ->where('seen', 0)
-                ->where('seen_pop', 0)
-                ->where('time', '>=', $timepopunder)
-                ->orderBy('time', 'desc')
-                ->first();
-
-            if ($popupNotification) {
-                $notifier = DB::table('Wo_Users')
-                    ->where('user_id', $popupNotification->notifier_id)
+            try {
+                $timepopunder = time() - 60; // Last 60 seconds
+                $popupNotification = DB::table('Wo_Notifications')
+                    ->where('recipient_id', $tokenUserId)
+                    ->where('seen', 0)
+                    ->where('seen_pop', 0)
+                    ->where('time', '>=', $timepopunder)
+                    ->orderBy('time', 'desc')
                     ->first();
-                
-                if ($notifier) {
-                    $data['html'] = $this->formatNotificationHtml($popupNotification, $notifier);
-                    $data['icon'] = $notifier->avatar ?? '';
-                    $data['title'] = $notifier->name ?? '';
-                    $data['notification_text'] = $this->getNotificationText($popupNotification->type);
-                    $data['url'] = $popupNotification->url ?? '';
-                    $data['pop'] = 200;
 
-                    // Mark as seen_pop
-                    if ($popupNotification->seen_pop == 0) {
-                        DB::table('Wo_Notifications')
-                            ->where('id', $popupNotification->id)
-                            ->update(['seen_pop' => time()]);
+                if ($popupNotification) {
+                    $notifier = DB::table('Wo_Users')
+                        ->where('user_id', $popupNotification->notifier_id)
+                        ->first();
+                    
+                    if ($notifier) {
+                        $data['html'] = $this->formatNotificationHtml($popupNotification, $notifier);
+                        $data['icon'] = $notifier->avatar ?? '';
+                        $data['title'] = $notifier->name ?? '';
+                        $data['notification_text'] = $this->getNotificationText($popupNotification->type);
+                        $data['url'] = $popupNotification->url ?? '';
+                        $data['pop'] = 200;
+
+                        // Mark as seen_pop
+                        if (isset($popupNotification->seen_pop) && $popupNotification->seen_pop == 0) {
+                            DB::table('Wo_Notifications')
+                                ->where('id', $popupNotification->id)
+                                ->update(['seen_pop' => time()]);
+                        }
                     }
                 }
+            } catch (\Exception $e) {
+                // Column seen_pop might not exist, skip popup notification
+                // Just continue without popup notification
             }
 
             // Get unread messages count
