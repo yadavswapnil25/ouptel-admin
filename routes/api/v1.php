@@ -235,6 +235,8 @@ Route::post('/settings/update-user-data', [SettingsController::class, 'updateUse
 // Profile routes (mimics old WoWonder API)
 Route::get('/profile/user-data', [ProfileController::class, 'getUserData']);
 Route::post('/profile/user-data', [ProfileController::class, 'getUserData']);
+Route::get('/update-data', [ProfileController::class, 'updateData']);
+Route::post('/update-data', [ProfileController::class, 'updateData']);
 
 // Privacy settings routes (mimics old WoWonder API)
 Route::get('/privacy/settings', [PrivacyController::class, 'getPrivacySettings']);

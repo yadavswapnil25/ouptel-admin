@@ -565,5 +565,399 @@ class ProfileController extends Controller
         if ($time < 31536000) return floor($time / 2592000) . ' months ago';
         return floor($time / 31536000) . ' years ago';
     }
+
+    /**
+     * Update data endpoint (mimics WoWonder requests.php?f=update_data)
+     * Used for updating session, getting notifications, messages, and loading user posts
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function updateData(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '5',
+                    'error_text' => 'No session sent.'
+                ]
+            ], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '6',
+                    'error_text' => 'Session id is wrong.'
+                ]
+            ], 401);
+        }
+
+        try {
+            // Update session time
+            DB::table('Wo_AppsSessions')
+                ->where('session_id', $token)
+                ->update(['time' => time()]);
+
+            $data = [
+                'pop' => 0,
+                'status' => 200,
+                'notifications' => 0,
+                'html' => '',
+                'messages' => 0,
+                'calls' => 0,
+                'is_call' => 0,
+                'audio_calls' => 0,
+                'is_audio_call' => 0,
+                'followRequests' => 0,
+                'notifications_sound' => '1',
+                'count_num' => 0,
+            ];
+
+            // Get unread notifications count
+            $data['notifications'] = DB::table('Wo_Notifications')
+                ->where('recipient_id', $tokenUserId)
+                ->where('seen', 0)
+                ->whereNotIn('type', ['requested_to_join_group', 'interested_event', 'going_event', 'invited_event', 'forum_reply', 'admin_notification'])
+                ->count();
+
+            // Get popup notification (unread, type_2 = popunder, limit 1)
+            $popupNotification = DB::table('Wo_Notifications')
+                ->where('recipient_id', $tokenUserId)
+                ->where('seen', 0)
+                ->where('type_2', 'popunder')
+                ->orderBy('time', 'desc')
+                ->first();
+
+            if ($popupNotification) {
+                $notifier = DB::table('Wo_Users')
+                    ->where('user_id', $popupNotification->notifier_id)
+                    ->first();
+                
+                if ($notifier) {
+                    $data['html'] = $this->formatNotificationHtml($popupNotification, $notifier);
+                    $data['icon'] = $notifier->avatar ?? '';
+                    $data['title'] = $notifier->name ?? '';
+                    $data['notification_text'] = $this->getNotificationText($popupNotification->type);
+                    $data['url'] = $popupNotification->url ?? '';
+                    $data['pop'] = 200;
+
+                    // Mark as seen_pop
+                    if ($popupNotification->seen_pop == 0) {
+                        DB::table('Wo_Notifications')
+                            ->where('id', $popupNotification->id)
+                            ->update(['seen_pop' => time()]);
+                    }
+                }
+            }
+
+            // Get unread messages count
+            $data['messages'] = DB::table('Wo_Messages')
+                ->where('to_id', $tokenUserId)
+                ->where('seen', 0)
+                ->where('deleted_one', '!=', $tokenUserId)
+                ->where('deleted_two', '!=', $tokenUserId)
+                ->count();
+
+            // Check for group chat unread messages (if table exists)
+            try {
+                $groupChatUnread = DB::table('Wo_GroupChat')
+                    ->where('user_id', $tokenUserId)
+                    ->where('seen', 0)
+                    ->count();
+                $data['messages'] += $groupChatUnread;
+            } catch (\Exception $e) {
+                // Table doesn't exist, skip
+            }
+
+            // Check for incoming calls (video)
+            try {
+                $incomingCall = DB::table('Wo_VideoCalls')
+                    ->where('to_id', $tokenUserId)
+                    ->where('status', 'calling')
+                    ->where('declined', 0)
+                    ->orderBy('time', 'desc')
+                    ->first();
+
+                if ($incomingCall) {
+                    $caller = DB::table('Wo_Users')
+                        ->where('user_id', $incomingCall->from_id)
+                        ->first();
+                    
+                    if ($caller) {
+                        $data['calls'] = 200;
+                        $data['is_call'] = 1;
+                        $data['call_id'] = $incomingCall->id;
+                        $data['calls_html'] = $this->formatInCallHtml($incomingCall, $caller);
+                    }
+                }
+            } catch (\Exception $e) {
+                // Table doesn't exist, skip
+            }
+
+            // Check for incoming audio calls
+            try {
+                $incomingAudioCall = DB::table('Wo_VideoCalls')
+                    ->where('to_id', $tokenUserId)
+                    ->where('type', 'audio')
+                    ->where('status', 'calling')
+                    ->where('declined', 0)
+                    ->orderBy('time', 'desc')
+                    ->first();
+
+                if ($incomingAudioCall) {
+                    $caller = DB::table('Wo_Users')
+                        ->where('user_id', $incomingAudioCall->from_id)
+                        ->first();
+                    
+                    if ($caller) {
+                        $data['audio_calls'] = 200;
+                        $data['is_audio_call'] = 1;
+                        $data['call_id'] = $incomingAudioCall->id;
+                        $data['audio_calls_html'] = $this->formatInCallHtml($incomingAudioCall, $caller, 'audio');
+                    }
+                }
+            } catch (\Exception $e) {
+                // Table doesn't exist, skip
+            }
+
+            // Get follow requests count
+            try {
+                $data['followRequests'] = DB::table('Wo_FollowRequests')
+                    ->where('recipient_id', $tokenUserId)
+                    ->count();
+            } catch (\Exception $e) {
+                $data['followRequests'] = 0;
+            }
+
+            // Get group chat requests count (if table exists)
+            try {
+                $groupChatRequests = DB::table('Wo_GroupChatRequests')
+                    ->where('user_id', $tokenUserId)
+                    ->count();
+                $data['followRequests'] += $groupChatRequests;
+            } catch (\Exception $e) {
+                // Table doesn't exist, skip
+            }
+
+            // Get user notifications sound setting
+            $user = DB::table('Wo_Users')->where('user_id', $tokenUserId)->first();
+            if ($user && isset($user->notifications_sound)) {
+                $data['notifications_sound'] = $user->notifications_sound ?? '1';
+            }
+
+            // Handle posts loading if check_posts=true
+            if ($request->input('check_posts') == 'true' || $request->input('check_posts') === true) {
+                $userId = $request->input('user_id');
+                $beforePostId = $request->input('before_post_id');
+
+                if (!empty($beforePostId) && !empty($userId)) {
+                    $posts = $this->getUserPosts($userId, $tokenUserId, $beforePostId, 20);
+                    $count = count($posts);
+                    
+                    $data['count_num'] = $count;
+                    if ($count == 1) {
+                        $data['count'] = "View {count} more post";
+                    } else {
+                        $data['count'] = "View {count} more posts";
+                    }
+                    $data['count'] = str_replace('{count}', $count, $data['count']);
+                    $data['posts'] = $posts;
+                }
+            }
+
+            // Handle hashtag posts if hash_posts=true
+            if ($request->input('hash_posts') == 'true' || $request->input('hash_posts') === true) {
+                $hashtagName = $request->input('hashtagName');
+                $beforePostId = $request->input('before_post_id');
+
+                if (!empty($hashtagName) && !empty($beforePostId)) {
+                    $posts = $this->getHashtagPosts($hashtagName, $tokenUserId, $beforePostId, 20);
+                    $count = count($posts);
+                    
+                    $data['count_num'] = $count;
+                    if ($count == 1) {
+                        $data['count'] = "View {count} more post";
+                    } else {
+                        $data['count'] = "View {count} more posts";
+                    }
+                    $data['count'] = str_replace('{count}', $count, $data['count']);
+                    $data['posts'] = $posts;
+                }
+            }
+
+            return response()->json($data);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => '500',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '7',
+                    'error_text' => 'Failed to update data: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Get user posts with pagination
+     */
+    private function getUserPosts(int $userId, int $loggedUserId, int $beforePostId, int $limit = 20): array
+    {
+        $query = DB::table('Wo_Posts')
+            ->where('user_id', $userId)
+            ->where('active', '1')
+            ->where('id', '<', $beforePostId)
+            ->orderBy('time', 'desc')
+            ->limit($limit);
+
+        $posts = $query->get();
+
+        $result = [];
+        foreach ($posts as $post) {
+            $postData = $this->formatPostData($post, $loggedUserId);
+            $result[] = $postData;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get hashtag posts with pagination
+     */
+    private function getHashtagPosts(string $hashtagName, int $loggedUserId, int $beforePostId, int $limit = 20): array
+    {
+        // Remove # if present
+        $hashtagName = ltrim($hashtagName, '#');
+
+        $query = DB::table('Wo_Posts')
+            ->where('active', '1')
+            ->where('id', '<', $beforePostId)
+            ->where(function($q) use ($hashtagName) {
+                $q->where('postText', 'LIKE', '%#' . $hashtagName . '%')
+                  ->orWhere('postText', 'LIKE', '%# ' . $hashtagName . '%');
+            })
+            ->orderBy('time', 'desc')
+            ->limit($limit);
+
+        $posts = $query->get();
+
+        $result = [];
+        foreach ($posts as $post) {
+            $postData = $this->formatPostData($post, $loggedUserId);
+            $result[] = $postData;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Format post data for response
+     */
+    private function formatPostData($post, int $loggedUserId): array
+    {
+        $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
+        
+        // Get reaction counts
+        $reactionsCount = DB::table('Wo_Reactions')
+            ->where('post_id', $post->id)
+            ->count();
+
+        // Get comments count
+        $commentsCount = DB::table('Wo_Comments')
+            ->where('post_id', $post->id)
+            ->count();
+
+        // Check if logged user liked this post
+        $isLiked = DB::table('Wo_Reactions')
+            ->where('post_id', $post->id)
+            ->where('user_id', $loggedUserId)
+            ->exists();
+
+        return [
+            'id' => $post->id,
+            'post_id' => $post->post_id ?? $post->id,
+            'user_id' => $post->user_id,
+            'user' => [
+                'user_id' => $user->user_id ?? 0,
+                'name' => $user->name ?? '',
+                'username' => $user->username ?? '',
+                'avatar' => $user->avatar ?? '',
+            ],
+            'postText' => $post->postText ?? '',
+            'postType' => $post->postType ?? 'text',
+            'postPrivacy' => $post->postPrivacy ?? '0',
+            'postPhoto' => $post->postPhoto ?? '',
+            'postFile' => $post->postFile ?? '',
+            'postYoutube' => $post->postYoutube ?? '',
+            'postLink' => $post->postLink ?? '',
+            'time' => $post->time ?? time(),
+            'reactions_count' => $reactionsCount,
+            'comments_count' => $commentsCount,
+            'is_liked' => $isLiked ? 1 : 0,
+            'is_owner' => ($post->user_id == $loggedUserId) ? 1 : 0,
+        ];
+    }
+
+    /**
+     * Format notification HTML
+     */
+    private function formatNotificationHtml($notification, $notifier): string
+    {
+        // Simple HTML format for notification popup
+        return '<div class="notification-popup">
+            <img src="' . ($notifier->avatar ?? '') . '" alt="' . ($notifier->name ?? '') . '">
+            <div>
+                <strong>' . ($notifier->name ?? '') . '</strong>
+                <p>' . $this->getNotificationText($notification->type) . '</p>
+            </div>
+        </div>';
+    }
+
+    /**
+     * Get notification text by type
+     */
+    private function getNotificationText(string $type): string
+    {
+        $texts = [
+            'liked_post' => 'liked your post',
+            'commented_post' => 'commented on your post',
+            'shared_post' => 'shared your post',
+            'followed_you' => 'started following you',
+            'visited_profile' => 'visited your profile',
+            'mentioned_you' => 'mentioned you',
+            'joined_group' => 'joined your group',
+            'accepted_request' => 'accepted your request',
+        ];
+
+        return $texts[$type] ?? 'sent you a notification';
+    }
+
+    /**
+     * Format in-call HTML
+     */
+    private function formatInCallHtml($call, $caller, string $type = 'video'): string
+    {
+        $callType = $type == 'audio' ? 'Audio' : 'Video';
+        return '<div class="in-call-modal">
+            <h3>Incoming ' . $callType . ' Call</h3>
+            <img src="' . ($caller->avatar ?? '') . '" alt="' . ($caller->name ?? '') . '">
+            <p>' . ($caller->name ?? 'Unknown') . ' is calling you</p>
+            <button onclick="acceptCall(' . $call->id . ')">Accept</button>
+            <button onclick="declineCall(' . $call->id . ')">Decline</button>
+        </div>';
+    }
 }
 

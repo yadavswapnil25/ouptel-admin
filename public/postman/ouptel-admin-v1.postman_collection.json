@@ -2610,6 +2610,61 @@
       }
     },
     {
+      "name": "Profile - Update Data",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/update-data?check_posts=true&user_id=76476&before_post_id=176157",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","update-data"],
+          "query": [
+            {"key":"check_posts","value":"true","description":"Load user posts"},
+            {"key":"user_id","value":"76476","description":"User ID to load posts for"},
+            {"key":"before_post_id","value":"176157","description":"Post ID for pagination (loads posts before this ID)"}
+          ]
+        },
+        "description": "Update session, get notifications/messages/calls, and load user posts (mimics old requests.php?f=update_data). Use check_posts=true with user_id and before_post_id to load posts when viewing a user profile."
+      }
+    },
+    {
+      "name": "Profile - Update Data (Hashtag Posts)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/update-data?hash_posts=true&hashtagName=test&before_post_id=176157",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","update-data"],
+          "query": [
+            {"key":"hash_posts","value":"true","description":"Load hashtag posts"},
+            {"key":"hashtagName","value":"test","description":"Hashtag name (without #)"},
+            {"key":"before_post_id","value":"176157","description":"Post ID for pagination"}
+          ]
+        },
+        "description": "Load hashtag posts with pagination. Returns notifications, messages, and hashtag posts."
+      }
+    },
+    {
+      "name": "Profile - Update Data (Basic)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/update-data",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","update-data"]
+        },
+        "description": "Basic update data call - updates session time and returns notifications, messages, calls, and follow requests count. No posts loaded."
+      }
+    },
+    {
       "name": "Privacy - Get Privacy Settings",
       "request": {
         "method": "GET",
