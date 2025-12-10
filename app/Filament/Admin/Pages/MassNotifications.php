@@ -56,8 +56,11 @@ class MassNotifications extends Page
 
                         Forms\Components\Select::make('selected_users')
                             ->label('Selected Users (Optional)')
-                            ->options(function ($search) {
-                                if (empty($search)) {
+                            ->multiple()
+                            ->searchable()
+                            ->preload(false)
+                            ->getSearchResultsUsing(function (string $search): array {
+                                if (strlen($search) < 2) {
                                     return [];
                                 }
                                 return User::where('username', 'like', "%{$search}%")
@@ -70,22 +73,8 @@ class MassNotifications extends Page
                                     })
                                     ->toArray();
                             })
-                            ->multiple()
-                            ->searchable()
-                            ->preload(false)
-                            ->getSearchResultsUsing(function (string $search): array {
-                                return User::where('username', 'like', "%{$search}%")
-                                    ->orWhere('name', 'like', "%{$search}%")
-                                    ->orWhere('email', 'like', "%{$search}%")
-                                    ->limit(50)
-                                    ->get()
-                                    ->mapWithKeys(function ($user) {
-                                        return [$user->user_id => $user->username . ' (' . ($user->name ?? $user->email) . ')'];
-                                    })
-                                    ->toArray();
-                            })
                             ->getOptionLabelUsing(function ($value): ?string {
-                                $user = User::find($value);
+                                $user = User::where('user_id', $value)->first();
                                 return $user ? $user->username . ' (' . ($user->name ?? $user->email) . ')' : null;
                             })
                             ->helperText('If left empty, the notification will be sent to all active users. Search and select specific users to send only to them.'),
@@ -115,10 +104,14 @@ class MassNotifications extends Page
         $data = $this->form->getState();
 
         try {
-            // Get recipients
-            $recipients = $this->getRecipients($data['selected_users'] ?? []);
+            // Check if specific users are selected
+            $selectedUsers = $data['selected_users'] ?? [];
+            $hasSelectedUsers = !empty($selectedUsers);
 
-            if (empty($recipients)) {
+            // Count total recipients first
+            $totalCount = $this->getRecipientCount($selectedUsers);
+
+            if ($totalCount === 0) {
                 Notification::make()
                     ->title('No recipients found')
                     ->body('No users found to send notifications to.')
@@ -127,16 +120,46 @@ class MassNotifications extends Page
                 return;
             }
 
-            // Send notifications
+            // Warn if sending to a large number of users
+            if (!$hasSelectedUsers && $totalCount > 1000) {
+                Notification::make()
+                    ->title('Large notification batch')
+                    ->body("You are about to send notifications to {$totalCount} users. This may take a while. Processing in batches...")
+                    ->warning()
+                    ->persistent()
+                    ->send();
+            }
+
+            // Send notifications in chunks to avoid memory issues
             $sentCount = 0;
             $failedCount = 0;
+            $chunkSize = 100; // Process 100 users at a time
 
-            foreach ($recipients as $user) {
-                if ($this->sendNotificationToUser($user, $data)) {
-                    $sentCount++;
-                } else {
-                    $failedCount++;
-                }
+            if ($hasSelectedUsers) {
+                // Process selected users in chunks
+                User::whereIn('user_id', $selectedUsers)
+                    ->where('active', '1')
+                    ->chunk($chunkSize, function ($users) use ($data, &$sentCount, &$failedCount) {
+                        foreach ($users as $user) {
+                            if ($this->sendNotificationToUser($user->toArray(), $data)) {
+                                $sentCount++;
+                            } else {
+                                $failedCount++;
+                            }
+                        }
+                    });
+            } else {
+                // Process all active users in chunks
+                User::where('active', '1')
+                    ->chunk($chunkSize, function ($users) use ($data, &$sentCount, &$failedCount) {
+                        foreach ($users as $user) {
+                            if ($this->sendNotificationToUser($user->toArray(), $data)) {
+                                $sentCount++;
+                            } else {
+                                $failedCount++;
+                            }
+                        }
+                    });
             }
 
             Notification::make()
@@ -162,20 +185,17 @@ class MassNotifications extends Page
         }
     }
 
-    private function getRecipients(array $selectedUsers = []): array
+    private function getRecipientCount(array $selectedUsers = []): int
     {
-        // If specific users are selected, use them
+        // If specific users are selected, count them
         if (!empty($selectedUsers)) {
             return User::whereIn('user_id', $selectedUsers)
                 ->where('active', '1')
-                ->get()
-                ->toArray();
+                ->count();
         }
 
-        // Otherwise, send to all active users
-        return User::where('active', '1')
-            ->get()
-            ->toArray();
+        // Otherwise, count all active users
+        return User::where('active', '1')->count();
     }
 
     private function sendNotificationToUser(array $user, array $data): bool
