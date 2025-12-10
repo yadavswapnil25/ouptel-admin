@@ -45,6 +45,7 @@ use App\Http\Controllers\Api\V1\PollController;
 use App\Http\Controllers\Api\V1\StoriesController;
 use App\Http\Controllers\Api\V1\NotificationsController;
 use App\Http\Controllers\Api\V1\ShareController;
+use App\Http\Controllers\Api\V1\AnnouncementsController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -303,4 +304,9 @@ Route::post('/search', [SearchController::class, 'search']); // Main search (old
 Route::post('/search/posts', [SearchController::class, 'searchForPosts']); // Search for posts (old API: search_for_posts.php)
 Route::get('/search/recent', [SearchController::class, 'recentSearches']); // Recent searches (old API: recent_search.php)
 Route::get('/search/explore', [SearchController::class, 'explore']); // Explore search (alternative endpoint)
+
+// Announcements routes (matching old API structure: get-general-data.php with announcement parameter)
+Route::get('/announcements/home', [AnnouncementsController::class, 'getHomeAnnouncement']); // Get home announcement (old API: Wo_GetHomeAnnouncements)
+Route::post('/announcements/mark-viewed', [AnnouncementsController::class, 'markAsViewed']); // Mark announcement as viewed
+Route::get('/announcements', [AnnouncementsController::class, 'getAllActive']); // Get all active announcements
 

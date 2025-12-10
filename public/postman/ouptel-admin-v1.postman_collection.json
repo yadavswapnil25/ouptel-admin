@@ -3304,6 +3304,56 @@
         },
         "description": "Explore search for users, pages, and groups mirroring the site search filters like on https://ouptel.com/search?... Parameters: verified=all|verified|unverified, status=all|online|offline, image=all|yes|no, filterbyage=yes|no, age_from, age_to, query, country, per_page, page."
       }
+    },
+    {
+      "name": "Announcements - Get Home Announcement",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/announcements/home",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","announcements","home"]
+        },
+        "description": "Get a random active announcement that the user hasn't viewed yet (matching old API: Wo_GetHomeAnnouncements). Returns null if no unviewed announcements available. Response includes: id, text (HTML), text_decode (plain text), time, time_text, active."
+      }
+    },
+    {
+      "name": "Announcements - Mark as Viewed",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"announcement_id\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/announcements/mark-viewed",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","announcements","mark-viewed"]
+        },
+        "description": "Mark an announcement as viewed by the user. Parameters: announcement_id (required, integer). This prevents the announcement from showing again in the home announcement endpoint."
+      }
+    },
+    {
+      "name": "Announcements - Get All Active",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/announcements",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","announcements"]
+        },
+        "description": "Get all active announcements with viewed status for the current user. Returns array of announcements with: id, text (HTML), text_decode (plain text), time, time_text, active, viewed (boolean)."
+      }
     }
   ],
   "variable": [
