@@ -631,11 +631,14 @@ class ProfileController extends Controller
                 ->whereNotIn('type', ['requested_to_join_group', 'interested_event', 'going_event', 'invited_event', 'forum_reply', 'admin_notification'])
                 ->count();
 
-            // Get popup notification (unread, type_2 = popunder, limit 1)
+            // Get popup notification (unread, seen_pop = 0, from last 60 seconds, limit 1)
+            // This mimics the old Wo_GetNotifications with type_2 = 'popunder'
+            $timepopunder = time() - 60; // Last 60 seconds
             $popupNotification = DB::table('Wo_Notifications')
                 ->where('recipient_id', $tokenUserId)
                 ->where('seen', 0)
-                ->where('type_2', 'popunder')
+                ->where('seen_pop', 0)
+                ->where('time', '>=', $timepopunder)
                 ->orderBy('time', 'desc')
                 ->first();
 
