@@ -120,51 +120,67 @@ class MassNotifications extends Page
                 return;
             }
 
-            // Warn if sending to a large number of users
-            if (!$hasSelectedUsers && $totalCount > 1000) {
-                Notification::make()
-                    ->title('Large notification batch')
-                    ->body("You are about to send notifications to {$totalCount} users. This may take a while. Processing in batches...")
-                    ->warning()
-                    ->persistent()
-                    ->send();
-            }
+            // Get admin user ID
+            $adminUser = Auth::user();
+            $adminUserId = $adminUser->user_id ?? $adminUser->id ?? 0;
+            $currentTime = time();
 
-            // Send notifications in chunks to avoid memory issues
-            $sentCount = 0;
-            $failedCount = 0;
-            $chunkSize = 100; // Process 100 users at a time
+            // Prepare notification data
+            $notificationData = [
+                'notifier_id' => $adminUserId,
+                'type' => 'admin_notification',
+                'text' => $data['description'],
+                'url' => $data['url'],
+                'time' => $currentTime,
+            ];
+
+            // Build bulk insert data
+            $notificationsToInsert = [];
+            $chunkSize = 500; // Insert 500 notifications at a time
 
             if ($hasSelectedUsers) {
                 // Process selected users in chunks
                 User::whereIn('user_id', $selectedUsers)
                     ->where('active', '1')
-                    ->chunk($chunkSize, function ($users) use ($data, &$sentCount, &$failedCount) {
+                    ->chunk($chunkSize, function ($users) use ($notificationData, &$notificationsToInsert, $chunkSize) {
                         foreach ($users as $user) {
-                            if ($this->sendNotificationToUser($user->toArray(), $data)) {
-                                $sentCount++;
-                            } else {
-                                $failedCount++;
-                            }
+                            $notificationsToInsert[] = array_merge($notificationData, [
+                                'recipient_id' => $user->user_id,
+                            ]);
+                        }
+
+                        // Bulk insert when chunk is full
+                        if (count($notificationsToInsert) >= $chunkSize) {
+                            DB::table('Wo_Notifications')->insert($notificationsToInsert);
+                            $notificationsToInsert = [];
                         }
                     });
             } else {
                 // Process all active users in chunks
                 User::where('active', '1')
-                    ->chunk($chunkSize, function ($users) use ($data, &$sentCount, &$failedCount) {
+                    ->chunk($chunkSize, function ($users) use ($notificationData, &$notificationsToInsert, $chunkSize) {
                         foreach ($users as $user) {
-                            if ($this->sendNotificationToUser($user->toArray(), $data)) {
-                                $sentCount++;
-                            } else {
-                                $failedCount++;
-                            }
+                            $notificationsToInsert[] = array_merge($notificationData, [
+                                'recipient_id' => $user->user_id,
+                            ]);
+                        }
+
+                        // Bulk insert when chunk is full
+                        if (count($notificationsToInsert) >= $chunkSize) {
+                            DB::table('Wo_Notifications')->insert($notificationsToInsert);
+                            $notificationsToInsert = [];
                         }
                     });
             }
 
+            // Insert remaining notifications
+            if (!empty($notificationsToInsert)) {
+                DB::table('Wo_Notifications')->insert($notificationsToInsert);
+            }
+
             Notification::make()
                 ->title('Notifications sent successfully')
-                ->body("Successfully sent {$sentCount} notifications" . ($failedCount > 0 ? " ({$failedCount} failed)" : "") . ".")
+                ->body("Successfully sent {$totalCount} notifications.")
                 ->success()
                 ->send();
 
@@ -198,28 +214,5 @@ class MassNotifications extends Page
         return User::where('active', '1')->count();
     }
 
-    private function sendNotificationToUser(array $user, array $data): bool
-    {
-        try {
-            // Insert notification into Wo_Notifications table
-            // Matching old API structure
-            $adminUser = Auth::user();
-            $adminUserId = $adminUser->user_id ?? $adminUser->id ?? 0;
-            
-            DB::table('Wo_Notifications')->insert([
-                'notifier_id' => $adminUserId, // Admin user ID
-                'recipient_id' => $user['user_id'],
-                'type' => 'admin_notification',
-                'text' => $data['description'],
-                'url' => $data['url'],
-                'time' => time(),
-            ]);
-
-            return true;
-        } catch (\Exception $e) {
-            Log::error('Failed to send notification to user ' . $user['user_id'] . ': ' . $e->getMessage());
-            return false;
-        }
-    }
 }
 
