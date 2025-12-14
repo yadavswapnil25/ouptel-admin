@@ -302,6 +302,110 @@ class EventsController extends BaseController
             ],
         ]);
     }
+
+    public function goEvent(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$userId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+        }
+
+        // Validate event_id
+        $validated = $request->validate([
+            'event_id' => ['required', 'integer'],
+        ]);
+
+        $eventId = $validated['event_id'];
+
+        // Check if event exists
+        $event = Event::find($eventId);
+        if (!$event) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Event not found',
+                ],
+            ], 400);
+        }
+
+        // Check if Wo_Egoing table exists
+        if (!DB::getSchemaBuilder()->hasTable('Wo_Egoing')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Event going table does not exist',
+                ],
+            ], 400);
+        }
+
+        // Check if user is already going to the event
+        $isGoing = DB::table('Wo_Egoing')
+            ->where('event_id', $eventId)
+            ->where('user_id', $userId)
+            ->exists();
+
+        $goStatus = 'invalid';
+
+        if ($isGoing) {
+            // Remove from going list
+            DB::table('Wo_Egoing')
+                ->where('event_id', $eventId)
+                ->where('user_id', $userId)
+                ->delete();
+            
+            // Also remove from interested list (matching old code behavior)
+            if (DB::getSchemaBuilder()->hasTable('Wo_Einterested')) {
+                DB::table('Wo_Einterested')
+                    ->where('event_id', $eventId)
+                    ->where('user_id', $userId)
+                    ->delete();
+            }
+            
+            $goStatus = 'not-going';
+        } else {
+            // Add to going list
+            DB::table('Wo_Egoing')->insert([
+                'event_id' => $eventId,
+                'user_id' => $userId,
+            ]);
+
+            // Remove from invited list if exists (when user accepts going, remove from invites)
+            if (DB::getSchemaBuilder()->hasTable('Wo_Einvited')) {
+                DB::table('Wo_Einvited')
+                    ->where('event_id', $eventId)
+                    ->where('invited_id', $userId)
+                    ->delete();
+            }
+
+            // Remove from interested list if exists (going takes precedence)
+            if (DB::getSchemaBuilder()->hasTable('Wo_Einterested')) {
+                DB::table('Wo_Einterested')
+                    ->where('event_id', $eventId)
+                    ->where('user_id', $userId)
+                    ->delete();
+            }
+
+            $goStatus = 'going';
+        }
+
+        return response()->json([
+            'api_status' => 200,
+            'api_text' => 'success',
+            'api_version' => '1.0',
+            'go_status' => $goStatus,
+            'data' => [
+                'going' => $goStatus === 'going',
+            ],
+        ]);
+    }
 }
 
 

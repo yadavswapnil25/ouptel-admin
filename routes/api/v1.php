@@ -12,6 +12,7 @@ use App\Http\Controllers\Api\V1\MemoriesController;
 use App\Http\Controllers\Api\V1\PokeController;
 use App\Http\Controllers\Api\V1\GroupsController;
 use App\Http\Controllers\Api\V1\PagesController;
+use App\Http\Controllers\Api\V1\CountriesController;
 use App\Http\Controllers\Api\V1\BlogsController;
 use App\Http\Controllers\Api\V1\ProductsController;
 use App\Http\Controllers\Api\V1\DirectoryController;
@@ -96,6 +97,7 @@ Route::get('/events/going', [EventsController::class, 'going']);
 Route::get('/events/invited', [EventsController::class, 'invited']);
 Route::get('/events/interested', [EventsController::class, 'interested']);
 Route::get('/my-events', [EventsController::class, 'mine']);
+Route::post('/events/go', [EventsController::class, 'goEvent']); // Go/not going to event (old API: requests.php?f=go_event)
 Route::get('/games', [GamesController::class, 'index']);
 Route::post('/games', [GamesController::class, 'store']);
 
@@ -315,6 +317,10 @@ Route::post('/search', [SearchController::class, 'search']); // Main search (old
 Route::post('/search/posts', [SearchController::class, 'searchForPosts']); // Search for posts (old API: search_for_posts.php)
 Route::get('/search/recent', [SearchController::class, 'recentSearches']); // Recent searches (old API: recent_search.php)
 Route::get('/search/explore', [SearchController::class, 'explore']); // Explore search (alternative endpoint)
+
+// Countries routes (for explore page)
+Route::get('/countries', [CountriesController::class, 'index']); // Get countries list
+Route::get('/countries/meta', [CountriesController::class, 'meta']); // Get countries meta (for explore page filters)
 
 // Announcements routes (matching old API structure: get-general-data.php with announcement parameter)
 Route::get('/announcements/home', [AnnouncementsController::class, 'getHomeAnnouncement']); // Get home announcement (old API: Wo_GetHomeAnnouncements)

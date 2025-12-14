@@ -193,6 +193,10 @@
       }
     },
     {
+      "name": "Events - Go",
+      "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"event_id\": 1\n}"},"url":{"raw":"{{base_url}}/api/v1/events/go","host":["{{base_url}}"],"path":["api","v1","events","go"]}}
+    },
+    {
       "name": "Pages - List (my_pages)",
       "request": {
         "method": "GET",
@@ -245,19 +249,19 @@
       "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/blogs?term=music","host":["{{base_url}}"],"path":["api","v1","blogs"],"query":[{"key":"term","value":"music"}]}}
     },
     {
-      "name": "Blogs - My Articles (5.1)",
+      "name": "Blogs - My Articles",
       "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/blogs/my-articles","host":["{{base_url}}"],"path":["api","v1","blogs","my-articles"]}}
     },
     {
-      "name": "Blogs - Create Article (5.2)",
-      "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"title\": \"My Article Title\",\n  \"description\": \"Article description\",\n  \"content\": \"Full article content here...\",\n  \"category\": 1,\n  \"thumbnail\": \"\",\n  \"tags\": \"tag1,tag2\",\n  \"active\": true\n}"},"url":{"raw":"{{base_url}}/api/v1/blogs","host":["{{base_url}}"],"path":["api","v1","blogs"]}}
+      "name": "Blogs - Create Article",
+      "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"title\": \"My Blog Post\",\n  \"description\": \"Short description\",\n  \"content\": \"Full blog content here...\",\n  \"category\": 1,\n  \"tags\": \"tech,programming\",\n  \"active\": 1\n}"},"url":{"raw":"{{base_url}}/api/v1/blogs","host":["{{base_url}}"],"path":["api","v1","blogs"]}}
     },
     {
-      "name": "Blogs - Update Article (5.3)",
-      "request": {"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"title\": \"Updated Article Title\",\n  \"description\": \"Updated description\",\n  \"content\": \"Updated content...\",\n  \"category\": 1,\n  \"active\": true\n}"},"url":{"raw":"{{base_url}}/api/v1/blogs/1","host":["{{base_url}}"],"path":["api","v1","blogs","1"]}}
+      "name": "Blogs - Update Article",
+      "request": {"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"title\": \"Updated Blog Post\",\n  \"description\": \"Updated description\",\n  \"content\": \"Updated content...\",\n  \"category\": 1,\n  \"tags\": \"tech,programming,updated\",\n  \"active\": 1\n}"},"url":{"raw":"{{base_url}}/api/v1/blogs/1","host":["{{base_url}}"],"path":["api","v1","blogs","1"]}}
     },
     {
-      "name": "Blogs - Delete Article (5.4)",
+      "name": "Blogs - Delete Article",
       "request": {"method":"DELETE","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/blogs/1","host":["{{base_url}}"],"path":["api","v1","blogs","1"]}}
     },
     {
@@ -3387,6 +3391,14 @@
         },
         "description": "Explore search for users, pages, and groups mirroring the site search filters like on https://ouptel.com/search?... Parameters: verified=all|verified|unverified, status=all|online|offline, image=all|yes|no, filterbyage=yes|no, age_from, age_to, query, country, per_page, page."
       }
+    },
+    {
+      "name": "Countries - List",
+      "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/countries","host":["{{base_url}}"],"path":["api","v1","countries"]}}
+    },
+    {
+      "name": "Countries - Meta",
+      "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/countries/meta","host":["{{base_url}}"],"path":["api","v1","countries","meta"]}}
     },
     {
       "name": "Announcements - Get Home Announcement",
