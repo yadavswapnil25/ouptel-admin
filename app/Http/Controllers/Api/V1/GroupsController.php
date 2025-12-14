@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Models\Group;
+use App\Models\GroupMember;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
@@ -37,10 +38,14 @@ class GroupsController extends BaseController
                 ->where('active', '1')
                 ->orderByDesc('id');
         } elseif ($type === 'joined_groups') {
-            // Groups the user has joined - simplified since Wo_GroupMembers table doesn't exist
-            $query = Group::query()
+            // Groups the user has joined
+            $joinedGroupIds = DB::table('Wo_Group_Members')
+                ->where('user_id', (string) $userId)
                 ->where('active', '1')
-                ->where('user_id', '!=', (string) $userId) // Not owned by user (simplified logic)
+                ->pluck('group_id');
+            $query = Group::query()
+                ->whereIn('id', $joinedGroupIds)
+                ->where('active', '1')
                 ->orderByDesc('id');
         } elseif ($type === 'category') {
             // Groups by category
@@ -54,10 +59,15 @@ class GroupsController extends BaseController
                 ->where('active', '1')
                 ->orderByDesc('id');
         } elseif ($type === 'suggested') {
-            // Suggested groups - groups user hasn't joined yet (simplified since Wo_GroupMembers table doesn't exist)
+            // Suggested groups - groups user hasn't joined yet
+            $joinedGroupIds = DB::table('Wo_Group_Members')
+                ->where('user_id', (string) $userId)
+                ->pluck('group_id')
+                ->toArray();
             $query = Group::query()
                 ->where('active', '1')
                 ->where('user_id', '!=', (string) $userId) // Not owned by user
+                ->whereNotIn('id', $joinedGroupIds)
                 ->orderByDesc('id')
                 ->limit(50); // Limit suggestions
         } else {
@@ -67,9 +77,17 @@ class GroupsController extends BaseController
         $paginator = $query->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (Group $group) use ($userId) {
-            // Simplified since Wo_GroupMembers table doesn't exist
-            $membersCount = 0; // Default to 0 since we can't count members
-            $isJoined = false; // Default to false since we can't check membership
+            // Get member count and join status
+            $membersCount = DB::table('Wo_Group_Members')
+                ->where('group_id', $group->id)
+                ->where('active', '1')
+                ->count();
+            
+            $isJoined = DB::table('Wo_Group_Members')
+                ->where('group_id', $group->id)
+                ->where('user_id', $userId)
+                ->where('active', '1')
+                ->exists();
 
             return [
                 'id' => $group->id,
@@ -147,7 +165,15 @@ class GroupsController extends BaseController
         $group->time = (string) time();
         $group->save();
 
-        // Note: Wo_GroupMembers table doesn't exist, so we skip adding creator as member
+        // Add creator as member
+        if (DB::getSchemaBuilder()->hasTable('Wo_Group_Members')) {
+            DB::table('Wo_Group_Members')->insert([
+                'group_id' => $group->id,
+                'user_id' => (string) $userId,
+                'active' => '1',
+                'time' => time(),
+            ]);
+        }
 
         return response()->json([
             'ok' => true,
@@ -204,6 +230,115 @@ class GroupsController extends BaseController
                 ],
                 'categories' => $categories,
                 'sub_categories' => $subCategories,
+            ],
+        ]);
+    }
+
+    public function joinGroup(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$userId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+        }
+
+        // Validate group_id
+        $validated = $request->validate([
+            'group_id' => ['required', 'integer'],
+        ]);
+
+        $groupId = $validated['group_id'];
+
+        // Check if group exists
+        $group = Group::find($groupId);
+        if (!$group) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Group not found',
+            ], 404);
+        }
+
+        // Check if user is the owner
+        if ($group->user_id == $userId) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'You are the owner of this group',
+            ], 400);
+        }
+
+        // Check if group is active
+        if ($group->active != '1') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Group is not active',
+            ], 400);
+        }
+
+        // Check if Wo_Group_Members table exists (with underscore, matching old code)
+        $groupMembersTableExists = DB::getSchemaBuilder()->hasTable('Wo_Group_Members');
+        
+        if (!$groupMembersTableExists) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Group members table does not exist. Please contact administrator.',
+            ], 500);
+        }
+
+        // Check if user is already a member (active = '1')
+        $isMember = DB::table('Wo_Group_Members')
+            ->where('group_id', $groupId)
+            ->where('user_id', $userId)
+            ->where('active', '1')
+            ->exists();
+
+        // Check if user has a pending join request (active = '0')
+        $hasJoinRequest = DB::table('Wo_Group_Members')
+            ->where('group_id', $groupId)
+            ->where('user_id', $userId)
+            ->where('active', '0')
+            ->exists();
+
+        $joinStatus = 'invalid';
+
+        // If user is already a member or has requested to join, leave the group
+        if ($isMember || $hasJoinRequest) {
+            // Remove from members table (deletes both joined and requested entries)
+            DB::table('Wo_Group_Members')
+                ->where('group_id', $groupId)
+                ->where('user_id', $userId)
+                ->delete();
+
+            $joinStatus = 'left';
+        } else {
+            // Check if join_privacy is private
+            // The Group model accessor converts database values: '1' = 'public', '0' = 'private'
+            // Also check raw database value for compatibility with old system (where '2' = private)
+            $rawJoinPrivacy = DB::table('Wo_Groups')->where('id', $groupId)->value('join_privacy');
+            $isPrivate = ($rawJoinPrivacy == '0' || $rawJoinPrivacy == 0 || $rawJoinPrivacy == '2' || $rawJoinPrivacy == 2 || $group->join_privacy === 'private');
+
+            // Set active based on privacy: '1' for joined (public), '0' for requested (private)
+            $active = $isPrivate ? '0' : '1';
+            $joinStatus = $isPrivate ? 'requested' : 'joined';
+
+            // Insert into Wo_Group_Members table with appropriate active value
+            DB::table('Wo_Group_Members')->insert([
+                'group_id' => $groupId,
+                'user_id' => $userId,
+                'active' => $active,
+                'time' => time(),
+            ]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'join_status' => $joinStatus,
+            'data' => [
+                'join' => $joinStatus === 'left' ? 'left' : ($joinStatus === 'requested' ? 'requested' : 'joined'),
             ],
         ]);
     }

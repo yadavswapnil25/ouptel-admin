@@ -70,11 +70,20 @@ Route::delete('/pokes/{pokeId}', [PokeController::class, 'destroy']);
 Route::get('/groups', [GroupsController::class, 'index']);
 Route::post('/groups', [GroupsController::class, 'store']);
 Route::get('/groups/meta', [GroupsController::class, 'meta']);
+Route::post('/groups/join', [GroupsController::class, 'joinGroup']); // Join/leave group (old API: requests.php?f=join_group)
 Route::get('/pages', [PagesController::class, 'index']);
 Route::get('/pages/meta', [PagesController::class, 'meta']);
 Route::post('/pages', [PagesController::class, 'store']);
+Route::post('/pages/like', [PagesController::class, 'likePage']); // Like/unlike page (old API: requests.php?f=like_page)
+Route::post('/pages/delete', [PagesController::class, 'destroy']); // Delete page (old API: v2/endpoints/delete_page.php)
 Route::get('/blogs', [BlogsController::class, 'index']);
 Route::get('/blogs/meta', [BlogsController::class, 'meta']);
+Route::get('/blogs/my-articles', [BlogsController::class, 'getMyArticles']); // 5.1 Get My Articles (old API: ajax_loading.php?link1=my-blogs)
+Route::post('/blogs', [BlogsController::class, 'createArticle']); // 5.2 Create Article
+Route::put('/blogs/{id}', [BlogsController::class, 'updateArticle']); // 5.3 Update My Article
+Route::post('/blogs/{id}', [BlogsController::class, 'updateArticle']); // 5.3 Update My Article (POST alternative)
+Route::delete('/blogs/{id}', [BlogsController::class, 'deleteArticle']); // 5.4 Delete My Article
+Route::post('/blogs/{id}/delete', [BlogsController::class, 'deleteArticle']); // 5.4 Delete My Article (POST alternative)
 Route::get('/products', [ProductsController::class, 'index']);
 Route::get('/products/meta', [ProductsController::class, 'meta']);
 Route::get('/my-products', [ProductsController::class, 'my']);

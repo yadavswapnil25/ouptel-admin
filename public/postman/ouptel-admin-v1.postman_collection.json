@@ -217,6 +217,14 @@
       }
     },
     {
+      "name": "Pages - Like",
+      "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"page_id\": 3\n}"},"url":{"raw":"{{base_url}}/api/v1/pages/like","host":["{{base_url}}"],"path":["api","v1","pages","like"]}}
+    },
+    {
+      "name": "Pages - Delete",
+      "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"page_id\": 3,\n  \"password\": \"your_password\"\n}"},"url":{"raw":"{{base_url}}/api/v1/pages/delete","host":["{{base_url}}"],"path":["api","v1","pages","delete"]}}
+    },
+    {
       "name": "Groups - Suggested",
       "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/groups?type=suggested","host":["{{base_url}}"],"path":["api","v1","groups"],"query":[{"key":"type","value":"suggested"}]}}
     },
@@ -229,8 +237,28 @@
       "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"group_name\": \"devs\",\n  \"group_title\": \"Developers\",\n  \"category\": 1,\n  \"privacy\": \"public\",\n  \"join_privacy\": \"public\"\n}"},"url":{"raw":"{{base_url}}/api/v1/groups","host":["{{base_url}}"],"path":["api","v1","groups"]}}
     },
     {
+      "name": "Groups - Join",
+      "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"group_id\": 3\n}"},"url":{"raw":"{{base_url}}/api/v1/groups/join","host":["{{base_url}}"],"path":["api","v1","groups","join"]}}
+    },
+    {
       "name": "Blogs - List",
       "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/blogs?term=music","host":["{{base_url}}"],"path":["api","v1","blogs"],"query":[{"key":"term","value":"music"}]}}
+    },
+    {
+      "name": "Blogs - My Articles (5.1)",
+      "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/blogs/my-articles","host":["{{base_url}}"],"path":["api","v1","blogs","my-articles"]}}
+    },
+    {
+      "name": "Blogs - Create Article (5.2)",
+      "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"title\": \"My Article Title\",\n  \"description\": \"Article description\",\n  \"content\": \"Full article content here...\",\n  \"category\": 1,\n  \"thumbnail\": \"\",\n  \"tags\": \"tag1,tag2\",\n  \"active\": true\n}"},"url":{"raw":"{{base_url}}/api/v1/blogs","host":["{{base_url}}"],"path":["api","v1","blogs"]}}
+    },
+    {
+      "name": "Blogs - Update Article (5.3)",
+      "request": {"method":"PUT","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"title\": \"Updated Article Title\",\n  \"description\": \"Updated description\",\n  \"content\": \"Updated content...\",\n  \"category\": 1,\n  \"active\": true\n}"},"url":{"raw":"{{base_url}}/api/v1/blogs/1","host":["{{base_url}}"],"path":["api","v1","blogs","1"]}}
+    },
+    {
+      "name": "Blogs - Delete Article (5.4)",
+      "request": {"method":"DELETE","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/blogs/1","host":["{{base_url}}"],"path":["api","v1","blogs","1"]}}
     },
     {
       "name": "Products - Market",
