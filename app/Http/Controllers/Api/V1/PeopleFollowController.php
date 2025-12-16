@@ -186,32 +186,128 @@ class PeopleFollowController extends Controller
      */
     public function followUser(Request $request): JsonResponse
     {
-        // Auth via Wo_AppsSessions
+        // Auth via Wo_AppsSessions (same as other APIs)
         $authHeader = $request->header('Authorization');
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided',
+                ],
+            ], 401);
         }
+
         $token = substr($authHeader, 7);
         $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         if (!$tokenUserId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found',
+                ],
+            ], 401);
         }
 
+        // Validate target user_id (like old v2 follow-user.php which expects POST[user_id])
         $validated = $request->validate([
-            'user_id' => ['required', 'string'],
+            'user_id' => ['required', 'integer'],
         ]);
 
-        $targetUserId = $validated['user_id'];
+        $targetUserId = (int) $validated['user_id'];
 
-        if ($targetUserId === $tokenUserId) {
-            return response()->json(['ok' => false, 'message' => 'Cannot follow yourself'], 400);
+        // Cannot follow yourself
+        if ($targetUserId === (int) $tokenUserId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 3,
+                    'error_text' => 'Cannot follow yourself',
+                ],
+            ], 400);
         }
 
-        // Note: Wo_Friends table might not exist, so return error
-        return response()->json([
-            'ok' => false,
-            'message' => 'Follow feature is currently unavailable. Please try again later.'
-        ], 503);
+        // Check if target user exists
+        $targetUser = DB::table('Wo_Users')->where('user_id', $targetUserId)->first();
+        if (!$targetUser) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Recipient user not found',
+                ],
+            ], 400);
+        }
+
+        // Basic active check (0/2 are deactivated/banned in WoWonder)
+        if (isset($targetUser->active) && in_array((string) $targetUser->active, ['0', '2'], true)) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 7,
+                    'error_text' => 'Cannot follow this user',
+                ],
+            ], 400);
+        }
+
+        // Toggle follow logic using Wo_Followers (mimics v2/endpoints/follow-user.php)
+        try {
+            DB::beginTransaction();
+
+            $existing = DB::table('Wo_Followers')
+                ->where('follower_id', $tokenUserId)
+                ->where('following_id', $targetUserId)
+                ->first();
+
+            $followStatus = 'invalid';
+
+            if ($existing) {
+                // Already following or requested → unfollow (delete record)
+                DB::table('Wo_Followers')
+                    ->where('follower_id', $tokenUserId)
+                    ->where('following_id', $targetUserId)
+                    ->delete();
+
+                $followStatus = 'unfollowed';
+            } else {
+                // Determine if follow requires approval, similar to FollowController::requiresFollowApproval
+                $requiresApproval = false;
+                if (isset($targetUser->confirm_followers) && (string) $targetUser->confirm_followers === '1') {
+                    $requiresApproval = true;
+                }
+                if (isset($targetUser->follow_privacy) && (string) $targetUser->follow_privacy === '2') {
+                    // In old code this depends on friendship; here we simplify to always require approval
+                    $requiresApproval = true;
+                }
+
+                DB::table('Wo_Followers')->insert([
+                    'follower_id'  => $tokenUserId,
+                    'following_id' => $targetUserId,
+                    'active'       => $requiresApproval ? '0' : '1', // 0 = requested, 1 = followed
+                    'time'         => time(),
+                ]);
+
+                $followStatus = $requiresApproval ? 'requested' : 'followed';
+            }
+
+            DB::commit();
+
+            return response()->json([
+                'api_status' => 200,
+                'follow_status' => $followStatus,
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'api_status' => 500,
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Failed to update follow status',
+                ],
+            ], 500);
+        }
     }
 
     /**
