@@ -64,7 +64,7 @@ class NotificationsController extends Controller
         $countNotifications = DB::table('Wo_Notifications')
             ->where('recipient_id', $tokenUserId)
             ->where('seen', 0)
-            ->whereNotIn('type', ['requested_to_join_group', 'interested_event', 'going_event', 'invited_event', 'forum_reply', 'admin_notification'])
+            ->whereIn('type', ['requested_to_join_group', 'interested_event', 'going_event', 'invited_event', 'forum_reply', 'admin_notification'])
             ->count();
 
         // Count friend requests
@@ -272,7 +272,7 @@ class NotificationsController extends Controller
     {
         $notifications = DB::table('Wo_Notifications')
             ->where('recipient_id', $userId)
-            ->whereNotIn('type', ['requested_to_join_group', 'interested_event', 'going_event', 'invited_event', 'forum_reply', 'admin_notification'])
+            ->whereIn('type', ['requested_to_join_group', 'interested_event', 'going_event', 'invited_event', 'forum_reply', 'admin_notification'])
             ->orderByDesc('time')
             ->limit(50)
             ->get();
