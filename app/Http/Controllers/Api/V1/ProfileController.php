@@ -1092,20 +1092,17 @@ class ProfileController extends Controller
      */
     private function getTimelinePosts(int $userId, int $loggedUserId, int $beforePostId, int $limit = 20): array
     {
-        // Use post_id for reactions query (matching how reactions are stored)
+        // Build query - match the exact same logic as getUserPosts and post_count calculation
         $query = DB::table('Wo_Posts')
             ->where('user_id', $userId)
-            ->where(function($q) {
-                // Handle both string '1' and integer 1 for active field
-                $q->where('active', '1')
-                  ->orWhere('active', 1);
-            });
+            ->where('active', 1); // Use integer 1 to match post_count calculation
 
         // Handle pagination
         if ($beforePostId < PHP_INT_MAX) {
             $query->where('id', '<', $beforePostId);
         }
 
+        // Order by time desc (matching getUserPosts method)
         $query->orderBy('time', 'desc')->limit($limit);
         $posts = $query->get();
 
