@@ -920,6 +920,254 @@ class ProfileController extends Controller
     }
 
     /**
+     * Get user timeline/posts (mimics old API: ajax_loading.php?link1=timeline&u=username)
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getTimeline(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '5',
+                    'error_text' => 'No session sent.'
+                ]
+            ], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '5',
+                    'error_text' => 'Invalid session.'
+                ]
+            ], 401);
+        }
+
+        // Get username parameter (u)
+        $username = $request->input('u', $request->query('u'));
+        if (empty($username)) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '6',
+                    'error_text' => 'Username (u) parameter is required.'
+                ]
+            ], 400);
+        }
+
+        // Get user by username
+        $user = DB::table('Wo_Users')->where('username', $username)->first();
+        if (!$user) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '7',
+                    'error_text' => 'User not found.'
+                ]
+            ], 404);
+        }
+
+        // Pagination parameters
+        $beforePostId = (int) ($request->input('before_post_id', $request->query('before_post_id', PHP_INT_MAX)));
+        $limit = (int) ($request->input('limit', $request->query('limit', 20)));
+        $limit = max(1, min($limit, 50));
+
+        // Get user posts
+        $posts = $this->getTimelinePosts($user->user_id, $tokenUserId, $beforePostId, $limit);
+
+        // Get user profile data
+        $userData = $this->getTimelineUserData($user, $tokenUserId);
+
+        return response()->json([
+            'api_status' => '200',
+            'api_text' => 'success',
+            'api_version' => '1.0',
+            'user_data' => $userData,
+            'posts' => $posts,
+            'count' => count($posts),
+        ]);
+    }
+
+    /**
+     * Get timeline posts for a user
+     * 
+     * @param int $userId
+     * @param int $loggedUserId
+     * @param int $beforePostId
+     * @param int $limit
+     * @return array
+     */
+    private function getTimelinePosts(int $userId, int $loggedUserId, int $beforePostId, int $limit = 20): array
+    {
+        // Use post_id for reactions query (matching how reactions are stored)
+        $query = DB::table('Wo_Posts')
+            ->where('user_id', $userId)
+            ->where('active', '1');
+
+        // Handle pagination
+        if ($beforePostId < PHP_INT_MAX) {
+            $query->where('id', '<', $beforePostId);
+        }
+
+        $query->orderBy('time', 'desc')->limit($limit);
+        $posts = $query->get();
+
+        $result = [];
+        foreach ($posts as $post) {
+            // Use post_id for reactions (matching PostController pattern)
+            $postIdForReactions = $post->post_id ?? $post->id;
+            
+            $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
+            
+            // Get reaction counts (using post_id)
+            $reactionsCount = 0;
+            if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Reactions')) {
+                try {
+                    $reactionsCount = DB::table('Wo_Reactions')
+                        ->where('post_id', $postIdForReactions)
+                        ->where('comment_id', 0)
+                        ->count();
+                } catch (\Exception $e) {
+                    // Fallback to post_likes column
+                    $reactionsCount = (int) ($post->post_likes ?? 0);
+                }
+            } else {
+                $reactionsCount = (int) ($post->post_likes ?? 0);
+            }
+
+            // Get comments count
+            $commentsCount = 0;
+            if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Comments')) {
+                try {
+                    $commentsCount = DB::table('Wo_Comments')
+                        ->where('post_id', $post->id)
+                        ->count();
+                } catch (\Exception $e) {
+                    $commentsCount = (int) ($post->post_comments ?? 0);
+                }
+            } else {
+                $commentsCount = (int) ($post->post_comments ?? 0);
+            }
+
+            // Check if logged user liked this post
+            $isLiked = false;
+            if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Reactions')) {
+                try {
+                    $isLiked = DB::table('Wo_Reactions')
+                        ->where('post_id', $postIdForReactions)
+                        ->where('user_id', $loggedUserId)
+                        ->where('comment_id', 0)
+                        ->exists();
+                } catch (\Exception $e) {
+                    $isLiked = false;
+                }
+            }
+
+            $result[] = [
+                'id' => $post->id,
+                'post_id' => $post->post_id ?? $post->id,
+                'user_id' => $post->user_id,
+                'user' => [
+                    'user_id' => $user->user_id ?? 0,
+                    'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->name ?? $user->username ?? ''),
+                    'username' => $user->username ?? '',
+                    'avatar' => $user->avatar ?? '',
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'verified' => (bool) ($user->verified ?? false),
+                ],
+                'postText' => $post->postText ?? '',
+                'postType' => $post->postType ?? 'text',
+                'postPrivacy' => $post->postPrivacy ?? '0',
+                'postPhoto' => $post->postPhoto ?? '',
+                'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
+                'postFile' => $post->postFile ?? '',
+                'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
+                'postYoutube' => $post->postYoutube ?? '',
+                'postVimeo' => $post->postVimeo ?? '',
+                'postLink' => $post->postLink ?? '',
+                'postLinkTitle' => $post->postLinkTitle ?? '',
+                'postLinkImage' => $post->postLinkImage ?? '',
+                'postLinkContent' => $post->postLinkContent ?? '',
+                'time' => $post->time ?? time(),
+                'created_at' => $post->time ? date('c', $post->time) : null,
+                'reactions_count' => $reactionsCount,
+                'comments_count' => $commentsCount,
+                'shares_count' => (int) ($post->postShare ?? 0),
+                'is_liked' => $isLiked ? 1 : 0,
+                'is_owner' => ($post->user_id == $loggedUserId) ? 1 : 0,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Get user data for timeline
+     * 
+     * @param object $user
+     * @param int $loggedUserId
+     * @return array
+     */
+    private function getTimelineUserData($user, int $loggedUserId): array
+    {
+        // Get user stats
+        $postCount = DB::table('Wo_Posts')
+            ->where('user_id', $user->user_id)
+            ->where('active', '1')
+            ->count();
+
+        // Check follow status
+        $isFollowing = false;
+        if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Followers')) {
+            try {
+                $isFollowing = DB::table('Wo_Followers')
+                    ->where('follower_id', $loggedUserId)
+                    ->where('following_id', $user->user_id)
+                    ->exists();
+            } catch (\Exception $e) {
+                $isFollowing = false;
+            }
+        }
+
+        // Check if viewing own profile
+        $isOwner = ($user->user_id == $loggedUserId);
+
+        return [
+            'user_id' => $user->user_id,
+            'username' => $user->username ?? '',
+            'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->name ?? $user->username ?? ''),
+            'first_name' => $user->first_name ?? '',
+            'last_name' => $user->last_name ?? '',
+            'email' => $isOwner ? ($user->email ?? '') : '',
+            'avatar' => $user->avatar ?? '',
+            'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+            'cover' => $user->cover ?? '',
+            'cover_url' => $user->cover ? asset('storage/' . $user->cover) : null,
+            'about' => $user->about ?? '',
+            'verified' => (bool) ($user->verified ?? false),
+            'is_following' => $isFollowing ? 1 : 0,
+            'is_owner' => $isOwner ? 1 : 0,
+            'post_count' => $postCount,
+        ];
+    }
+
+    /**
      * Format notification HTML
      */
     private function formatNotificationHtml($notification, $notifier): string

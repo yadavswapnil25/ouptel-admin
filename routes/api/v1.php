@@ -248,6 +248,8 @@ Route::get('/profile/user-data', [ProfileController::class, 'getUserData']);
 Route::post('/profile/user-data', [ProfileController::class, 'getUserData']);
 Route::get('/update-data', [ProfileController::class, 'updateData']);
 Route::post('/update-data', [ProfileController::class, 'updateData']);
+Route::get('/timeline', [ProfileController::class, 'getTimeline']); // Get user timeline (old API: ajax_loading.php?link1=timeline&u=username)
+Route::post('/timeline', [ProfileController::class, 'getTimeline']); // POST alternative
 
 // Privacy settings routes (mimics old WoWonder API)
 Route::get('/privacy/settings', [PrivacyController::class, 'getPrivacySettings']);

@@ -2697,6 +2697,46 @@
       }
     },
     {
+      "name": "Profile - Get Timeline",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/timeline?u=deendoughouz&limit=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","timeline"],
+          "query": [
+            {"key":"u","value":"deendoughouz","description":"Username of the user whose timeline to view"},
+            {"key":"limit","value":"20","description":"Number of posts to return (default: 20, max: 50)"},
+            {"key":"before_post_id","value":"","description":"Post ID for pagination (loads posts before this ID, optional)"}
+          ]
+        },
+        "description": "Get user timeline/posts (mimics old API: ajax_loading.php?link1=timeline&u=username). Returns user profile data and their posts with pagination support."
+      }
+    },
+    {
+      "name": "Profile - Get Timeline (POST)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"u\": \"deendoughouz\",\n  \"limit\": 20,\n  \"before_post_id\": 12345\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/timeline",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","timeline"]
+        },
+        "description": "Get user timeline/posts via POST (mimics old API: ajax_loading.php?link1=timeline&u=username). Returns user profile data and their posts with pagination support. Use POST body for parameters: u (username, required), limit (optional), before_post_id (optional for pagination)."
+      }
+    },
+    {
       "name": "Privacy - Get Privacy Settings",
       "request": {
         "method": "GET",
