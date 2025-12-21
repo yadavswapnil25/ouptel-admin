@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class NewFeedController extends Controller
 {
@@ -357,6 +358,12 @@ class NewFeedController extends Controller
                 $albumImages = $this->getAlbumImages($post->id);
             }
             
+            // Get poll options if it's a poll post
+            $pollOptions = [];
+            if (isset($post->poll_id) && $post->poll_id == 1) {
+                $pollOptions = $this->getPollOptions($post->id, $userId);
+            }
+            
             return [
                 'id' => $post->id,
                 'post_id' => $post->post_id ?? $post->id,
@@ -393,6 +400,10 @@ class NewFeedController extends Controller
                 'multi_image_post' => (bool) ($post->multi_image_post ?? false),
                 'album_images' => $albumImages,
                 'album_images_count' => count($albumImages),
+                
+                // Poll data
+                'poll_id' => $post->poll_id ?? null,
+                'poll_options' => $pollOptions,
                 
                 // Engagement metrics
                 'reactions_count' => $reactionsCount,
@@ -582,5 +593,83 @@ class NewFeedController extends Controller
         if ($time < 2592000) return floor($time / 86400) . 'd';
         if ($time < 31536000) return floor($time / 2592000) . 'mo';
         return floor($time / 31536000) . 'y';
+    }
+
+    /**
+     * Get poll options with vote counts and percentages
+     * 
+     * @param int $postId
+     * @param string $userId
+     * @return array
+     */
+    private function getPollOptions(int $postId, string $userId): array
+    {
+        // Check if poll table exists
+        if (!Schema::hasTable('Wo_Polls')) {
+            return [];
+        }
+
+        try {
+            // Get poll options from Wo_Polls table
+            $options = DB::table('Wo_Polls')
+                ->where('post_id', $postId)
+                ->get();
+
+            if ($options->isEmpty()) {
+                return [];
+            }
+
+            // Determine votes table name
+            $votesTable = 'Wo_Votes';
+            if (!Schema::hasTable($votesTable)) {
+                if (Schema::hasTable('Wo_PollVotes')) {
+                    $votesTable = 'Wo_PollVotes';
+                } else {
+                    // If votes table doesn't exist, return options without vote data
+                    return $options->map(function ($option) {
+                        return [
+                            'id' => $option->id,
+                            'text' => $option->text ?? '',
+                            'votes' => 0,
+                            'percentage' => 0,
+                            'is_voted' => false,
+                        ];
+                    })->toArray();
+                }
+            }
+
+            // Get total votes for the poll
+            $totalVotes = DB::table($votesTable)
+                ->where('post_id', $postId)
+                ->count();
+
+            // Get user's vote
+            $userVote = DB::table($votesTable)
+                ->where('post_id', $postId)
+                ->where('user_id', $userId)
+                ->value('option_id');
+
+            // Calculate votes and percentages for each option
+            return $options->map(function ($option) use ($votesTable, $postId, $totalVotes, $userVote) {
+                $optionVotes = DB::table($votesTable)
+                    ->where('post_id', $postId)
+                    ->where('option_id', $option->id)
+                    ->count();
+
+                $percentage = $totalVotes > 0 ? round(($optionVotes / $totalVotes) * 100, 2) : 0;
+
+                return [
+                    'id' => $option->id,
+                    'text' => $option->text ?? '',
+                    'votes' => $optionVotes,
+                    'percentage' => $percentage,
+                    'is_voted' => $userVote == $option->id,
+                ];
+            })->toArray();
+
+        } catch (\Exception $e) {
+            // If there's an error, return empty array
+            return [];
+        }
     }
 }
