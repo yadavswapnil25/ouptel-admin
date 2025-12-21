@@ -346,8 +346,10 @@ class NewFeedController extends Controller
             // Get user information
             $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
             
-            // Get post reactions count
-            $reactionsCount = $this->getPostReactionsCount($post->id);
+            // Get post reactions count (try Wo_Reactions table first, fallback to post_likes column)
+            // Use post_id field (which is used to store reactions) with fallback to id
+            $postIdForReactions = $post->post_id ?? $post->id;
+            $reactionsCount = $this->getPostReactionsCount($postIdForReactions, $post);
             
             // Get post comments count  
             $commentsCount = $this->getPostCommentsCount($post->id);
@@ -534,13 +536,38 @@ class NewFeedController extends Controller
      * Get post reactions count
      * 
      * @param int $postId
+     * @param object|null $post Optional post object to use post_likes column as fallback
      * @return int
      */
-    private function getPostReactionsCount(int $postId): int
+    private function getPostReactionsCount(int $postId, $post = null): int
     {
-        // Note: Wo_PostReactions table might not exist
-        // In a real implementation, you would query this table
-        return 0;
+        // Try to count from Wo_Reactions table (more accurate, real-time count)
+        if (Schema::hasTable('Wo_Reactions')) {
+            try {
+                $count = DB::table('Wo_Reactions')
+                    ->where('post_id', $postId)
+                    ->where('comment_id', 0) // Only count post reactions, not comment reactions
+                    ->count();
+                return $count;
+            } catch (\Exception $e) {
+                // If query fails, fall through to post_likes column
+            }
+        }
+        
+        // Fallback: Use post_likes column if available (cached count)
+        if ($post && isset($post->post_likes)) {
+            return (int) ($post->post_likes ?? 0);
+        }
+        
+        // Last resort: Query post_likes column
+        try {
+            $postLikes = DB::table('Wo_Posts')
+                ->where('id', $postId)
+                ->value('post_likes');
+            return (int) ($postLikes ?? 0);
+        } catch (\Exception $e) {
+            return 0;
+        }
     }
 
     /**
