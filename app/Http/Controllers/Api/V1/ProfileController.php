@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class ProfileController extends Controller
@@ -290,6 +291,9 @@ class ProfileController extends Controller
         // Check if blocked
         $userData['is_blocked'] = $this->isBlocked($user->user_id, $loggedUserId);
 
+        // Check if users are friends
+        $userData['is_friend'] = $this->isFriend($user->user_id, $loggedUserId) ? 1 : 0;
+
         // Add profile and cover URLs
         $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/default-avatar.png');
         $userData['cover_url'] = $user->cover ? asset('storage/' . $user->cover) : asset('images/default-cover.jpg');
@@ -549,6 +553,78 @@ class ProfileController extends Controller
             ->exists();
 
         return $blocked ? 1 : 0;
+    }
+
+    /**
+     * Check if two users are friends
+     * 
+     * @param int $userId1
+     * @param int $userId2
+     * @return bool
+     */
+    private function isFriend(int $userId1, int $userId2): bool
+    {
+        // Check Wo_Friends table first (if it exists)
+        if (Schema::hasTable('Wo_Friends')) {
+            try {
+                // Check if friendship exists in either direction
+                $isFriend = DB::table('Wo_Friends')
+                    ->where(function($q) use ($userId1, $userId2) {
+                        $q->where('user_id', $userId1)
+                          ->where('friend_id', $userId2);
+                    })
+                    ->orWhere(function($q) use ($userId1, $userId2) {
+                        $q->where('user_id', $userId2)
+                          ->where('friend_id', $userId1);
+                    })
+                    ->where('status', '2') // Status 2 = Accepted friends
+                    ->exists();
+                
+                if ($isFriend) {
+                    return true;
+                }
+                
+                // Also check with from_id/to_id structure (alternative table structure)
+                $isFriendAlt = DB::table('Wo_Friends')
+                    ->where(function($q) use ($userId1, $userId2) {
+                        $q->where('from_id', $userId1)
+                          ->where('to_id', $userId2);
+                    })
+                    ->orWhere(function($q) use ($userId1, $userId2) {
+                        $q->where('from_id', $userId2)
+                          ->where('to_id', $userId1);
+                    })
+                    ->exists();
+                
+                return $isFriendAlt;
+            } catch (\Exception $e) {
+                // Table exists but query failed, fall through to followers check
+            }
+        }
+        
+        // Fallback: Check if both users are following each other (mutual following = friends)
+        if (Schema::hasTable('Wo_Followers')) {
+            try {
+                $user1FollowingUser2 = DB::table('Wo_Followers')
+                    ->where('follower_id', $userId1)
+                    ->where('following_id', $userId2)
+                    ->where('active', 1)
+                    ->exists();
+                
+                $user2FollowingUser1 = DB::table('Wo_Followers')
+                    ->where('follower_id', $userId2)
+                    ->where('following_id', $userId1)
+                    ->where('active', 1)
+                    ->exists();
+                
+                // Both following each other = friends
+                return $user1FollowingUser2 && $user2FollowingUser1;
+            } catch (\Exception $e) {
+                // Table exists but query failed
+            }
+        }
+        
+        return false;
     }
 
     /**
