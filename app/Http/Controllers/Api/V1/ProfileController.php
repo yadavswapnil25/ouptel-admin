@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
@@ -1094,7 +1095,11 @@ class ProfileController extends Controller
         // Use post_id for reactions query (matching how reactions are stored)
         $query = DB::table('Wo_Posts')
             ->where('user_id', $userId)
-            ->where('active', '1');
+            ->where(function($q) {
+                // Handle both string '1' and integer 1 for active field
+                $q->where('active', '1')
+                  ->orWhere('active', 1);
+            });
 
         // Handle pagination
         if ($beforePostId < PHP_INT_MAX) {
