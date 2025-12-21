@@ -591,11 +591,21 @@ class SearchController extends Controller
             ->get();
 
         $formatted = [];
+        $hasPageLikesTable = Schema::hasTable('Wo_PageLikes');
+        
         foreach ($pages as $page) {
-            $isLiked = DB::table('Wo_PageLikes')
-                ->where('user_id', $tokenUserId)
-                ->where('page_id', $page->page_id)
-                ->exists();
+            $isLiked = false;
+            if ($hasPageLikesTable) {
+                try {
+                    $isLiked = DB::table('Wo_PageLikes')
+                        ->where('user_id', $tokenUserId)
+                        ->where('page_id', $page->page_id)
+                        ->exists();
+                } catch (\Exception $e) {
+                    // Table doesn't exist or query failed, assume not liked
+                    $isLiked = false;
+                }
+            }
 
             $formatted[] = [
                 'id' => $page->page_id,
