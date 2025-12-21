@@ -664,11 +664,21 @@ class SearchController extends Controller
             ->get();
 
         $formatted = [];
+        $hasGroupMembersTable = Schema::hasTable('Wo_GroupMembers');
+        
         foreach ($groups as $group) {
-            $isJoined = DB::table('Wo_GroupMembers')
-                ->where('user_id', $tokenUserId)
-                ->where('group_id', $group->id)
-                ->exists();
+            $isJoined = false;
+            if ($hasGroupMembersTable) {
+                try {
+                    $isJoined = DB::table('Wo_GroupMembers')
+                        ->where('user_id', $tokenUserId)
+                        ->where('group_id', $group->id)
+                        ->exists();
+                } catch (\Exception $e) {
+                    // Table doesn't exist or query failed, assume not joined
+                    $isJoined = false;
+                }
+            }
 
             $formatted[] = [
                 'id' => $group->id,
