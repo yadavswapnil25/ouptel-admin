@@ -804,6 +804,153 @@ class StoriesController extends Controller
     }
 
     /**
+     * Mark story as seen (mimics old API: mark_story_seen.php)
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function markAsSeen(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
+        }
+
+        // Validate request
+        $storyId = $request->input('story_id');
+        $storyIds = $request->input('story_ids', []); // Support multiple stories
+        
+        // If single story_id provided, convert to array
+        if ($storyId && empty($storyIds)) {
+            $storyIds = [$storyId];
+        }
+        
+        // If story_ids is a string (comma-separated), convert to array
+        if (is_string($storyIds)) {
+            $storyIds = array_filter(array_map('trim', explode(',', $storyIds)));
+        }
+        
+        if (empty($storyIds) || !is_array($storyIds)) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'story_id or story_ids is required'
+                ]
+            ], 400);
+        }
+
+        // Convert to integers and filter invalid IDs
+        $storyIds = array_filter(array_map('intval', $storyIds));
+        if (empty($storyIds)) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'Invalid story_id(s) provided'
+                ]
+            ], 400);
+        }
+
+        $markedCount = 0;
+        $alreadySeenCount = 0;
+        $notFoundCount = 0;
+
+        if (Schema::hasTable('Wo_StorySeen')) {
+            foreach ($storyIds as $id) {
+                // Check if story exists
+                $story = DB::table('Wo_UserStory')->where('id', $id)->first();
+                if (!$story) {
+                    $notFoundCount++;
+                    continue;
+                }
+
+                // Don't mark own stories as seen
+                if ($story->user_id == $tokenUserId) {
+                    continue;
+                }
+
+                // Check if already viewed
+                $alreadyViewed = DB::table('Wo_StorySeen')
+                    ->where('story_id', $id)
+                    ->where('user_id', $tokenUserId)
+                    ->exists();
+
+                if ($alreadyViewed) {
+                    $alreadySeenCount++;
+                    continue;
+                }
+
+                // Mark as viewed
+                $seenInsertData = [
+                    'story_id' => $id,
+                    'user_id' => $tokenUserId,
+                ];
+                
+                // Only add time if column exists
+                if (Schema::hasColumn('Wo_StorySeen', 'time')) {
+                    $seenInsertData['time'] = time();
+                }
+                
+                try {
+                    DB::table('Wo_StorySeen')->insert($seenInsertData);
+                    $markedCount++;
+
+                    // Create notification for story owner (if notification system is enabled)
+                    if (Schema::hasTable('Wo_Notifications')) {
+                        try {
+                            $storyOwner = DB::table('Wo_Users')->where('user_id', $story->user_id)->first();
+                            if ($storyOwner) {
+                                DB::table('Wo_Notifications')->insert([
+                                    'notifier_id' => $tokenUserId,
+                                    'recipient_id' => $story->user_id,
+                                    'type' => 'viewed_story',
+                                    'url' => 'index.php?link1=timeline&u=' . ($storyOwner->username ?? ''),
+                                    'time' => time(),
+                                    'seen' => 0,
+                                ]);
+                            }
+                        } catch (\Exception $e) {
+                            // Notification creation failed, but story is still marked as seen
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Insert failed, skip this story
+                    continue;
+                }
+            }
+        }
+
+        return response()->json([
+            'api_status' => 200,
+            'message' => 'Stories marked as seen',
+            'marked' => $markedCount,
+            'already_seen' => $alreadySeenCount,
+            'not_found' => $notFoundCount,
+            'total_requested' => count($storyIds)
+        ]);
+    }
+
+    /**
      * Get story views (mimics old API: get_story_views.php)
      * 
      * @param Request $request

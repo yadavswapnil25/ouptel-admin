@@ -224,6 +224,7 @@ Route::post('/stories/create', [StoriesController::class, 'create']); // Create 
 Route::post('/stories/delete', [StoriesController::class, 'delete']); // Delete story (old API: delete-story.php)
 Route::post('/stories/react', [StoriesController::class, 'react']); // React to story (old API: react_story.php)
 Route::post('/stories/mute', [StoriesController::class, 'mute']); // Mute/unmute story (old API: mute_story.php)
+Route::post('/stories/mark-seen', [StoriesController::class, 'markAsSeen']); // Mark story as seen (old API: mark_story_seen.php)
 Route::post('/stories/views', [StoriesController::class, 'getStoryViews']); // Get story views (old API: get_story_views.php)
 Route::post('/stories/{id}', [StoriesController::class, 'getStoryById']); // Get story by ID (old API: get_story_by_id.php) - Must be last to avoid matching specific routes
 

@@ -2460,6 +2460,26 @@
       }
     },
     {
+      "name": "Stories - Mark Story as Seen",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"story_id\": {{story_id}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/stories/mark-seen",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","stories","mark-seen"]
+        },
+        "description": "Mark one or multiple stories as seen when a user views them (matching old API: mark_story_seen.php). Supports single story_id or array of story_ids. Only marks stories from other users (not your own). Automatically creates notification for story owner. Returns count of marked, already seen, and not found stories."
+      }
+    },
+    {
       "name": "Follow - Follow User",
       "request": {
         "method": "POST",
