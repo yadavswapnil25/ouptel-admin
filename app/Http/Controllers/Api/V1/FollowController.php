@@ -7,8 +7,9 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Validator;
 
 class FollowController extends Controller
 {
@@ -741,16 +742,59 @@ class FollowController extends Controller
      */
     private function sendFollowNotification(string $followerId, string $followingId, bool $requiresApproval): void
     {
-        // In a real implementation, you would:
-        // 1. Create notification record
-        // 2. Send push notification
-        // 3. Send email if enabled
-        
-        Log::info("Follow notification sent", [
-            'follower_id' => $followerId,
-            'following_id' => $followingId,
-            'requires_approval' => $requiresApproval
-        ]);
+        try {
+            // Get follower user data
+            $follower = DB::table('Wo_Users')->where('user_id', $followerId)->first();
+            if (!$follower) {
+                return;
+            }
+
+            // Check if notifications table exists
+            if (!\Illuminate\Support\Facades\Schema::hasTable('Wo_Notifications')) {
+                return;
+            }
+
+            // Determine notification type and text
+            $notificationType = $requiresApproval ? 'follow_request' : 'following';
+            $notificationText = $requiresApproval 
+                ? 'sent you a follow request' 
+                : 'started following you';
+
+            // Check if notification already exists to avoid duplicates
+            $existingNotification = DB::table('Wo_Notifications')
+                ->where('notifier_id', $followerId)
+                ->where('recipient_id', $followingId)
+                ->where('type', $notificationType)
+                ->where('seen', 0)
+                ->first();
+
+            if (!$existingNotification) {
+                // Create notification record
+                $notificationData = [
+                    'notifier_id' => $followerId,
+                    'recipient_id' => $followingId,
+                    'type' => $notificationType,
+                    'text' => '',
+                    'url' => 'index.php?link1=timeline&u=' . ($follower->username ?? ''),
+                    'time' => time(),
+                    'seen' => 0,
+                ];
+
+                // Only add time column if it exists
+                if (\Illuminate\Support\Facades\Schema::hasColumn('Wo_Notifications', 'time')) {
+                    $notificationData['time'] = time();
+                }
+
+                DB::table('Wo_Notifications')->insert($notificationData);
+            }
+        } catch (\Exception $e) {
+            // Log error but don't fail the follow operation
+            Log::error("Failed to send follow notification", [
+                'follower_id' => $followerId,
+                'following_id' => $followingId,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 
     /**
@@ -762,10 +806,52 @@ class FollowController extends Controller
      */
     private function sendFollowAcceptedNotification(string $followerId, string $followingId): void
     {
-        // In a real implementation, you would send a notification
-        Log::info("Follow accepted notification sent", [
-            'follower_id' => $followerId,
-            'following_id' => $followingId
-        ]);
+        try {
+            // Get following user data (the one who accepted)
+            $followingUser = DB::table('Wo_Users')->where('user_id', $followingId)->first();
+            if (!$followingUser) {
+                return;
+            }
+
+            // Check if notifications table exists
+            if (!\Illuminate\Support\Facades\Schema::hasTable('Wo_Notifications')) {
+                return;
+            }
+
+            // Check if notification already exists to avoid duplicates
+            $existingNotification = DB::table('Wo_Notifications')
+                ->where('notifier_id', $followingId)
+                ->where('recipient_id', $followerId)
+                ->where('type', 'accepted_request')
+                ->where('seen', 0)
+                ->first();
+
+            if (!$existingNotification) {
+                // Create notification record for accepted request
+                $notificationData = [
+                    'notifier_id' => $followingId,
+                    'recipient_id' => $followerId,
+                    'type' => 'accepted_request',
+                    'text' => '',
+                    'url' => 'index.php?link1=timeline&u=' . ($followingUser->username ?? ''),
+                    'time' => time(),
+                    'seen' => 0,
+                ];
+
+                // Only add time column if it exists
+                if (\Illuminate\Support\Facades\Schema::hasColumn('Wo_Notifications', 'time')) {
+                    $notificationData['time'] = time();
+                }
+
+                DB::table('Wo_Notifications')->insert($notificationData);
+            }
+        } catch (\Exception $e) {
+            // Log error but don't fail the accept operation
+            Log::error("Failed to send follow accepted notification", [
+                'follower_id' => $followerId,
+                'following_id' => $followingId,
+                'error' => $e->getMessage()
+            ]);
+        }
     }
 }

@@ -916,40 +916,66 @@ class StoriesController extends Controller
      */
     private function getFriendsStories(string $userId, int $limit): array
     {
-        // Get user's friends/following
+        // Get user's friends and following
         $friendIds = [$userId]; // Include own stories
 
+        // Get friends from Wo_Friends table (if exists)
         if (Schema::hasTable('Wo_Friends')) {
-            $userFriends = DB::table('Wo_Friends')
-                ->where(function($q) use ($userId) {
-                    $q->where('from_id', $userId)
-                      ->orWhere('to_id', $userId);
-                })
-                ->get();
+            try {
+                $userFriends = DB::table('Wo_Friends')
+                    ->where(function($q) use ($userId) {
+                        $q->where('from_id', $userId)
+                          ->orWhere('to_id', $userId);
+                    })
+                    ->get();
 
-            foreach ($userFriends as $friend) {
-                if ($friend->from_id != $userId) {
-                    $friendIds[] = $friend->from_id;
+                foreach ($userFriends as $friend) {
+                    if ($friend->from_id != $userId) {
+                        $friendIds[] = $friend->from_id;
+                    }
+                    if ($friend->to_id != $userId) {
+                        $friendIds[] = $friend->to_id;
+                    }
                 }
-                if ($friend->to_id != $userId) {
-                    $friendIds[] = $friend->to_id;
-                }
+            } catch (\Exception $e) {
+                // Table exists but query failed, continue to followers check
             }
-        } elseif (Schema::hasTable('Wo_Followers')) {
-            // Use Wo_Followers table
-            $following = DB::table('Wo_Followers')
-                ->where('follower_id', $userId)
-                ->where('active', 1)
-                ->pluck('following_id')
-                ->toArray();
-            
-            $followers = DB::table('Wo_Followers')
-                ->where('following_id', $userId)
-                ->where('active', 1)
-                ->pluck('follower_id')
-                ->toArray();
-            
-            $friendIds = array_merge($friendIds, $following, $followers);
+        }
+
+        // Also get people you follow from Wo_Followers table (if exists)
+        // This ensures you see stories from people you follow, even if not friends
+        if (Schema::hasTable('Wo_Followers')) {
+            try {
+                // People you are following (where you are the follower)
+                $following = DB::table('Wo_Followers')
+                    ->where('follower_id', $userId)
+                    ->where(function($q) {
+                        // Include both active (accepted) and pending (active=0) to see their stories
+                        $q->where('active', 1)
+                          ->orWhere('active', '1')
+                          ->orWhere('active', 0)
+                          ->orWhere('active', '0');
+                    })
+                    ->pluck('following_id')
+                    ->toArray();
+                
+                // People following you (mutual follows)
+                $followers = DB::table('Wo_Followers')
+                    ->where('following_id', $userId)
+                    ->where(function($q) {
+                        // Include both active (accepted) and pending
+                        $q->where('active', 1)
+                          ->orWhere('active', '1')
+                          ->orWhere('active', 0)
+                          ->orWhere('active', '0');
+                    })
+                    ->pluck('follower_id')
+                    ->toArray();
+                
+                $friendIds = array_merge($friendIds, $following, $followers);
+            } catch (\Exception $e) {
+                // Table exists but query failed
+            }
         }
         
         $friendIds = array_unique($friendIds);
@@ -1032,40 +1058,66 @@ class StoriesController extends Controller
      */
     private function getFriendsStoriesGrouped(string $userId, int $limit, int $offset): array
     {
-        // Get user's friends/following
+        // Get user's friends and following
         $friendIds = [$userId]; // Include own stories
 
+        // Get friends from Wo_Friends table (if exists)
         if (Schema::hasTable('Wo_Friends')) {
-            $userFriends = DB::table('Wo_Friends')
-                ->where(function($q) use ($userId) {
-                    $q->where('from_id', $userId)
-                      ->orWhere('to_id', $userId);
-                })
-                ->get();
+            try {
+                $userFriends = DB::table('Wo_Friends')
+                    ->where(function($q) use ($userId) {
+                        $q->where('from_id', $userId)
+                          ->orWhere('to_id', $userId);
+                    })
+                    ->get();
 
-            foreach ($userFriends as $friend) {
-                if ($friend->from_id != $userId) {
-                    $friendIds[] = $friend->from_id;
+                foreach ($userFriends as $friend) {
+                    if ($friend->from_id != $userId) {
+                        $friendIds[] = $friend->from_id;
+                    }
+                    if ($friend->to_id != $userId) {
+                        $friendIds[] = $friend->to_id;
+                    }
                 }
-                if ($friend->to_id != $userId) {
-                    $friendIds[] = $friend->to_id;
-                }
+            } catch (\Exception $e) {
+                // Table exists but query failed, continue to followers check
             }
-        } elseif (Schema::hasTable('Wo_Followers')) {
-            // Use Wo_Followers table
-            $following = DB::table('Wo_Followers')
-                ->where('follower_id', $userId)
-                ->where('active', 1)
-                ->pluck('following_id')
-                ->toArray();
-            
-            $followers = DB::table('Wo_Followers')
-                ->where('following_id', $userId)
-                ->where('active', 1)
-                ->pluck('follower_id')
-                ->toArray();
-            
-            $friendIds = array_merge($friendIds, $following, $followers);
+        }
+
+        // Also get people you follow from Wo_Followers table (if exists)
+        // This ensures you see stories from people you follow, even if not friends
+        if (Schema::hasTable('Wo_Followers')) {
+            try {
+                // People you are following (where you are the follower)
+                $following = DB::table('Wo_Followers')
+                    ->where('follower_id', $userId)
+                    ->where(function($q) {
+                        // Include both active (accepted) and pending (active=0) to see their stories
+                        $q->where('active', 1)
+                          ->orWhere('active', '1')
+                          ->orWhere('active', 0)
+                          ->orWhere('active', '0');
+                    })
+                    ->pluck('following_id')
+                    ->toArray();
+                
+                // People following you (mutual follows)
+                $followers = DB::table('Wo_Followers')
+                    ->where('following_id', $userId)
+                    ->where(function($q) {
+                        // Include both active (accepted) and pending
+                        $q->where('active', 1)
+                          ->orWhere('active', '1')
+                          ->orWhere('active', 0)
+                          ->orWhere('active', '0');
+                    })
+                    ->pluck('follower_id')
+                    ->toArray();
+                
+                $friendIds = array_merge($friendIds, $following, $followers);
+            } catch (\Exception $e) {
+                // Table exists but query failed
+            }
         }
         
         $friendIds = array_unique($friendIds);

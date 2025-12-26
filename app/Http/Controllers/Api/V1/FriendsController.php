@@ -236,6 +236,9 @@ class FriendsController extends Controller
                 // Update follow counts
                 $this->updateFollowCounts($tokenUserId, $recipientId);
 
+                // Send notification for follow/follow request
+                $this->sendFollowNotification($tokenUserId, $recipientId, $requiresApproval);
+
                 // Check if it's a request or direct follow
                 if ($requiresApproval) {
                     $followMessage = 'requested';
@@ -1319,6 +1322,62 @@ class FriendsController extends Controller
         } catch (\Exception $e) {
             // Columns don't exist, skip update
             // Silently fail if columns don't exist
+        }
+    }
+
+    /**
+     * Send follow notification
+     * 
+     * @param string $followerId
+     * @param string $followingId
+     * @param bool $requiresApproval
+     * @return void
+     */
+    private function sendFollowNotification(string $followerId, string $followingId, bool $requiresApproval): void
+    {
+        try {
+            // Get follower user data
+            $follower = DB::table('Wo_Users')->where('user_id', $followerId)->first();
+            if (!$follower) {
+                return;
+            }
+
+            // Check if notifications table exists
+            if (!Schema::hasTable('Wo_Notifications')) {
+                return;
+            }
+
+            // Determine notification type
+            $notificationType = $requiresApproval ? 'follow_request' : 'following';
+
+            // Check if notification already exists to avoid duplicates
+            $existingNotification = DB::table('Wo_Notifications')
+                ->where('notifier_id', $followerId)
+                ->where('recipient_id', $followingId)
+                ->where('type', $notificationType)
+                ->where('seen', 0)
+                ->first();
+
+            if (!$existingNotification) {
+                // Create notification record
+                $notificationData = [
+                    'notifier_id' => $followerId,
+                    'recipient_id' => $followingId,
+                    'type' => $notificationType,
+                    'text' => '',
+                    'url' => 'index.php?link1=timeline&u=' . ($follower->username ?? ''),
+                    'seen' => 0,
+                ];
+
+                // Only add time column if it exists
+                if (Schema::hasColumn('Wo_Notifications', 'time')) {
+                    $notificationData['time'] = time();
+                }
+
+                DB::table('Wo_Notifications')->insert($notificationData);
+            }
+        } catch (\Exception $e) {
+            // Silently fail if notification creation fails
         }
     }
 }

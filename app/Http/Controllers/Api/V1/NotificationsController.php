@@ -60,11 +60,23 @@ class NotificationsController extends Controller
         // Get notifications (excluding certain types)
         $notifications = $this->getUserNotifications($tokenUserId);
         
-        // Count unread notifications
+        // Count unread notifications (including follow requests)
+        $notificationTypes = [
+            'requested_to_join_group', 
+            'interested_event', 
+            'going_event', 
+            'invited_event', 
+            'forum_reply', 
+            'admin_notification',
+            'following',           // Someone followed you
+            'follow_request',      // Follow request
+            'accepted_request',    // Follow request accepted
+        ];
+        
         $countNotifications = DB::table('Wo_Notifications')
             ->where('recipient_id', $tokenUserId)
             ->where('seen', 0)
-            ->whereIn('type', ['requested_to_join_group', 'interested_event', 'going_event', 'invited_event', 'forum_reply', 'admin_notification'])
+            ->whereIn('type', $notificationTypes)
             ->count();
 
         // Count friend requests
@@ -270,9 +282,22 @@ class NotificationsController extends Controller
      */
     private function getUserNotifications(string $userId): array
     {
+        // Get all notification types including follow/friend requests
+        $notificationTypes = [
+            'requested_to_join_group', 
+            'interested_event', 
+            'going_event', 
+            'invited_event', 
+            'forum_reply', 
+            'admin_notification',
+            'following',           // Someone followed you
+            'follow_request',      // Follow request (if separate type exists)
+            'accepted_request',    // Follow request accepted
+        ];
+        
         $notifications = DB::table('Wo_Notifications')
             ->where('recipient_id', $userId)
-            ->whereIn('type', ['requested_to_join_group', 'interested_event', 'going_event', 'invited_event', 'forum_reply', 'admin_notification'])
+            ->whereIn('type', $notificationTypes)
             ->orderByDesc('time')
             ->limit(50)
             ->get();
@@ -393,7 +418,11 @@ class NotificationsController extends Controller
         // Set type text and icon based on notification type
         switch ($type) {
             case 'following':
-                $notification['type_text'] = 'followed you';
+                $notification['type_text'] = 'started following you';
+                $notification['icon'] = 'user-plus';
+                break;
+            case 'follow_request':
+                $notification['type_text'] = 'sent you a follow request';
                 $notification['icon'] = 'user-plus';
                 break;
             case 'comment_mention':
