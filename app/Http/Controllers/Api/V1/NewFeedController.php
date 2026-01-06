@@ -80,6 +80,9 @@ class NewFeedController extends Controller
 
         $perPage = (int) ($request->query('per_page', 10));
         $perPage = max(1, min($perPage, 50));
+        
+        $page = (int) ($request->query('page', 1));
+        $page = max(1, $page);
 
         // Get filter parameter (Image, File, Jobs, Audio, Video, Blogs, Articles)
         $filter = $request->query('filter');
@@ -94,18 +97,17 @@ class NewFeedController extends Controller
         // Get user's current feed order preference
         $feedOrder = $this->getUserFeedOrder($tokenUserId);
 
-        // Get posts based on feed order and filter
-        $posts = $this->getPostsByFeedOrder($tokenUserId, $feedOrder, $perPage, $filter);
+        // Get posts based on feed order and filter with pagination
+        $result = $this->getPostsByFeedOrder($tokenUserId, $feedOrder, $perPage, $page, $filter);
 
         return response()->json([
             'ok' => true,
-            'data' => $posts,
+            'data' => $result['posts'],
             'meta' => [
                 'current_feed_type' => $feedOrder,
                 'feed_type_name' => $this->getFeedTypeName($feedOrder),
                 'filter' => $filter ? ucfirst(strtolower($filter)) : null,
-                'per_page' => $perPage,
-                'total' => count($posts)
+                'pagination' => $result['pagination']
             ]
         ]);
     }
@@ -191,15 +193,16 @@ class NewFeedController extends Controller
     }
 
     /**
-     * Get posts based on feed order type
+     * Get posts based on feed order type with pagination
      * 
      * @param string $userId
      * @param int $feedOrder
      * @param int $perPage
+     * @param int $page
      * @param string|null $filter
      * @return array
      */
-    private function getPostsByFeedOrder(string $userId, int $feedOrder, int $perPage, ?string $filter = null): array
+    private function getPostsByFeedOrder(string $userId, int $feedOrder, int $perPage, int $page, ?string $filter = null): array
     {
         // Note: This is a simplified implementation since Wo_Posts table structure may vary
         // In a real implementation, you'd need to adjust based on your actual database schema
@@ -340,9 +343,20 @@ class NewFeedController extends Controller
                 $query->orderByDesc('time');
         }
 
-        $posts = $query->limit($perPage)->get();
+        // Get total count for pagination
+        $total = $query->count();
+        
+        // Calculate offset
+        $offset = ($page - 1) * $perPage;
+        
+        // Get paginated posts
+        $posts = $query->offset($offset)->limit($perPage)->get();
+        
+        // Calculate pagination metadata
+        $lastPage = (int) ceil($total / $perPage);
+        $hasMore = $page < $lastPage;
 
-        return $posts->map(function ($post) use ($userId) {
+        $formattedPosts = $posts->map(function ($post) use ($userId) {
             // Get user information
             $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
             
@@ -351,8 +365,8 @@ class NewFeedController extends Controller
             $postIdForReactions = $post->post_id ?? $post->id;
             $reactionsCount = $this->getPostReactionsCount($postIdForReactions, $post);
             
-            // Get post comments count  
-            $commentsCount = $this->getPostCommentsCount($post->id);
+            // Get post comments count (try Wo_Comments table first, fallback to post_comments column)
+            $commentsCount = $this->getPostCommentsCount($post->id, $post);
             
             // Get album images if it's an album post
             $albumImages = [];
@@ -443,6 +457,19 @@ class NewFeedController extends Controller
                 'time' => $post->time,
             ];
         })->toArray();
+
+        return [
+            'posts' => $formattedPosts,
+            'pagination' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => $lastPage,
+                'has_more' => $hasMore,
+                'from' => $total > 0 ? $offset + 1 : 0,
+                'to' => $total > 0 ? min($offset + $perPage, $total) : 0,
+            ]
+        ];
     }
 
     /**
@@ -574,13 +601,37 @@ class NewFeedController extends Controller
      * Get post comments count
      * 
      * @param int $postId
+     * @param object|null $post Optional post object to use post_comments column as fallback
      * @return int
      */
-    private function getPostCommentsCount(int $postId): int
+    private function getPostCommentsCount(int $postId, $post = null): int
     {
-        // Note: Wo_Comments table might not exist
-        // In a real implementation, you would query this table
-        return 0;
+        // Try to count from Wo_Comments table (more accurate, real-time count)
+        if (Schema::hasTable('Wo_Comments')) {
+            try {
+                $count = DB::table('Wo_Comments')
+                    ->where('post_id', $postId)
+                    ->count();
+                return $count;
+            } catch (\Exception $e) {
+                // If query fails, fall through to post_comments column
+            }
+        }
+        
+        // Fallback: Use post_comments column if available (cached count)
+        if ($post && isset($post->post_comments)) {
+            return (int) ($post->post_comments ?? 0);
+        }
+        
+        // Last resort: Query post_comments column
+        try {
+            $postComments = DB::table('Wo_Posts')
+                ->where('id', $postId)
+                ->value('post_comments');
+            return (int) ($postComments ?? 0);
+        } catch (\Exception $e) {
+            return 0;
+        }
     }
 
     /**

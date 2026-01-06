@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use App\Models\GroupCategory;
 use App\Models\GroupSubCategory;
 
@@ -194,6 +195,165 @@ class GroupsController extends BaseController
                 'created_at' => $group->time ? date('c', $group->time_as_timestamp) : null,
             ],
         ], 201);
+    }
+
+    /**
+     * Get single group by ID
+     * 
+     * @param Request $request
+     * @param int $id
+     * @return JsonResponse
+     */
+    public function show(Request $request, $id): JsonResponse
+    {
+        // Auth is optional - public groups can be viewed without auth
+        $tokenUserId = null;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        // Find the group
+        $group = Group::find($id);
+        
+        if (!$group) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'Group not found',
+                ],
+            ], 404);
+        }
+
+        // Check if group is active (unless user is the owner)
+        if ($group->active != '1' && $group->active != 1) {
+            if (!$tokenUserId || $group->user_id != $tokenUserId) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 4,
+                        'error_text' => 'Group not found',
+                    ],
+                ], 404);
+            }
+        }
+
+        // Get member count
+        $membersCount = 0;
+        $isJoined = false;
+        $isPending = false;
+        $isAdmin = false;
+        
+        if (Schema::hasTable('Wo_Group_Members')) {
+            try {
+                $membersCount = DB::table('Wo_Group_Members')
+                    ->where('group_id', $id)
+                    ->where('active', '1')
+                    ->count();
+                
+                if ($tokenUserId) {
+                    // Check if user is joined
+                    $isJoined = DB::table('Wo_Group_Members')
+                        ->where('group_id', $id)
+                        ->where('user_id', $tokenUserId)
+                        ->where('active', '1')
+                        ->exists();
+                    
+                    // Check if user has pending join request
+                    $isPending = DB::table('Wo_Group_Members')
+                        ->where('group_id', $id)
+                        ->where('user_id', $tokenUserId)
+                        ->where('active', '0')
+                        ->exists();
+                    
+                    // Check if user is admin
+                    if (Schema::hasTable('Wo_GroupAdmins')) {
+                        $isAdmin = DB::table('Wo_GroupAdmins')
+                            ->where('group_id', $id)
+                            ->where('user_id', $tokenUserId)
+                            ->exists();
+                    }
+                }
+            } catch (\Exception $e) {
+                // If query fails, continue with default values
+            }
+        }
+
+        // Get category information
+        $category = null;
+        if ($group->category) {
+            $categoryModel = GroupCategory::find($group->category);
+            if ($categoryModel) {
+                $category = [
+                    'id' => $categoryModel->id,
+                    'name' => $categoryModel->name,
+                ];
+            }
+        }
+
+        // Get sub-category information
+        $subCategory = null;
+        if ($group->sub_category && $group->sub_category > 0) {
+            $subCategoryModel = GroupSubCategory::find($group->sub_category);
+            if ($subCategoryModel) {
+                $subCategory = [
+                    'id' => $subCategoryModel->id,
+                    'category_id' => $subCategoryModel->category_id,
+                    'name' => $subCategoryModel->name,
+                ];
+            }
+        }
+
+        // Get owner/user information
+        $owner = null;
+        if ($group->user) {
+            $owner = [
+                'user_id' => $group->user->user_id,
+                'username' => $group->user->username ?? 'Unknown',
+                'name' => $group->user->name ?? $group->user->username ?? 'Unknown User',
+                'avatar' => $group->user->avatar ?? '',
+                'avatar_url' => $group->user->avatar ? asset('storage/' . $group->user->avatar) : null,
+                'verified' => (bool) ($group->user->verified ?? false),
+            ];
+        }
+
+        // Format response
+        $response = [
+            'api_status' => 200,
+            'api_text' => 'success',
+            'api_version' => '1.0',
+            'data' => [
+                'id' => $group->id,
+                'group_name' => $group->group_name,
+                'group_title' => $group->group_title,
+                'about' => $group->about ?? '',
+                'category' => $category,
+                'category_id' => $group->category,
+                'sub_category' => $subCategory,
+                'sub_category_id' => $group->sub_category ?? 0,
+                'privacy' => $group->privacy,
+                'privacy_text' => ucfirst($group->privacy),
+                'join_privacy' => $group->join_privacy,
+                'join_privacy_text' => ucfirst($group->join_privacy),
+                'avatar' => $group->avatar ?? '',
+                'avatar_url' => $group->avatar_url,
+                'cover' => $group->cover ?? '',
+                'cover_url' => $group->cover_url,
+                'members_count' => $membersCount,
+                'is_joined' => $isJoined,
+                'is_pending' => $isPending,
+                'is_admin' => $isAdmin,
+                'is_owner' => $tokenUserId && $group->user_id == $tokenUserId,
+                'active' => (bool) ($group->active == '1' || $group->active == 1),
+                'created_at' => $group->time ? date('c', $group->time_as_timestamp) : null,
+                'created_at_timestamp' => $group->time_as_timestamp,
+                'owner' => $owner,
+            ],
+        ];
+
+        return response()->json($response);
     }
 
     public function meta(Request $request): JsonResponse

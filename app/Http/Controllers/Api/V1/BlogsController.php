@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class BlogsController extends BaseController
 {
@@ -99,6 +100,159 @@ class BlogsController extends BaseController
                 'categories' => $categories,
             ],
         ]);
+    }
+
+    /**
+     * Get blog categories with metadata
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function categories(Request $request): JsonResponse
+    {
+        $categories = BlogCategory::query()
+            ->orderBy('id')
+            ->get()
+            ->map(function ($category) {
+                // Get article count for this category
+                $articleCount = Article::where('category', $category->id)
+                    ->where('active', '1')
+                    ->count();
+
+                return [
+                    'id' => $category->id,
+                    'name' => $category->name,
+                    'lang_key' => $category->lang_key ?? '',
+                    'articles_count' => $articleCount,
+                ];
+            });
+
+        return response()->json([
+            'api_status' => 200,
+            'api_text' => 'success',
+            'api_version' => '1.0',
+            'data' => [
+                'categories' => $categories,
+                'total_categories' => $categories->count(),
+            ],
+        ]);
+    }
+
+    /**
+     * Get blog/article by ID
+     * 
+     * @param Request $request
+     * @param int $id
+     * @return JsonResponse
+     */
+    public function show(Request $request, $id): JsonResponse
+    {
+        // Find the article
+        $article = Article::find($id);
+        
+        if (!$article) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'Article not found',
+                ],
+            ], 404);
+        }
+
+        // Check if article is active (unless user is the owner)
+        $tokenUserId = null;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        // If article is not active, only show to owner
+        if ($article->active != '1' && $article->active != 1) {
+            if (!$tokenUserId || $article->user != $tokenUserId) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 4,
+                        'error_text' => 'Article not found',
+                    ],
+                ], 404);
+            }
+        }
+
+        // Increment view count (optional, can be controlled by parameter)
+        if ($request->boolean('increment_view', true)) {
+            $article->increment('view');
+        }
+
+        // Get category information
+        $category = null;
+        if ($article->category) {
+            $categoryModel = BlogCategory::find($article->category);
+            if ($categoryModel) {
+                $category = [
+                    'id' => $categoryModel->id,
+                    'name' => $categoryModel->name,
+                ];
+            }
+        }
+
+        // Get user information
+        $user = $article->user;
+        $userData = null;
+        if ($user) {
+            $userData = [
+                'user_id' => $user->user_id,
+                'username' => $user->username ?? 'Unknown',
+                'name' => $user->name ?? $user->username ?? 'Unknown User',
+                'avatar' => $user->avatar ?? '',
+                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'verified' => (bool) ($user->verified ?? false),
+            ];
+        }
+
+        // Check if current user has reacted (if authenticated)
+        $isLiked = false;
+        if ($tokenUserId && \Illuminate\Support\Facades\Schema::hasTable('Wo_Blog_Reaction')) {
+            $isLiked = DB::table('Wo_Blog_Reaction')
+                ->where('blog_id', $id)
+                ->where('user_id', $tokenUserId)
+                ->exists();
+        }
+
+        // Format response
+        $response = [
+            'api_status' => 200,
+            'api_text' => 'success',
+            'api_version' => '1.0',
+            'data' => [
+                'id' => $article->id,
+                'title' => $article->title,
+                'description' => $article->description,
+                'content' => $article->content,
+                'excerpt' => $article->excerpt,
+                'category' => $category,
+                'category_id' => $article->category,
+                'thumbnail' => $article->thumbnail,
+                'thumbnail_url' => $article->thumbnail_url,
+                'tags' => $article->tags ? explode(',', $article->tags) : [],
+                'posted' => $article->posted,
+                'posted_at' => $article->posted_date,
+                'active' => (bool) ($article->active == '1' || $article->active == 1),
+                'status_text' => $article->status_text,
+                'views' => $article->views_count,
+                'shares' => $article->shares_count,
+                'comments' => $article->comments_count,
+                'reactions' => $article->reactions_count,
+                'url' => $article->url,
+                'is_liked' => $isLiked,
+                'is_owner' => $tokenUserId && $article->user == $tokenUserId,
+                'author' => $userData,
+            ],
+        ];
+
+        return response()->json($response);
     }
 
     // 5.1 Get My Articles
@@ -360,13 +514,42 @@ class BlogsController extends BaseController
             ], 400);
         }
 
-        // Delete related data
-        DB::table('Wo_Blog_Comments')->where('blog_id', $id)->delete();
-        DB::table('Wo_Blog_Comment_Replies')->where('blog_id', $id)->delete();
-        DB::table('Wo_Blog_Reaction')->where('blog_id', $id)->delete();
+        // Delete related data (with error handling)
+        try {
+            // Delete blog comments
+            if (Schema::hasTable('Wo_BlogComments')) {
+                DB::table('Wo_BlogComments')->where('blog_id', $id)->delete();
+            }
+            
+            // Delete blog comment replies
+            if (Schema::hasTable('Wo_BlogCommentReplies')) {
+                DB::table('Wo_BlogCommentReplies')->where('blog_id', $id)->delete();
+            }
+            
+            // Delete blog reactions
+            if (Schema::hasTable('Wo_Blog_Reaction')) {
+                DB::table('Wo_Blog_Reaction')->where('blog_id', $id)->delete();
+            }
+        } catch (\Exception $e) {
+            // Log error but continue with article deletion
+            \Log::warning('Error deleting related blog data: ' . $e->getMessage(), [
+                'blog_id' => $id,
+                'error' => $e->getMessage()
+            ]);
+        }
 
         // Delete the article
-        $article->delete();
+        try {
+            $article->delete();
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 8,
+                    'error_text' => 'Failed to delete article: ' . $e->getMessage(),
+                ],
+            ], 500);
+        }
 
         return response()->json([
             'api_status' => 200,

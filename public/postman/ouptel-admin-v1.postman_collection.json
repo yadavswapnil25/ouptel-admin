@@ -237,6 +237,21 @@
       "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/groups/meta","host":["{{base_url}}"],"path":["api","v1","groups","meta"]}}
     },
     {
+      "name": "Groups - Get by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/groups/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","groups","1"]
+        },
+        "description": "Get a single group by ID. Returns full group details including category, sub-category, member count, join status, admin status, and owner information. Authentication is optional - public groups can be viewed without auth. If authenticated, shows additional info like is_joined, is_pending, is_admin, is_owner."
+      }
+    },
+    {
       "name": "Groups - Create",
       "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"group_name\": \"devs\",\n  \"group_title\": \"Developers\",\n  \"category\": 1,\n  \"privacy\": \"public\",\n  \"join_privacy\": \"public\"\n}"},"url":{"raw":"{{base_url}}/api/v1/groups","host":["{{base_url}}"],"path":["api","v1","groups"]}}
     },
@@ -249,8 +264,39 @@
       "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/blogs?term=music","host":["{{base_url}}"],"path":["api","v1","blogs"],"query":[{"key":"term","value":"music"}]}}
     },
     {
+      "name": "Blogs - Categories",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/blogs/categories",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","blogs","categories"]
+        },
+        "description": "Get all blog categories with metadata including article count for each category. No authentication required."
+      }
+    },
+    {
       "name": "Blogs - My Articles",
       "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/blogs/my-articles","host":["{{base_url}}"],"path":["api","v1","blogs","my-articles"]}}
+    },
+    {
+      "name": "Blogs - Get by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/blogs/1?increment_view=true",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","blogs","1"],
+          "query": [
+            {"key":"increment_view","value":"true","description":"Increment view count (default: true)"}
+          ]
+        },
+        "description": "Get a single blog/article by ID. Returns full article details including content, category, author, view counts, and like status. Works without authentication for public articles. Set increment_view=false to prevent view count increment."
+      }
     },
     {
       "name": "Blogs - Create Article",

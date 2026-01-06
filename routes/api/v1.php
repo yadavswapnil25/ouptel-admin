@@ -69,6 +69,7 @@ Route::get('/pokes', [PokeController::class, 'index']);
 Route::post('/pokes', [PokeController::class, 'store']);
 Route::delete('/pokes/{pokeId}', [PokeController::class, 'destroy']);
 Route::get('/groups', [GroupsController::class, 'index']);
+Route::get('/groups/{id}', [GroupsController::class, 'show']); // Get single group by ID
 Route::post('/groups', [GroupsController::class, 'store']);
 Route::get('/groups/meta', [GroupsController::class, 'meta']);
 Route::post('/groups/join', [GroupsController::class, 'joinGroup']); // Join/leave group (old API: requests.php?f=join_group)
@@ -79,7 +80,9 @@ Route::post('/pages/like', [PagesController::class, 'likePage']); // Like/unlike
 Route::post('/pages/delete', [PagesController::class, 'destroy']); // Delete page (old API: v2/endpoints/delete_page.php)
 Route::get('/blogs', [BlogsController::class, 'index']);
 Route::get('/blogs/meta', [BlogsController::class, 'meta']);
+Route::get('/blogs/categories', [BlogsController::class, 'categories']); // Get blog categories with metadata
 Route::get('/blogs/my-articles', [BlogsController::class, 'getMyArticles']); // 5.1 Get My Articles (old API: ajax_loading.php?link1=my-blogs)
+Route::get('/blogs/{id}', [BlogsController::class, 'show']); // Get blog/article by ID (must be after specific routes)
 Route::post('/blogs', [BlogsController::class, 'createArticle']); // 5.2 Create Article
 Route::put('/blogs/{id}', [BlogsController::class, 'updateArticle']); // 5.3 Update My Article
 Route::post('/blogs/{id}', [BlogsController::class, 'updateArticle']); // 5.3 Update My Article (POST alternative)
