@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 
 class BlogsController extends BaseController
@@ -147,8 +148,34 @@ class BlogsController extends BaseController
      */
     public function show(Request $request, $id): JsonResponse
     {
+        // Get authentication (optional)
+        $tokenUserId = null;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        // Build query similar to index method - show active articles to everyone
+        // If authenticated, also show inactive articles if user is the owner
+        $query = Article::query()->where('id', $id);
+        
+        // If not authenticated, only show active articles (matching index behavior)
+        if (!$tokenUserId) {
+            $query->where('active', 1);
+        } else {
+            // If authenticated, show active articles OR inactive articles owned by user
+            $query->where(function($q) use ($tokenUserId) {
+                $q->where('active', 1)
+                  ->orWhere(function($q2) use ($tokenUserId) {
+                      $q2->where('active', '!=', 1)
+                         ->where('user', (string) $tokenUserId);
+                  });
+            });
+        }
+
         // Find the article
-        $article = Article::find($id);
+        $article = $query->first();
         
         if (!$article) {
             return response()->json([
@@ -160,26 +187,8 @@ class BlogsController extends BaseController
             ], 404);
         }
 
-        // Check if article is active (unless user is the owner)
-        $tokenUserId = null;
-        $authHeader = $request->header('Authorization');
-        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
-            $token = substr($authHeader, 7);
-            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-        }
-
-        // If article is not active, only show to owner
-        if ($article->active != '1' && $article->active != 1) {
-            if (!$tokenUserId || $article->user != $tokenUserId) {
-                return response()->json([
-                    'api_status' => 400,
-                    'errors' => [
-                        'error_id' => 4,
-                        'error_text' => 'Article not found',
-                    ],
-                ], 404);
-            }
-        }
+        // Get raw user value from database for comparison
+        $rawUserId = DB::table('Wo_Blog')->where('id', $id)->value('user');
 
         // Increment view count (optional, can be controlled by parameter)
         if ($request->boolean('increment_view', true)) {
@@ -199,9 +208,12 @@ class BlogsController extends BaseController
         }
 
         // Get user information
+        // Use optional() to safely access user relationship, or fetch directly if needed
         $user = $article->user;
         $userData = null;
-        if ($user) {
+        
+        // Check if user is an object (relationship loaded) or if we need to fetch it
+        if (is_object($user) && isset($user->user_id)) {
             $userData = [
                 'user_id' => $user->user_id,
                 'username' => $user->username ?? 'Unknown',
@@ -210,6 +222,19 @@ class BlogsController extends BaseController
                 'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                 'verified' => (bool) ($user->verified ?? false),
             ];
+        } elseif ($rawUserId) {
+            // If relationship didn't load, fetch user directly from database
+            $userFromDb = DB::table('Wo_Users')->where('user_id', $rawUserId)->first();
+            if ($userFromDb) {
+                $userData = [
+                    'user_id' => $userFromDb->user_id,
+                    'username' => $userFromDb->username ?? 'Unknown',
+                    'name' => $userFromDb->name ?? $userFromDb->username ?? 'Unknown User',
+                    'avatar' => $userFromDb->avatar ?? '',
+                    'avatar_url' => $userFromDb->avatar ? asset('storage/' . $userFromDb->avatar) : null,
+                    'verified' => (bool) ($userFromDb->verified ?? false),
+                ];
+            }
         }
 
         // Check if current user has reacted (if authenticated)
@@ -247,7 +272,7 @@ class BlogsController extends BaseController
                 'reactions' => $article->reactions_count,
                 'url' => $article->url,
                 'is_liked' => $isLiked,
-                'is_owner' => $tokenUserId && $article->user == $tokenUserId,
+                'is_owner' => $tokenUserId && (string) $rawUserId == (string) $tokenUserId,
                 'author' => $userData,
             ],
         ];
@@ -532,7 +557,7 @@ class BlogsController extends BaseController
             }
         } catch (\Exception $e) {
             // Log error but continue with article deletion
-            \Log::warning('Error deleting related blog data: ' . $e->getMessage(), [
+            Log::warning('Error deleting related blog data: ' . $e->getMessage(), [
                 'blog_id' => $id,
                 'error' => $e->getMessage()
             ]);
