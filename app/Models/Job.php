@@ -133,4 +133,22 @@ class Job extends Model
         // Simplified since user_id and applications table might not exist
         return false;
     }
+
+    /**
+     * Get job URL for viewing in frontend
+     */
+    public function getUrlAttribute(): string
+    {
+        $baseUrl = config('app.url', 'https://ouptel.com');
+        return "{$baseUrl}/jobs/{$this->id}";
+    }
+
+    /**
+     * Get user_id from either user_id or user column
+     * Note: This accessor handles both column names
+     */
+    public function getUserIdValueAttribute()
+    {
+        return $this->attributes['user_id'] ?? $this->attributes['user'] ?? null;
+    }
 }

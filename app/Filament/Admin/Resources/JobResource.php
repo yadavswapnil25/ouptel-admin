@@ -18,11 +18,14 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Filters\Filter;
 use Filament\Tables\Actions\Action;
 use Filament\Tables\Actions\BulkActionGroup;
 use Filament\Tables\Actions\DeleteBulkAction;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Carbon\Carbon;
 
 class JobResource extends Resource
 {
@@ -59,23 +62,118 @@ class JobResource extends Resource
 
                         Forms\Components\Select::make('user_id')
                             ->label('Publisher')
-                            ->relationship('user', 'username')
+                            ->options(function () {
+                                if (!Schema::hasTable('Wo_Users')) {
+                                    return [];
+                                }
+                                try {
+                                    return User::select('user_id', 'username')
+                                        ->limit(1000)
+                                        ->get()
+                                        ->mapWithKeys(function ($user) {
+                                            $label = $user->username ?? "User {$user->user_id}";
+                                            return [$user->user_id => $label];
+                                        });
+                                } catch (\Exception $e) {
+                                    return [];
+                                }
+                            })
+                            ->getSearchResultsUsing(function (string $search) {
+                                if (!Schema::hasTable('Wo_Users')) {
+                                    return [];
+                                }
+                                try {
+                                    return User::select('user_id', 'username')
+                                        ->where('username', 'like', "%{$search}%")
+                                        ->orWhere('user_id', 'like', "%{$search}%")
+                                        ->limit(50)
+                                        ->get()
+                                        ->mapWithKeys(function ($user) {
+                                            $label = $user->username ?? "User {$user->user_id}";
+                                            return [$user->user_id => $label];
+                                        });
+                                } catch (\Exception $e) {
+                                    return [];
+                                }
+                            })
                             ->searchable()
-                            ->preload()
                             ->required(),
 
                         Forms\Components\Select::make('page_id')
                             ->label('Page')
-                            ->relationship('page', 'page_name')
+                            ->options(function () {
+                                if (!Schema::hasTable('Wo_Pages')) {
+                                    return [];
+                                }
+                                try {
+                                    return Page::select('page_id', 'page_name')
+                                        ->limit(1000)
+                                        ->get()
+                                        ->mapWithKeys(function ($page) {
+                                            $label = $page->page_name ?? "Page {$page->page_id}";
+                                            return [$page->page_id => $label];
+                                        });
+                                } catch (\Exception $e) {
+                                    return [];
+                                }
+                            })
+                            ->getSearchResultsUsing(function (string $search) {
+                                if (!Schema::hasTable('Wo_Pages')) {
+                                    return [];
+                                }
+                                try {
+                                    return Page::select('page_id', 'page_name')
+                                        ->where('page_name', 'like', "%{$search}%")
+                                        ->orWhere('page_id', 'like', "%{$search}%")
+                                        ->limit(50)
+                                        ->get()
+                                        ->mapWithKeys(function ($page) {
+                                            $label = $page->page_name ?? "Page {$page->page_id}";
+                                            return [$page->page_id => $label];
+                                        });
+                                } catch (\Exception $e) {
+                                    return [];
+                                }
+                            })
                             ->searchable()
-                            ->preload()
                             ->nullable(),
 
                         Forms\Components\Select::make('category')
                             ->label('Category')
-                            ->options(JobCategory::all()->mapWithKeys(function ($category) {
-                                return [$category->id => $category->name];
-                            }))
+                            ->options(function () {
+                                if (!Schema::hasTable('Wo_Job_Categories')) {
+                                    return [];
+                                }
+                                try {
+                                    $categories = JobCategory::query()->get();
+                                    $options = [];
+                                    foreach ($categories as $category) {
+                                        $options[$category->id] = $category->name ?? "Category {$category->id}";
+                                    }
+                                    return $options;
+                                } catch (\Exception $e) {
+                                    return [];
+                                }
+                            })
+                            ->getSearchResultsUsing(function (string $search) {
+                                if (!Schema::hasTable('Wo_Job_Categories')) {
+                                    return [];
+                                }
+                                try {
+                                    $categories = JobCategory::query()
+                                        ->where('name', 'like', "%{$search}%")
+                                        ->orWhere('id', 'like', "%{$search}%")
+                                        ->limit(50)
+                                        ->get();
+                                    $options = [];
+                                    foreach ($categories as $category) {
+                                        $options[$category->id] = $category->name ?? "Category {$category->id}";
+                                    }
+                                    return $options;
+                                } catch (\Exception $e) {
+                                    return [];
+                                }
+                            })
                             ->searchable()
                             ->required(),
 
@@ -223,188 +321,252 @@ class JobResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->modifyQueryUsing(function (Builder $query) {
+                // Search by title and description (matching old admin panel)
+                if (request()->filled('tableSearch')) {
+                    $search = request('tableSearch');
+                    $query->where(function ($q) use ($search) {
+                        $q->where('title', 'like', "%{$search}%")
+                          ->orWhere('description', 'like', "%{$search}%");
+                    });
+                }
+            })
             ->columns([
-                ImageColumn::make('image_url')
-                    ->label('Image')
-                    ->circular()
-                    ->size(40),
-
                 TextColumn::make('id')
                     ->label('ID')
                     ->sortable()
                     ->searchable(),
 
+                TextColumn::make('publisher')
+                    ->label('Publisher')
+                    ->formatStateUsing(function ($record) {
+                        // Get user_id from record attributes (may be user_id or user column)
+                        $userId = $record->attributes['user_id'] ?? $record->attributes['user'] ?? null;
+                        if (!$userId || !Schema::hasTable('Wo_Users')) {
+                            return 'Unknown';
+                        }
+                        try {
+                            $user = DB::table('Wo_Users')->where('user_id', $userId)->first();
+                            if (!$user) {
+                                return 'Unknown';
+                            }
+                            $avatar = $user->avatar ?? '';
+                            $avatarUrl = $avatar ? asset('storage/' . $avatar) : asset('images/default-avatar.png');
+                            $name = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->name ?? $user->username ?? 'Unknown');
+                            
+                            return view('filament.admin.resources.job-resource.publisher', [
+                                'avatar' => $avatarUrl,
+                                'name' => $name,
+                                'username' => $user->username ?? '',
+                                'userId' => $userId,
+                            ])->render();
+                        } catch (\Exception $e) {
+                            return 'Unknown';
+                        }
+                    })
+                    ->html()
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        if (!Schema::hasTable('Wo_Users')) {
+                            return $query;
+                        }
+                        // Check which column exists (user_id or user)
+                        $hasUserId = Schema::hasColumn('Wo_Job', 'user_id');
+                        $hasUser = Schema::hasColumn('Wo_Job', 'user');
+                        $column = $hasUserId ? 'user_id' : ($hasUser ? 'user' : null);
+                        
+                        if (!$column) {
+                            return $query;
+                        }
+                        
+                        return $query->whereIn($column, function ($subQuery) use ($search) {
+                            $subQuery->select('user_id')
+                                ->from('Wo_Users')
+                                ->where('username', 'like', "%{$search}%")
+                                ->orWhere('name', 'like', "%{$search}%")
+                                ->orWhere('first_name', 'like', "%{$search}%")
+                                ->orWhere('last_name', 'like', "%{$search}%");
+                        });
+                    }),
+
                 TextColumn::make('title')
                     ->label('Title')
                     ->searchable()
                     ->sortable()
-                    ->limit(50),
+                    ->limit(50)
+                    ->wrap(),
 
-                TextColumn::make('user.username')
-                    ->label('Publisher')
-                    ->searchable()
-                    ->sortable()
+                TextColumn::make('job_link')
+                    ->label('Job Link')
                     ->formatStateUsing(function ($record) {
-                        return $record->user ? $record->user->username : 'Unknown';
-                    }),
-
-                TextColumn::make('location')
-                    ->label('Location')
-                    ->searchable()
-                    ->limit(30),
-
-                TextColumn::make('category_name')
-                    ->label('Category')
-                    ->formatStateUsing(function ($record) {
-                        if ($record->category) {
-                            $category = JobCategory::find($record->category);
-                            return $category ? $category->name : "Category {$record->category}";
-                        }
-                        return 'No Category';
+                        // Generate job URL similar to old admin panel
+                        $jobId = $record->id;
+                        $baseUrl = config('app.url', 'https://ouptel.com');
+                        // Try to get URL from record, or construct it
+                        $jobUrl = $record->url ?? "{$baseUrl}/jobs/{$jobId}";
+                        
+                        return view('filament.admin.resources.job-resource.job-link', [
+                            'url' => $jobUrl,
+                        ])->render();
                     })
-                    ->badge()
-                    ->color('info'),
+                    ->html(),
 
-                TextColumn::make('job_type_text')
-                    ->label('Type')
-                    ->badge()
-                    ->color(fn (string $state): string => match ($state) {
-                        'Full Time' => 'success',
-                        'Part Time' => 'warning',
-                        'Contract' => 'info',
-                        'Freelance' => 'gray',
-                        'Internship' => 'primary',
-                        default => 'gray',
-                    }),
-
-                TextColumn::make('salary_range')
-                    ->label('Salary Range')
-                    ->sortable(query: function (Builder $query, string $direction): Builder {
-                        return $query->orderBy('minimum', $direction);
-                    }),
-
-                TextColumn::make('applications_count')
-                    ->label('Applications')
-                    ->sortable()
-                    ->alignCenter(),
-
-                TextColumn::make('posted_date')
+                TextColumn::make('posted')
                     ->label('Posted')
+                    ->formatStateUsing(function ($record) {
+                        $time = $record->time_as_timestamp ?? $record->time ?? null;
+                        if (!$time) {
+                            return 'N/A';
+                        }
+                        if (is_numeric($time)) {
+                            $carbon = Carbon::createFromTimestamp($time);
+                            return $carbon->diffForHumans();
+                        }
+                        return $time;
+                    })
                     ->sortable(query: function (Builder $query, string $direction): Builder {
                         return $query->orderBy('time', $direction);
+                    })
+                    ->tooltip(function ($record) {
+                        $time = $record->time_as_timestamp ?? $record->time ?? null;
+                        if ($time && is_numeric($time)) {
+                            return Carbon::createFromTimestamp($time)->format('Y-m-d H:i:s');
+                        }
+                        return null;
                     }),
 
-                IconColumn::make('status')
-                    ->label('Status')
-                    ->boolean()
-                    ->trueIcon('heroicon-o-check-circle')
-                    ->falseIcon('heroicon-o-x-circle')
-                    ->trueColor('success')
-                    ->falseColor('danger'),
-
                 TextColumn::make('actions')
-                    ->label('Actions')
+                    ->label('Action')
                     ->formatStateUsing(function ($record) {
                         return view('filament.admin.resources.job-resource.actions', compact('record'));
                     })
                     ->html(),
             ])
             ->filters([
-                SelectFilter::make('job_type')
-                    ->label('Job Type')
-                    ->options([
-                        'full_time' => 'Full Time',
-                        'part_time' => 'Part Time',
-                        'contract' => 'Contract',
-                        'freelance' => 'Freelance',
-                        'internship' => 'Internship',
-                    ]),
-
-                SelectFilter::make('category')
-                    ->label('Category')
-                    ->options(JobCategory::all()->mapWithKeys(function ($category) {
-                        return [$category->id => $category->name];
-                    }))
+                // Date Range Filter (matching old admin panel)
+                Filter::make('date_range')
+                    ->label('Date Range')
+                    ->form([
+                        Forms\Components\Select::make('range')
+                            ->label('Quick Range')
+                            ->options([
+                                'Today' => 'Today',
+                                'Yesterday' => 'Yesterday',
+                                'This Week' => 'This Week',
+                                'This Month' => 'This Month',
+                                'Last Month' => 'Last Month',
+                                'This Year' => 'This Year',
+                            ])
+                            ->placeholder('All'),
+                        Forms\Components\DatePicker::make('start_date')
+                            ->label('Start Date'),
+                        Forms\Components\DatePicker::make('end_date')
+                            ->label('End Date'),
+                    ])
                     ->query(function (Builder $query, array $data): Builder {
-                        return $query->when(
-                            $data['value'],
-                            fn (Builder $query, $categoryId): Builder => $query->where('category', $categoryId),
-                        );
+                        $range = $data['range'] ?? null;
+                        $startDate = $data['start_date'] ?? null;
+                        $endDate = $data['end_date'] ?? null;
+
+                        if ($range) {
+                            $now = Carbon::now();
+                            switch ($range) {
+                                case 'Today':
+                                    $start = $now->copy()->startOfDay()->timestamp;
+                                    $end = $now->copy()->endOfDay()->timestamp;
+                                    break;
+                                case 'Yesterday':
+                                    $start = $now->copy()->subDay()->startOfDay()->timestamp;
+                                    $end = $now->copy()->subDay()->endOfDay()->timestamp;
+                                    break;
+                                case 'This Week':
+                                    $start = $now->copy()->startOfWeek()->timestamp;
+                                    $end = $now->copy()->endOfWeek()->timestamp;
+                                    break;
+                                case 'This Month':
+                                    $start = $now->copy()->startOfMonth()->timestamp;
+                                    $end = $now->copy()->endOfMonth()->timestamp;
+                                    break;
+                                case 'Last Month':
+                                    $start = $now->copy()->subMonth()->startOfMonth()->timestamp;
+                                    $end = $now->copy()->subMonth()->endOfMonth()->timestamp;
+                                    break;
+                                case 'This Year':
+                                    $start = $now->copy()->startOfYear()->timestamp;
+                                    $end = $now->copy()->endOfYear()->timestamp;
+                                    break;
+                                default:
+                                    return $query;
+                            }
+                            return $query->whereBetween('time', [$start, $end]);
+                        }
+
+                        if ($startDate && $endDate) {
+                            $start = Carbon::parse($startDate)->startOfDay()->timestamp;
+                            $end = Carbon::parse($endDate)->endOfDay()->timestamp;
+                            return $query->whereBetween('time', [$start, $end]);
+                        }
+
+                        if ($startDate) {
+                            $start = Carbon::parse($startDate)->startOfDay()->timestamp;
+                            return $query->where('time', '>=', $start);
+                        }
+
+                        if ($endDate) {
+                            $end = Carbon::parse($endDate)->endOfDay()->timestamp;
+                            return $query->where('time', '<=', $end);
+                        }
+
+                        return $query;
                     }),
+
+                SelectFilter::make('user_id')
+                    ->label('Publisher')
+                    ->options(function () {
+                        if (!Schema::hasTable('Wo_Users')) {
+                            return [];
+                        }
+                        try {
+                            return User::select('user_id', 'username')
+                                ->limit(1000)
+                                ->get()
+                                ->mapWithKeys(function ($user) {
+                                    $label = $user->username ?? "User {$user->user_id}";
+                                    return [$user->user_id => $label];
+                                });
+                        } catch (\Exception $e) {
+                            return [];
+                        }
+                    })
+                    ->searchable(),
 
                 TernaryFilter::make('status')
                     ->label('Status')
                     ->placeholder('All jobs')
                     ->trueLabel('Active jobs')
-                    ->falseLabel('Inactive jobs'),
-
-                SelectFilter::make('user_id')
-                    ->label('Publisher')
-                    ->relationship('user', 'username')
-                    ->searchable()
-                    ->preload(),
-
-                Tables\Filters\Filter::make('has_applications')
-                    ->label('Has Applications')
-                    ->query(fn (Builder $query): Builder => $query->whereHas('applications')),
-
-                Tables\Filters\Filter::make('salary_range')
-                    ->form([
-                        Forms\Components\TextInput::make('min_salary')
-                            ->label('Minimum Salary')
-                            ->numeric()
-                            ->prefix('$'),
-                        Forms\Components\TextInput::make('max_salary')
-                            ->label('Maximum Salary')
-                            ->numeric()
-                            ->prefix('$'),
-                    ])
+                    ->falseLabel('Inactive jobs')
                     ->query(function (Builder $query, array $data): Builder {
-                        return $query
-                            ->when(
-                                $data['min_salary'],
-                                fn (Builder $query, $amount): Builder => $query->where('minimum', '>=', $amount),
-                            )
-                            ->when(
-                                $data['max_salary'],
-                                fn (Builder $query, $amount): Builder => $query->where('maximum', '<=', $amount),
-                            );
+                        if ($data['value'] === true) {
+                            return $query->where('status', '1');
+                        } elseif ($data['value'] === false) {
+                            return $query->where('status', '!=', '1');
+                        }
+                        return $query;
                     }),
             ], layout: Tables\Enums\FiltersLayout::AboveContent)
             ->actions([
-                Action::make('view')
-                    ->label('View')
-                    ->icon('heroicon-o-eye')
-                    ->url(fn (Job $record): string => $record->job_url)
-                    ->openUrlInNewTab(),
-
-                Action::make('applications')
-                    ->label('Applications')
-                    ->icon('heroicon-o-users')
-                    ->url(fn (Job $record): string => route('filament.admin.resources.jobs.applications', $record))
-                    ->visible(fn (Job $record): bool => $record->applications_count > 0),
-
-                Tables\Actions\EditAction::make(),
-                Tables\Actions\DeleteAction::make(),
+                Tables\Actions\DeleteAction::make()
+                    ->label('Delete')
+                    ->icon('heroicon-o-trash')
+                    ->color('danger'),
             ])
             ->bulkActions([
                 BulkActionGroup::make([
                     DeleteBulkAction::make(),
                 ]),
             ])
-            ->defaultSort('time', 'desc')
-            ->persistFiltersInSession()
-            ->headerActions([
-                Action::make('reset_filters')
-                    ->label('Reset All Filters')
-                    ->icon('heroicon-o-arrow-path')
-                    ->color('gray')
-                    ->action(function () {
-                        session()->forget('tableFilters');
-                        return redirect()->to(request()->url());
-                    })
-                    ->visible(fn () => request()->has('tableFilters') || session()->has('tableFilters')),
-            ]);
+            ->defaultSort('id', 'desc')
+            ->defaultPaginationPageOption(50) // Matching old admin panel (50 per page)
+            ->persistFiltersInSession();
     }
 
     public static function getRelations(): array

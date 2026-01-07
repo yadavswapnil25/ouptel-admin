@@ -19,6 +19,7 @@ use Filament\Tables\Actions\DeleteBulkAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Section;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Schema;
 
 class JobCategoryResource extends Resource
 {
@@ -35,6 +36,15 @@ class JobCategoryResource extends Resource
     protected static ?string $navigationGroup = 'Manage Features';
 
     protected static ?int $navigationSort = 6;
+
+    /**
+     * Check if the resource should be visible in navigation
+     * Hide if the table doesn't exist
+     */
+    public static function canViewAny(): bool
+    {
+        return Schema::hasTable('Wo_Job_Categories');
+    }
 
     public static function form(Form $form): Form
     {
@@ -64,6 +74,12 @@ class JobCategoryResource extends Resource
     {
         return $table
             ->modifyQueryUsing(function (Builder $query) {
+                // Check if table exists before querying
+                if (!Schema::hasTable('Wo_Job_Categories')) {
+                    // Return empty query if table doesn't exist
+                    return $query->whereRaw('1 = 0');
+                }
+                
                 // Handle custom search for category names
                 $search = request('tableSearch') ?? request('search') ?? request('q');
                 if ($search) {
@@ -72,13 +88,15 @@ class JobCategoryResource extends Resource
                         $query->where('id', 'like', "%{$search}%")
                               // Search by lang_key
                               ->orWhere('lang_key', 'like', "%{$search}%")
-                              // Search by category name in Wo_Langs table
+                              // Search by category name in Wo_Langs table (if it exists)
                               ->orWhereExists(function ($subQuery) use ($search) {
-                                  $subQuery->select(\Illuminate\Support\Facades\DB::raw(1))
-                                      ->from('Wo_Langs')
-                                      ->whereColumn('Wo_Langs.id', 'Wo_Job_Categories.lang_key')
-                                      ->where('Wo_Langs.type', 'category')
-                                      ->where('Wo_Langs.english', 'like', "%{$search}%");
+                                  if (Schema::hasTable('Wo_Langs')) {
+                                      $subQuery->select(\Illuminate\Support\Facades\DB::raw(1))
+                                          ->from('Wo_Langs')
+                                          ->whereColumn('Wo_Langs.id', 'Wo_Job_Categories.lang_key')
+                                          ->where('Wo_Langs.type', 'category')
+                                          ->where('Wo_Langs.english', 'like', "%{$search}%");
+                                  }
                               });
                     });
                 }

@@ -231,7 +231,7 @@ class SettingsController extends Controller
 
             // Add job categories (if available)
             try {
-                $jobCategories = DB::table('Wo_JobCategory')->get()->toArray();
+                $jobCategories = DB::table('Wo_Job_Categories')->get()->toArray();
                 $config['job_categories'] = $jobCategories;
             } catch (\Exception $e) {
                 $config['job_categories'] = [];

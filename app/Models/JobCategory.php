@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class JobCategory extends Model
 {
-    protected $table = 'Wo_JobCategory';
+    protected $table = 'Wo_Job_Categories';
     protected $primaryKey = 'id';
     public $timestamps = false;
 
