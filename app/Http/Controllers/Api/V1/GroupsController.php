@@ -254,17 +254,34 @@ class GroupsController extends BaseController
                     ->count();
                 
                 if ($tokenUserId) {
-                    // Check if user is joined
+                    // Convert tokenUserId to string to match database type
+                    $tokenUserIdStr = (string) $tokenUserId;
+                    
+                    // Check if user is joined (active = '1')
                     $isJoined = DB::table('Wo_Group_Members')
                         ->where('group_id', $id)
-                        ->where('user_id', $tokenUserId)
+                        ->where(function($query) use ($tokenUserIdStr) {
+                            $query->where('user_id', $tokenUserIdStr)
+                                  ->orWhere('user_id', (int) $tokenUserIdStr);
+                        })
                         ->where('active', '1')
                         ->exists();
                     
-                    // Check if user has pending join request
+                    // Also check if user is the group owner (owners are automatically "joined")
+                    if (!$isJoined && $group->user_id) {
+                        $groupOwnerId = (string) $group->user_id;
+                        if ($groupOwnerId == $tokenUserIdStr || (int) $groupOwnerId == (int) $tokenUserIdStr) {
+                            $isJoined = true;
+                        }
+                    }
+                    
+                    // Check if user has pending join request (active = '0')
                     $isPending = DB::table('Wo_Group_Members')
                         ->where('group_id', $id)
-                        ->where('user_id', $tokenUserId)
+                        ->where(function($query) use ($tokenUserIdStr) {
+                            $query->where('user_id', $tokenUserIdStr)
+                                  ->orWhere('user_id', (int) $tokenUserIdStr);
+                        })
                         ->where('active', '0')
                         ->exists();
                     
@@ -272,7 +289,10 @@ class GroupsController extends BaseController
                     if (Schema::hasTable('Wo_GroupAdmins')) {
                         $isAdmin = DB::table('Wo_GroupAdmins')
                             ->where('group_id', $id)
-                            ->where('user_id', $tokenUserId)
+                            ->where(function($query) use ($tokenUserIdStr) {
+                                $query->where('user_id', $tokenUserIdStr)
+                                      ->orWhere('user_id', (int) $tokenUserIdStr);
+                            })
                             ->exists();
                     }
                 }
@@ -449,17 +469,27 @@ class GroupsController extends BaseController
             ], 500);
         }
 
+        // Convert userId to string for consistent comparison
+        $userIdStr = (string) $userId;
+        
         // Check if user is already a member (active = '1')
+        // Handle both string and integer user_id types
         $isMember = DB::table('Wo_Group_Members')
             ->where('group_id', $groupId)
-            ->where('user_id', $userId)
+            ->where(function($query) use ($userIdStr) {
+                $query->where('user_id', $userIdStr)
+                      ->orWhere('user_id', (int) $userIdStr);
+            })
             ->where('active', '1')
             ->exists();
 
         // Check if user has a pending join request (active = '0')
         $hasJoinRequest = DB::table('Wo_Group_Members')
             ->where('group_id', $groupId)
-            ->where('user_id', $userId)
+            ->where(function($query) use ($userIdStr) {
+                $query->where('user_id', $userIdStr)
+                      ->orWhere('user_id', (int) $userIdStr);
+            })
             ->where('active', '0')
             ->exists();
 
@@ -468,9 +498,13 @@ class GroupsController extends BaseController
         // If user is already a member or has requested to join, leave the group
         if ($isMember || $hasJoinRequest) {
             // Remove from members table (deletes both joined and requested entries)
+            // Handle both string and integer user_id types
             DB::table('Wo_Group_Members')
                 ->where('group_id', $groupId)
-                ->where('user_id', $userId)
+                ->where(function($query) use ($userIdStr) {
+                    $query->where('user_id', $userIdStr)
+                          ->orWhere('user_id', (int) $userIdStr);
+                })
                 ->delete();
 
             $joinStatus = 'left';
@@ -486,9 +520,10 @@ class GroupsController extends BaseController
             $joinStatus = $isPrivate ? 'requested' : 'joined';
 
             // Insert into Wo_Group_Members table with appropriate active value
+            // Ensure user_id is stored consistently (as string to match database type)
             DB::table('Wo_Group_Members')->insert([
                 'group_id' => $groupId,
-                'user_id' => $userId,
+                'user_id' => (string) $userId,
                 'active' => $active,
                 'time' => time(),
             ]);

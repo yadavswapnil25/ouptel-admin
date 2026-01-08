@@ -20,6 +20,15 @@ class PostController extends Controller
     /**
      * Create a new post (mimics WoWonder requests.php?f=posts&s=insert_new_post)
      * 
+     * OPTIMIZED: Unified endpoint for all post types
+     * Use 'type' parameter to optimize: 'regular', 'gif', 'feeling', or 'colored'
+     * 
+     * Examples:
+     * - Regular post: POST /posts (or POST /posts?type=regular)
+     * - GIF post: POST /posts?type=gif (with postGif parameter)
+     * - Feeling post: POST /posts?type=feeling (with feeling parameter)
+     * - Colored post: POST /posts?type=colored (with color_id parameter)
+     * 
      * @param Request $request
      * @return JsonResponse
      */
@@ -37,11 +46,15 @@ class PostController extends Controller
             return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
         }
 
-        // Validate request parameters
-        $validator = Validator::make($request->all(), [
+        // Get post type (gif, feeling, colored, or regular)
+        $postCreationType = $request->input('type', 'regular'); // type: regular, gif, feeling, colored
+        
+        // Validate request parameters based on type
+        $validationRules = [
             'postText' => 'nullable|string|max:5000',
             'postPrivacy' => 'required|in:0,1,2,3,4', // 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group
-            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding',
+            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif',
+            'type' => 'nullable|in:regular,gif,feeling,colored', // Post creation type
             'page_id' => 'nullable|integer',
             'group_id' => 'nullable|integer',
             'event_id' => 'nullable|integer',
@@ -83,6 +96,7 @@ class PostController extends Controller
             'postFile' => 'nullable|file|mimes:pdf,doc,docx,txt,zip,rar|max:51200', // 50MB max
             'postRecord' => 'nullable|file|mimes:mp3,wav,ogg|max:51200', // 50MB max
             'postSticker' => 'nullable|string|max:500',
+            'postGif' => 'nullable|url|max:2000', // GIF URL from Giphy or similar service
         ]);
 
         if ($validator->fails()) {
@@ -93,12 +107,85 @@ class PostController extends Controller
             ], 422);
         }
 
+        // Get post creation type (regular, gif, feeling, colored)
+        $postCreationType = $request->input('type', 'regular');
+
+        // Handle type-specific processing
+        if ($postCreationType === 'feeling') {
+            // Convert 'feeling' parameter to 'postFeeling'
+            $feeling = $request->input('feeling');
+            $validFeelings = [
+                'happy', 'loved', 'sad', 'so_sad', 'angry', 'confused', 'smirk',
+                'broke', 'expressionless', 'cool', 'funny', 'tired', 'lovely',
+                'blessed', 'shocked', 'sleepy', 'pretty', 'bored'
+            ];
+            if (!in_array($feeling, $validFeelings)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Invalid feeling. Use GET /api/v1/feelings to see available feelings.'
+                ], 422);
+            }
+            $request->merge(['postFeeling' => $feeling]);
+        } elseif ($postCreationType === 'gif') {
+            // Validate GIF URL
+            $postGif = $request->input('postGif');
+            $isGifUrl = (
+                strpos($postGif, '.gif') !== false || 
+                strpos($postGif, 'giphy.com') !== false || 
+                strpos($postGif, 'tenor.com') !== false ||
+                strpos($postGif, 'media.giphy.com') !== false ||
+                strpos($postGif, 'media.tenor.com') !== false
+            );
+            if (!$isGifUrl) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Invalid GIF URL. Please provide a valid GIF URL from Giphy, Tenor, or similar service.'
+                ], 422);
+            }
+            $request->merge(['postType' => 'gif']);
+        }
+
         // Hash validation removed for simplified authentication
 
         // Check if user exists
         $user = User::where('user_id', $tokenUserId)->first();
         if (!$user) {
             return response()->json(['ok' => false, 'message' => 'User not found'], 404);
+        }
+
+        // Handle type-specific processing
+        if ($postCreationType === 'feeling') {
+            // Convert 'feeling' parameter to 'postFeeling'
+            $feeling = $request->input('feeling');
+            $validFeelings = [
+                'happy', 'loved', 'sad', 'so_sad', 'angry', 'confused', 'smirk',
+                'broke', 'expressionless', 'cool', 'funny', 'tired', 'lovely',
+                'blessed', 'shocked', 'sleepy', 'pretty', 'bored'
+            ];
+            if (!in_array($feeling, $validFeelings)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Invalid feeling. Use GET /api/v1/feelings to see available feelings.'
+                ], 422);
+            }
+            $request->merge(['postFeeling' => $feeling]);
+        } elseif ($postCreationType === 'gif') {
+            // Validate GIF URL
+            $postGif = $request->input('postGif');
+            $isGifUrl = (
+                strpos($postGif, '.gif') !== false || 
+                strpos($postGif, 'giphy.com') !== false || 
+                strpos($postGif, 'tenor.com') !== false ||
+                strpos($postGif, 'media.giphy.com') !== false ||
+                strpos($postGif, 'media.tenor.com') !== false
+            );
+            if (!$isGifUrl) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Invalid GIF URL. Please provide a valid GIF URL from Giphy, Tenor, or similar service.'
+                ], 422);
+            }
+            $request->merge(['postType' => 'gif']);
         }
 
         // Validate content requirements
@@ -110,13 +197,14 @@ class PostController extends Controller
         $postLink = $request->input('postLink', '');
         $postMap = $request->input('postMap', '');
         $postSticker = $request->input('postSticker', '');
+        $postGif = $request->input('postGif', '');
 
         // At least one content field must be provided
         if (empty($postText) && !$postPhoto && !$postFile && !$postRecord && 
-            empty($postYoutube) && empty($postLink) && empty($postMap) && empty($postSticker)) {
+            empty($postYoutube) && empty($postLink) && empty($postMap) && empty($postSticker) && empty($postGif)) {
             return response()->json([
                 'ok' => false,
-                'message' => 'At least one content field must be provided (text, photo, file, video, link, location, or sticker)'
+                'message' => 'At least one content field must be provided (text, photo, file, video, link, location, sticker, or gif)'
             ], 422);
         }
 
@@ -180,7 +268,7 @@ class PostController extends Controller
                 'postTraveling' => $request->input('postTraveling', ''),
                 'postWatching' => $request->input('postWatching', ''),
                 'postPlaying' => $request->input('postPlaying', ''),
-                'postPhoto' => $postPhotoPath,
+                'postPhoto' => $postGif ? $postGif : $postPhotoPath, // Store GIF URL or photo path in postPhoto field
                 'time' => time(),
                 'registered' => time(),
                 'album_name' => $request->input('album_name', ''),
@@ -218,6 +306,31 @@ class PostController extends Controller
             // Create the post
             $post = Post::create($postData);
 
+            // Handle colored post if color_id is provided
+            $colorData = null;
+            $colorId = $request->input('color_id', 0);
+            if ($colorId > 0 && Schema::hasTable('Wo_Colored_Posts')) {
+                try {
+                    $coloredPost = DB::table('Wo_Colored_Posts')
+                        ->where('id', $colorId)
+                        ->first();
+                    
+                    if ($coloredPost) {
+                        $colorData = [
+                            'color_id' => $coloredPost->id,
+                            'color_1' => $coloredPost->color_1 ?? '',
+                            'color_2' => $coloredPost->color_2 ?? '',
+                            'text_color' => $coloredPost->text_color ?? '',
+                            'image' => $coloredPost->image ?? '',
+                            'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    // If query fails, continue without color data
+                    Log::warning('Failed to fetch colored post data: ' . $e->getMessage());
+                }
+            }
+
             // Handle album creation if multiple images
             if ($request->hasFile('album_images') && $request->input('album_name')) {
                 $this->handleAlbumCreation($post->id, $request->file('album_images'), $request->input('album_name'));
@@ -230,25 +343,93 @@ class PostController extends Controller
 
             DB::commit();
 
+            $responseData = [
+                'post_id' => $post->id,
+                'post_id_original' => $post->post_id,
+                'post_url' => $post->post_url,
+                'post_type' => $post->postType,
+                'post_privacy' => $post->postPrivacy,
+                'created_at' => date('c', $post->time),
+                'created_at_human' => $this->getHumanTime($post->time),
+                'user_id' => $post->user_id,
+                'creation_type' => $postCreationType, // Type used for creation: regular, gif, feeling, colored
+                'author' => [
+                    'user_id' => $user->user_id,
+                    'username' => $user->username,
+                    'name' => $user->name,
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                ]
+            ];
+
+            // Add color data if available
+            if ($colorData) {
+                $responseData['color'] = $colorData;
+            }
+
+            // Add feeling data if available
+            if (!empty($post->postFeeling)) {
+                $feelingIcons = [
+                    'happy' => 'smile',
+                    'loved' => 'heart-eyes',
+                    'sad' => 'disappointed',
+                    'so_sad' => 'sob',
+                    'angry' => 'angry',
+                    'confused' => 'confused',
+                    'smirk' => 'smirk',
+                    'broke' => 'broken-heart',
+                    'expressionless' => 'expressionless',
+                    'cool' => 'sunglasses',
+                    'funny' => 'joy',
+                    'tired' => 'tired-face',
+                    'lovely' => 'heart',
+                    'blessed' => 'innocent',
+                    'shocked' => 'scream',
+                    'sleepy' => 'sleeping',
+                    'pretty' => 'relaxed',
+                    'bored' => 'unamused'
+                ];
+                
+                $feelingLabels = [
+                    'happy' => 'Happy',
+                    'loved' => 'Loved',
+                    'sad' => 'Sad',
+                    'so_sad' => 'So Sad',
+                    'angry' => 'Angry',
+                    'confused' => 'Confused',
+                    'smirk' => 'Smirk',
+                    'broke' => 'Broke',
+                    'expressionless' => 'Expressionless',
+                    'cool' => 'Cool',
+                    'funny' => 'Funny',
+                    'tired' => 'Tired',
+                    'lovely' => 'Lovely',
+                    'blessed' => 'Blessed',
+                    'shocked' => 'Shocked',
+                    'sleepy' => 'Sleepy',
+                    'pretty' => 'Pretty',
+                    'bored' => 'Bored'
+                ];
+
+                $feelingKey = $post->postFeeling;
+                $responseData['feeling'] = [
+                    'key' => $feelingKey,
+                    'label' => $feelingLabels[$feelingKey] ?? ucfirst($feelingKey),
+                    'icon' => $feelingIcons[$feelingKey] ?? 'smile',
+                ];
+            }
+
+            // Add GIF data if available
+            if ($postType === 'gif' && !empty($post->postPhoto) && filter_var($post->postPhoto, FILTER_VALIDATE_URL)) {
+                $responseData['gif'] = [
+                    'url' => $post->postPhoto,
+                    'type' => 'gif'
+                ];
+            }
+
             return response()->json([
                 'ok' => true,
                 'message' => 'Post created successfully',
-                'data' => [
-                    'post_id' => $post->id,
-                    'post_id_original' => $post->post_id,
-                    'post_url' => $post->post_url,
-                    'post_type' => $post->postType,
-                    'post_privacy' => $post->postPrivacy,
-                    'created_at' => date('c', $post->time),
-                    'created_at_human' => $this->getHumanTime($post->time),
-                    'user_id' => $post->user_id,
-                    'author' => [
-                        'user_id' => $user->user_id,
-                        'username' => $user->username,
-                        'name' => $user->name,
-                        'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                    ]
-                ]
+                'data' => $responseData
             ], 201);
 
         } catch (\Exception $e) {
@@ -322,6 +503,11 @@ class PostController extends Controller
      */
     private function determinePostType(Request $request, ?string $postPhotoPath, ?string $postFilePath, ?string $postRecordPath): string
     {
+        // Check for GIF first (GIF URLs are stored in postPhotoPath)
+        if ($request->input('postGif')) return 'gif';
+        if ($postPhotoPath && filter_var($postPhotoPath, FILTER_VALIDATE_URL) && (strpos($postPhotoPath, '.gif') !== false || strpos($postPhotoPath, 'giphy.com') !== false || strpos($postPhotoPath, 'tenor.com') !== false)) {
+            return 'gif';
+        }
         if ($postPhotoPath) return 'photo';
         if ($postRecordPath) return 'audio';
         if ($postFilePath) return 'file';
@@ -1935,5 +2121,123 @@ class PostController extends Controller
                 ]
             ], 500);
         }
+    }
+
+    /**
+     * Get available colored posts (mimics WoWonder colored posts system)
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getColoredPosts(Request $request): JsonResponse
+    {
+        // Auth is optional for this endpoint
+        $tokenUserId = null;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        // Check if colored posts table exists
+        if (!Schema::hasTable('Wo_Colored_Posts')) {
+            return response()->json([
+                'ok' => true,
+                'data' => [
+                    'colored_posts' => [],
+                    'message' => 'Colored posts feature is not available'
+                ]
+            ]);
+        }
+
+        try {
+            // Get all available colored posts
+            $coloredPosts = DB::table('Wo_Colored_Posts')
+                ->orderBy('id')
+                ->get()
+                ->map(function ($coloredPost) {
+                    return [
+                        'id' => $coloredPost->id,
+                        'color_1' => $coloredPost->color_1 ?? '',
+                        'color_2' => $coloredPost->color_2 ?? '',
+                        'text_color' => $coloredPost->text_color ?? '',
+                        'image' => $coloredPost->image ?? '',
+                        'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+                        'time' => $coloredPost->time ?? '',
+                    ];
+                });
+
+            return response()->json([
+                'ok' => true,
+                'data' => [
+                    'colored_posts' => $coloredPosts,
+                    'total' => $coloredPosts->count()
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch colored posts: ' . $e->getMessage());
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to fetch colored posts',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Create a GIF post (mimics WoWonder GIF post creation)
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function createGifPost(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        // Validate request
+        $validated = $request->validate([
+            'postText' => 'nullable|string|max:5000',
+            'postPrivacy' => 'required|in:0,1,2,3,4', // 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group
+            'postGif' => 'required|url|max:2000', // GIF URL from Giphy, Tenor, or similar service
+            'page_id' => 'nullable|integer',
+            'group_id' => 'nullable|integer',
+            'event_id' => 'nullable|integer',
+        ]);
+
+        // Validate that the URL is a GIF URL (from Giphy, Tenor, etc.)
+        $gifUrl = $validated['postGif'];
+        $isGifUrl = (
+            strpos($gifUrl, '.gif') !== false || 
+            strpos($gifUrl, 'giphy.com') !== false || 
+            strpos($gifUrl, 'tenor.com') !== false ||
+            strpos($gifUrl, 'media.giphy.com') !== false ||
+            strpos($gifUrl, 'media.tenor.com') !== false
+        );
+
+        if (!$isGifUrl) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Invalid GIF URL. Please provide a valid GIF URL from Giphy, Tenor, or similar service.'
+            ], 422);
+        }
+
+        // Merge GIF into request and forward to insertNewPost
+        $request->merge([
+            'postGif' => $gifUrl,
+            'postType' => 'gif'
+        ]);
+        
+        return $this->insertNewPost($request);
     }
 }

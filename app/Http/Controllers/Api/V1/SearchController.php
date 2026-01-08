@@ -567,7 +567,8 @@ class SearchController extends Controller
             return [];
         }
 
-        $query = DB::table('Wo_Pages');
+        $query = DB::table('Wo_Pages')
+            ->where('active', '1'); // Only show active pages
 
         if (!empty($searchKey)) {
             $like = '%' . $searchKey . '%';
@@ -607,6 +608,18 @@ class SearchController extends Controller
                 }
             }
 
+            // Get likes count
+            $likesCount = 0;
+            if ($hasPageLikesTable) {
+                try {
+                    $likesCount = DB::table('Wo_PageLikes')
+                        ->where('page_id', $page->page_id)
+                        ->count();
+                } catch (\Exception $e) {
+                    // Ignore error
+                }
+            }
+
             $formatted[] = [
                 'id' => $page->page_id,
                 'page_id' => $page->page_id,
@@ -619,7 +632,9 @@ class SearchController extends Controller
                 'cover' => $page->cover ?? '',
                 'cover_url' => $page->cover ? asset('storage/' . $page->cover) : null,
                 'verified' => (bool) ($page->verified ?? false),
+                'likes_count' => $likesCount,
                 'is_liked' => $isLiked ? 'yes' : 'no',
+                'is_admin' => ($page->user_id ?? null) == $tokenUserId,
             ];
         }
 
@@ -641,12 +656,14 @@ class SearchController extends Controller
             return [];
         }
 
-        $query = DB::table('Wo_Groups');
+        $query = DB::table('Wo_Groups')
+            ->where('active', '1'); // Only show active groups
 
         if (!empty($searchKey)) {
             $like = '%' . $searchKey . '%';
             $query->where(function($q) use ($like) {
-                $q->where('group_name', 'like', $like);
+                $q->where('group_name', 'like', $like)
+                  ->orWhere('group_title', 'like', $like);
                 
                 // Only search in about column if it exists
                 if (Schema::hasColumn('Wo_Groups', 'about')) {
@@ -664,16 +681,27 @@ class SearchController extends Controller
             ->get();
 
         $formatted = [];
-        $hasGroupMembersTable = Schema::hasTable('Wo_GroupMembers');
+        // Check for both table name variations
+        $hasGroupMembersTable = Schema::hasTable('Wo_Group_Members') || Schema::hasTable('Wo_GroupMembers');
+        $groupMembersTable = Schema::hasTable('Wo_Group_Members') ? 'Wo_Group_Members' : 'Wo_GroupMembers';
         
         foreach ($groups as $group) {
             $isJoined = false;
+            $membersCount = 0;
+            
             if ($hasGroupMembersTable) {
                 try {
-                    $isJoined = DB::table('Wo_GroupMembers')
+                    $isJoined = DB::table($groupMembersTable)
                         ->where('user_id', $tokenUserId)
                         ->where('group_id', $group->id)
+                        ->where('active', '1')
                         ->exists();
+                    
+                    // Get members count
+                    $membersCount = DB::table($groupMembersTable)
+                        ->where('group_id', $group->id)
+                        ->where('active', '1')
+                        ->count();
                 } catch (\Exception $e) {
                     // Table doesn't exist or query failed, assume not joined
                     $isJoined = false;
@@ -684,14 +712,18 @@ class SearchController extends Controller
                 'id' => $group->id,
                 'group_id' => $group->id,
                 'group_name' => $group->group_name ?? '',
-                'name' => $group->group_name ?? '',
+                'group_title' => $group->group_title ?? $group->group_name ?? '',
+                'name' => $group->group_title ?? $group->group_name ?? '',
                 'about' => $group->about ?? '',
                 'avatar' => $group->avatar ?? '',
                 'avatar_url' => $group->avatar ? asset('storage/' . $group->avatar) : null,
                 'cover' => $group->cover ?? '',
                 'cover_url' => $group->cover ? asset('storage/' . $group->cover) : null,
                 'privacy' => $group->privacy ?? 'public',
+                'join_privacy' => $group->join_privacy ?? 'public',
+                'members_count' => $membersCount,
                 'is_joined' => $isJoined ? 'yes' : 'no',
+                'is_owner' => ($group->user_id ?? null) == $tokenUserId,
             ];
         }
 

@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\V1\BlogsController;
 use App\Http\Controllers\Api\V1\ProductsController;
 use App\Http\Controllers\Api\V1\DirectoryController;
 use App\Http\Controllers\Api\V1\EventsController;
+use App\Http\Controllers\Api\V1\FeelingsController;
 use App\Http\Controllers\Api\V1\GamesController;
 use App\Http\Controllers\Api\V1\ForumsController;
 use App\Http\Controllers\Api\V1\JobsController;
@@ -75,7 +76,10 @@ Route::get('/groups/{id}', [GroupsController::class, 'show']); // Get single gro
 Route::post('/groups', [GroupsController::class, 'store']);
 Route::get('/pages', [PagesController::class, 'index']);
 Route::get('/pages/meta', [PagesController::class, 'meta']);
+Route::get('/pages/{id}', [PagesController::class, 'show']); // Get page by ID
 Route::post('/pages', [PagesController::class, 'store']);
+Route::put('/pages/{id}', [PagesController::class, 'update']); // Update page (Edit page)
+Route::patch('/pages/{id}', [PagesController::class, 'update']); // Update page (Edit page) - alternative method
 Route::post('/pages/like', [PagesController::class, 'likePage']); // Like/unlike page (old API: requests.php?f=like_page)
 Route::post('/pages/delete', [PagesController::class, 'destroy']); // Delete page (old API: v2/endpoints/delete_page.php)
 Route::get('/blogs', [BlogsController::class, 'index']);
@@ -193,7 +197,17 @@ Route::get('/people-follow/types', [PeopleFollowController::class, 'getPeopleFol
 Route::post('/people-follow/follow', [PeopleFollowController::class, 'followUser']);
 Route::post('/people-follow/{userId}/unfollow', [PeopleFollowController::class, 'unfollowUser']);
 
+Route::get('/feelings', [FeelingsController::class, 'index']); // Get available feelings
+
+// Unified post creation endpoint (optimized - handles all post types via 'type' parameter)
+// Use type: 'regular', 'gif', 'feeling', or 'colored' to optimize request handling
 Route::post('/posts', [PostController::class, 'insertNewPost']);
+
+// Legacy endpoints (deprecated - use POST /posts with 'type' parameter instead)
+// These endpoints still work but are redirected to the unified endpoint for optimization
+Route::post('/feelings/post', [FeelingsController::class, 'createFeelingPost']); // Create feeling post (use POST /posts?type=feeling)
+Route::post('/posts/gif', [PostController::class, 'createGifPost']); // Create GIF post (use POST /posts?type=gif)
+Route::get('/posts/colored', [PostController::class, 'getColoredPosts']); // Get available colored posts
 Route::get('/posts/{postId}', [PostController::class, 'getPost']);
 Route::post('/posts/get-data', [PostController::class, 'getPostData']); // Get post data for new tab (old API: get-post-data.php)
 
@@ -260,9 +274,11 @@ Route::get('/privacy/settings', [PrivacyController::class, 'getPrivacySettings']
 Route::post('/privacy/settings', [PrivacyController::class, 'updatePrivacySettings']);
 Route::put('/privacy/settings', [PrivacyController::class, 'updatePrivacySettings']);
 
-// Password change routes (mimics old WoWonder API)
-Route::post('/password/change', [PasswordController::class, 'changePassword']);
-Route::post('/password/verify', [PasswordController::class, 'verifyCurrentPassword']);
+// Password routes (mimics old WoWonder API)
+Route::post('/password/forgot', [PasswordController::class, 'forgotPassword']); // Request password reset
+Route::post('/password/reset', [PasswordController::class, 'resetPassword']); // Reset password with token
+Route::post('/password/change', [PasswordController::class, 'changePassword']); // Change password (requires auth)
+Route::post('/password/verify', [PasswordController::class, 'verifyCurrentPassword']); // Verify current password
 
 // Session management routes (mimics old WoWonder API)
 Route::get('/sessions', [SessionController::class, 'getSessions']);

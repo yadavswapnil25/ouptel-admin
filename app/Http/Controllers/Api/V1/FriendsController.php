@@ -101,28 +101,128 @@ class FriendsController extends Controller
 
         $perPage = (int) ($request->query('per_page', 12));
         $perPage = max(1, min($perPage, 50));
+        $page = (int) ($request->query('page', 1));
+        $page = max(1, $page);
 
-        // Note: Wo_FriendRequests table doesn't exist, so return empty results
-        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
-            collect([]), // Empty collection
-            0, // Total count
-            $perPage, // Per page
-            1, // Current page
-            ['path' => $request->url()]
-        );
+        try {
+            // Friend requests are stored in Wo_Followers table with active = '0'
+            // following_id = current user (who receives the request)
+            // follower_id = user who sent the request
+            $query = DB::table('Wo_Followers')
+                ->where('following_id', $tokenUserId) // Requests received by current user
+                ->where('active', '0'); // Pending requests
 
-        $data = [];
+            // Get total count
+            $total = $query->count();
 
-        return response()->json([
-            'ok' => true,
-            'data' => $data,
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
-            ],
-        ]);
+            // Get paginated results
+            $offset = ($page - 1) * $perPage;
+            $requests = $query->orderByDesc('time')
+                ->offset($offset)
+                ->limit($perPage)
+                ->get();
+
+            // Format the requests with user data
+            $data = [];
+            foreach ($requests as $requestItem) {
+                $requesterId = $requestItem->follower_id; // User who sent the request
+                
+                // Get requester user data
+                $requester = DB::table('Wo_Users')
+                    ->where('user_id', $requesterId)
+                    ->where('active', '1')
+                    ->first();
+
+                if ($requester) {
+                    // Get mutual friends count
+                    $mutualFriendsCount = 0;
+                    if (Schema::hasTable('Wo_Followers')) {
+                        // Get current user's following
+                        $currentUserFollowing = DB::table('Wo_Followers')
+                            ->where('follower_id', $tokenUserId)
+                            ->where('active', '1')
+                            ->pluck('following_id')
+                            ->toArray();
+                        
+                        // Get requester's following
+                        $requesterFollowing = DB::table('Wo_Followers')
+                            ->where('follower_id', $requesterId)
+                            ->where('active', '1')
+                            ->pluck('following_id')
+                            ->toArray();
+                        
+                        // Count mutual
+                        $mutualFriendsCount = count(array_intersect($currentUserFollowing, $requesterFollowing));
+                    }
+
+                    $data[] = [
+                        'id' => $requesterId,
+                        'user_id' => $requesterId,
+                        'username' => $requester->username ?? 'Unknown',
+                        'name' => $this->getUserName($requester),
+                        'first_name' => $requester->first_name ?? '',
+                        'last_name' => $requester->last_name ?? '',
+                        'email' => $requester->email ?? '',
+                        'avatar' => $requester->avatar ?? '',
+                        'avatar_url' => $requester->avatar ? asset('storage/' . $requester->avatar) : null,
+                        'cover' => $requester->cover ?? '',
+                        'cover_url' => $requester->cover ? asset('storage/' . $requester->cover) : null,
+                        'verified' => (bool) ($requester->verified ?? false),
+                        'mutual_friends_count' => $mutualFriendsCount,
+                        'request_time' => $requestItem->time ?? time(),
+                        'request_time_text' => $this->getTimeElapsedString($requestItem->time ?? time()),
+                    ];
+                }
+            }
+
+            // Calculate pagination metadata
+            $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
+
+            return response()->json([
+                'ok' => true,
+                'data' => $data,
+                'meta' => [
+                    'current_page' => $page,
+                    'per_page' => $perPage,
+                    'total' => $total,
+                    'last_page' => $lastPage,
+                    'from' => $total > 0 ? $offset + 1 : 0,
+                    'to' => min($offset + $perPage, $total),
+                    'has_more' => $page < $lastPage,
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to fetch friend requests: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get user name from user object (handles different column structures)
+     * 
+     * @param object $user
+     * @return string
+     */
+    private function getUserName($user): string
+    {
+        // Try name column first
+        if (isset($user->name) && !empty($user->name)) {
+            return $user->name;
+        }
+        
+        // Try first_name + last_name
+        $firstName = $user->first_name ?? '';
+        $lastName = $user->last_name ?? '';
+        $fullName = trim($firstName . ' ' . $lastName);
+        if (!empty($fullName)) {
+            return $fullName;
+        }
+        
+        // Fallback to username
+        return $user->username ?? 'Unknown User';
     }
 
     public function sendRequest(Request $request): JsonResponse
