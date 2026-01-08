@@ -366,7 +366,9 @@ class NewFeedController extends Controller
             $reactionsCount = $this->getPostReactionsCount($postIdForReactions, $post);
             
             // Get post comments count (try Wo_Comments table first, fallback to post_comments column)
-            $commentsCount = $this->getPostCommentsCount($post->id, $post);
+            // Use post_id field (which is used to store comments) with fallback to id
+            $postIdForComments = $post->post_id ?? $post->id;
+            $commentsCount = $this->getPostCommentsCount($postIdForComments, $post);
             
             // Get album images if it's an album post
             $albumImages = [];
