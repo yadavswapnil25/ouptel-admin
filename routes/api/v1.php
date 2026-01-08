@@ -69,10 +69,10 @@ Route::get('/pokes', [PokeController::class, 'index']);
 Route::post('/pokes', [PokeController::class, 'store']);
 Route::delete('/pokes/{pokeId}', [PokeController::class, 'destroy']);
 Route::get('/groups', [GroupsController::class, 'index']);
+Route::get('/groups/meta', [GroupsController::class, 'meta']); // Must be before /groups/{id} to avoid route conflict
+Route::post('/groups/join', [GroupsController::class, 'joinGroup']); // Join/leave group (old API: requests.php?f=join_group)
 Route::get('/groups/{id}', [GroupsController::class, 'show']); // Get single group by ID
 Route::post('/groups', [GroupsController::class, 'store']);
-Route::get('/groups/meta', [GroupsController::class, 'meta']);
-Route::post('/groups/join', [GroupsController::class, 'joinGroup']); // Join/leave group (old API: requests.php?f=join_group)
 Route::get('/pages', [PagesController::class, 'index']);
 Route::get('/pages/meta', [PagesController::class, 'meta']);
 Route::post('/pages', [PagesController::class, 'store']);
