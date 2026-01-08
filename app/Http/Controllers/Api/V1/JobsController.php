@@ -9,6 +9,7 @@ use App\Models\JobApplication;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class JobsController extends Controller
 {
@@ -32,13 +33,50 @@ class JobsController extends Controller
         $query = Job::query();
 
         if ($type === 'my_jobs') {
-            // Note: user_id column might not exist in Wo_Jobs table
-            // Return empty results for now
-            $query->where('id', 0); // This will return no results
+            // Filter jobs by the authenticated user
+            // Check if user_id or user column exists
+            // Handle both string and integer types
+            $tokenUserIdStr = (string) $tokenUserId;
+            $tokenUserIdInt = (int) $tokenUserId;
+            
+            if (Schema::hasColumn('Wo_Job', 'user_id')) {
+                // Try both string and integer matching (handle type mismatch)
+                $query->where(function ($q) use ($tokenUserIdStr, $tokenUserIdInt) {
+                    $q->where('user_id', $tokenUserIdStr)
+                      ->orWhere('user_id', $tokenUserIdInt);
+                });
+            } elseif (Schema::hasColumn('Wo_Job', 'user')) {
+                // Try both string and integer matching (handle type mismatch)
+                $query->where(function ($q) use ($tokenUserIdStr, $tokenUserIdInt) {
+                    $q->where('user', $tokenUserIdStr)
+                      ->orWhere('user', $tokenUserIdInt);
+                });
+            } else {
+                // If neither column exists, return empty results
+                $query->where('id', 0);
+            }
         } elseif ($type === 'applied_jobs') {
-            // Note: Wo_JobApplication table might not exist
-            // Return empty results for now
-            $query->where('id', 0); // This will return no results
+            // Filter jobs that the user has applied to
+            if (Schema::hasTable('Wo_Job_Apply') || Schema::hasTable('Wo_JobApplications')) {
+                $applyTable = Schema::hasTable('Wo_Job_Apply') ? 'Wo_Job_Apply' : 'Wo_JobApplications';
+                $jobIdColumn = Schema::hasColumn($applyTable, 'job_id') ? 'job_id' : 'job';
+                $userIdColumn = Schema::hasColumn($applyTable, 'user_id') ? 'user_id' : 'user';
+                
+                $appliedJobIds = DB::table($applyTable)
+                    ->where($userIdColumn, $tokenUserId)
+                    ->pluck($jobIdColumn)
+                    ->toArray();
+                
+                if (!empty($appliedJobIds)) {
+                    $query->whereIn('id', $appliedJobIds);
+                } else {
+                    // User hasn't applied to any jobs
+                    $query->where('id', 0);
+                }
+            } else {
+                // Table doesn't exist, return empty results
+                $query->where('id', 0);
+            }
         } elseif ($type === 'saved_jobs') {
             // Note: Wo_JobApplication table might not exist
             // Return empty results for now
@@ -82,6 +120,32 @@ class JobsController extends Controller
         $paginator = $query->orderByDesc('id')->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (Job $job) use ($tokenUserId) {
+            // Get owner user_id from job attributes
+            $ownerUserId = $job->attributes['user_id'] ?? $job->attributes['user'] ?? null;
+            $isOwner = $ownerUserId && (string) $ownerUserId === (string) $tokenUserId;
+            
+            // Get owner details if user_id exists
+            $owner = [
+                'user_id' => $ownerUserId,
+                'username' => 'Unknown',
+                'avatar_url' => null,
+            ];
+            
+            if ($ownerUserId && Schema::hasTable('Wo_Users')) {
+                try {
+                    $ownerUser = DB::table('Wo_Users')->where('user_id', $ownerUserId)->first();
+                    if ($ownerUser) {
+                        $owner['username'] = $ownerUser->username ?? 'Unknown';
+                        $avatar = $ownerUser->avatar ?? '';
+                        if ($avatar) {
+                            $owner['avatar_url'] = asset('storage/' . $avatar);
+                        }
+                    }
+                } catch (\Exception $e) {
+                    // Keep default values
+                }
+            }
+            
             return [
                 'id' => $job->id,
                 'title' => $job->title,
@@ -93,12 +157,8 @@ class JobsController extends Controller
                 'status' => $job->status,
                 'applications_count' => $job->applications_count,
                 'is_applied' => $job->is_applied,
-                'is_owner' => false, // Simplified since user_id doesn't exist
-                'owner' => [
-                    'user_id' => null,
-                    'username' => 'Unknown',
-                    'avatar_url' => null,
-                ],
+                'is_owner' => $isOwner,
+                'owner' => $owner,
                 'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
             ];
         });
@@ -148,7 +208,12 @@ class JobsController extends Controller
         // Note: salary column doesn't exist in Wo_Job table
         // Note: type column doesn't exist in Wo_Job table
         $job->status = '1'; // Active
-        // Note: user_id column might not exist in Wo_Jobs table
+        // Save user_id if column exists
+        if (Schema::hasColumn('Wo_Job', 'user_id')) {
+            $job->user_id = (string) $userId;
+        } elseif (Schema::hasColumn('Wo_Job', 'user')) {
+            $job->user = (string) $userId;
+        }
         $job->time = (string) time();
         $job->save();
 
