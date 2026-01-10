@@ -55,6 +55,7 @@ class PostController extends Controller
             'postPrivacy' => 'required|in:0,1,2,3,4', // 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group
             'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif',
             'type' => 'nullable|in:regular,gif,feeling,colored', // Post creation type
+            'feeling' => 'nullable|string|max:100', // Feeling parameter for type=feeling
             'page_id' => 'nullable|integer',
             'group_id' => 'nullable|integer',
             'event_id' => 'nullable|integer',
@@ -97,7 +98,9 @@ class PostController extends Controller
             'postRecord' => 'nullable|file|mimes:mp3,wav,ogg|max:51200', // 50MB max
             'postSticker' => 'nullable|string|max:500',
             'postGif' => 'nullable|url|max:2000', // GIF URL from Giphy or similar service
-        ]);
+        ];
+
+        $validator = Validator::make($request->all(), $validationRules);
 
         if ($validator->fails()) {
             return response()->json([
@@ -112,8 +115,15 @@ class PostController extends Controller
 
         // Handle type-specific processing
         if ($postCreationType === 'feeling') {
-            // Convert 'feeling' parameter to 'postFeeling'
+            // Validate and convert 'feeling' parameter to 'postFeeling'
             $feeling = $request->input('feeling');
+            if (empty($feeling)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'feeling parameter is required when type=feeling. Use GET /api/v1/feelings to see available feelings.'
+                ], 422);
+            }
+            
             $validFeelings = [
                 'happy', 'loved', 'sad', 'so_sad', 'angry', 'confused', 'smirk',
                 'broke', 'expressionless', 'cool', 'funny', 'tired', 'lovely',
@@ -129,6 +139,13 @@ class PostController extends Controller
         } elseif ($postCreationType === 'gif') {
             // Validate GIF URL
             $postGif = $request->input('postGif');
+            if (empty($postGif)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'postGif parameter is required when type=gif. Please provide a valid GIF URL from Giphy, Tenor, or similar service.'
+                ], 422);
+            }
+            
             $isGifUrl = (
                 strpos($postGif, '.gif') !== false || 
                 strpos($postGif, 'giphy.com') !== false || 
@@ -143,6 +160,15 @@ class PostController extends Controller
                 ], 422);
             }
             $request->merge(['postType' => 'gif']);
+        } elseif ($postCreationType === 'colored') {
+            // Validate color_id for colored posts
+            $colorId = $request->input('color_id', 0);
+            if (empty($colorId) || $colorId <= 0) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'color_id parameter is required when type=colored. Use GET /api/v1/posts/colored to see available colors.'
+                ], 422);
+            }
         }
 
         // Hash validation removed for simplified authentication
@@ -151,41 +177,6 @@ class PostController extends Controller
         $user = User::where('user_id', $tokenUserId)->first();
         if (!$user) {
             return response()->json(['ok' => false, 'message' => 'User not found'], 404);
-        }
-
-        // Handle type-specific processing
-        if ($postCreationType === 'feeling') {
-            // Convert 'feeling' parameter to 'postFeeling'
-            $feeling = $request->input('feeling');
-            $validFeelings = [
-                'happy', 'loved', 'sad', 'so_sad', 'angry', 'confused', 'smirk',
-                'broke', 'expressionless', 'cool', 'funny', 'tired', 'lovely',
-                'blessed', 'shocked', 'sleepy', 'pretty', 'bored'
-            ];
-            if (!in_array($feeling, $validFeelings)) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Invalid feeling. Use GET /api/v1/feelings to see available feelings.'
-                ], 422);
-            }
-            $request->merge(['postFeeling' => $feeling]);
-        } elseif ($postCreationType === 'gif') {
-            // Validate GIF URL
-            $postGif = $request->input('postGif');
-            $isGifUrl = (
-                strpos($postGif, '.gif') !== false || 
-                strpos($postGif, 'giphy.com') !== false || 
-                strpos($postGif, 'tenor.com') !== false ||
-                strpos($postGif, 'media.giphy.com') !== false ||
-                strpos($postGif, 'media.tenor.com') !== false
-            );
-            if (!$isGifUrl) {
-                return response()->json([
-                    'ok' => false,
-                    'message' => 'Invalid GIF URL. Please provide a valid GIF URL from Giphy, Tenor, or similar service.'
-                ], 422);
-            }
-            $request->merge(['postType' => 'gif']);
         }
 
         // Validate content requirements

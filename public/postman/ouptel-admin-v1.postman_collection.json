@@ -229,6 +229,41 @@
       "request": {"method":"POST","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"},{"key":"Content-Type","value":"application/json"}],"body":{"mode":"raw","raw":"{\n  \"page_id\": 3,\n  \"password\": \"your_password\"\n}"},"url":{"raw":"{{base_url}}/api/v1/pages/delete","host":["{{base_url}}"],"path":["api","v1","pages","delete"]}}
     },
     {
+      "name": "Pages - Get by ID",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text","disabled":true}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/pages/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","pages","1"]
+        },
+        "description": "Get a single page by ID. Returns full page details including category, sub-category, owner, likes count, posts count, and user-specific flags (is_liked, is_owner). Authentication is optional - public pages can be viewed without auth. If authenticated, shows additional info like is_liked and is_owner status."
+      }
+    },
+    {
+      "name": "Pages - Edit",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"page_title\": \"Updated Page Title\",\n  \"page_description\": \"Updated description\",\n  \"about\": \"Updated about text\",\n  \"page_category\": 1,\n  \"page_name\": \"updatedpagename\",\n  \"website\": \"https://example.com\",\n  \"phone\": \"+1234567890\",\n  \"address\": \"123 Main St, City, Country\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/pages/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","pages","1"]
+        },
+        "description": "Edit/update page details. Only the page owner can edit. Supports updating: page_title, page_description, about, page_category, page_name, website, phone, address. For avatar and cover images, use multipart/form-data with 'avatar' and 'cover' file fields. All fields are optional - only provided fields will be updated."
+      }
+    },
+    {
       "name": "Groups - Suggested",
       "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/groups?type=suggested","host":["{{base_url}}"],"path":["api","v1","groups"],"query":[{"key":"type","value":"suggested"}]}}
     },
@@ -248,7 +283,7 @@
           "host": ["{{base_url}}"],
           "path": ["api","v1","groups","1"]
         },
-        "description": "Get a single group by ID. Returns full group details including category, sub-category, member count, join status, admin status, and owner information. Authentication is optional - public groups can be viewed without auth. If authenticated, shows additional info like is_joined, is_pending, is_admin, is_owner."
+        "description": "Get a single group by ID. Returns full group details including category, sub-category, member count, join status, admin status, and owner information. Authentication is optional - public groups can be viewed without auth. If authenticated, shows additional info like is_joined (correctly reflects join status), is_pending, is_admin, is_owner. The is_joined status properly handles type mismatches and automatically marks group owners as joined."
       }
     },
     {
@@ -309,6 +344,19 @@
     {
       "name": "Blogs - Delete Article",
       "request": {"method":"DELETE","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/blogs/1","host":["{{base_url}}"],"path":["api","v1","blogs","1"]}}
+    },
+    {
+      "name": "Feelings - Get Available Feelings",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/feelings",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","feelings"]
+        },
+        "description": "Get list of available feelings/emotions that can be used when creating feeling posts. Returns array of feelings with id, name, and icon. No authentication required."
+      }
     },
     {
       "name": "Products - Market",
@@ -2235,6 +2283,62 @@
       }
     },
     {
+      "name": "Posts - Get Colored Posts",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/colored",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","colored"]
+        },
+        "description": "Get list of available colored post backgrounds. Returns array of colors with id, name, and color code. Used for creating colored text posts. No authentication required."
+      }
+    },
+    {
+      "name": "Posts - Create Unified Post (Optimized)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"type","value":"regular","type":"text","description":"Post type: regular, gif, feeling, or colored"},
+            {"key":"postText","value":"This is a test post","type":"text"},
+            {"key":"postPrivacy","value":"0","type":"text","description":"0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group"},
+            {"key":"postType","value":"text","type":"text","description":"text, photo, video, file, link, location, audio, sticker, album, poll, blog, forum, product, job, offer, funding, gif"},
+            {"key":"feeling_id","value":"1","type":"text","description":"Required if type=feeling"},
+            {"key":"postGif","value":"https://media.giphy.com/media/example.gif","type":"text","description":"GIF URL (required if type=gif)"},
+            {"key":"color_id","value":"1","type":"text","description":"Color ID from /api/v1/posts/colored (required if type=colored)"}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"]
+        },
+        "description": "Unified optimized endpoint for creating all post types (regular, GIF, feeling, colored). Use 'type' parameter to specify: 'regular' (default), 'gif' (requires postGif URL), 'feeling' (requires feeling_id), 'colored' (requires color_id). All other post creation endpoints redirect to this optimized endpoint."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.data && json.data.post_id) {",
+              "    pm.collectionVariables.set('post_id', json.data.post_id);",
+              "  }",
+              "} catch (e) { }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
       "name": "Polls - Create Poll (Old API Style)",
       "request": {
         "method": "POST",
@@ -2838,6 +2942,44 @@
       }
     },
     {
+      "name": "Password - Forgot Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user@example.com\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/password/forgot",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","password","forgot"]
+        },
+        "description": "Request password reset. Sends a password reset token to the user's email. Returns success message with masked email for verification. The token is valid for 1 hour. No authentication required."
+      }
+    },
+    {
+      "name": "Password - Reset Password",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"token\": \"reset_token_from_email\",\n  \"email\": \"user@example.com\",\n  \"new_password\": \"newpassword123\",\n  \"repeat_new_password\": \"newpassword123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/password/reset",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","password","reset"]
+        },
+        "description": "Reset password using token received from forgot password email. All fields are required. Token expires after 1 hour. After successful reset, all other sessions are logged out. No authentication required."
+      }
+    },
+    {
       "name": "Password - Change Password",
       "request": {
         "method": "POST",
@@ -3428,7 +3570,7 @@
           "host": ["{{base_url}}"],
           "path": ["api","v1","search"]
         },
-        "description": "Main search API (matching old API: search.php). Searches for users, pages, groups, and channels. Uses 'search_key' parameter (or 'query' as alternative). Supports filters: gender, status, image, country, verified, filterbyage, age_from, age_to. Uses offsets for pagination."
+        "description": "Main search API (matching old API: search.php). Searches for users, pages, groups, and channels. Uses 'search_key' parameter (or 'query' as alternative). Supports filters: gender, status, image, country, verified, filterbyage, age_from, age_to. Uses offsets for pagination. Pages and Groups are included in results with full details: Pages include likes_count, is_liked, is_admin, is_owner; Groups include members_count, is_joined, is_pending, is_owner. Only active pages and groups are returned."
       }
     },
     {
