@@ -753,7 +753,7 @@ class PostController extends Controller
             'post_privacy' => $post->postPrivacy,
             'post_privacy_text' => $post->post_privacy_text,
             'post_photo' => $post->postPhoto,
-            'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
+            'post_photo_url' => $this->getPostPhotoUrl($post),
             'post_file' => $post->postFile,
             'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
             'post_youtube' => $post->postYoutube,
@@ -1432,7 +1432,7 @@ class PostController extends Controller
             'post_privacy' => $post->postPrivacy,
             'post_privacy_text' => $post->post_privacy_text,
             'post_photo' => $post->postPhoto,
-            'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
+            'post_photo_url' => $this->getPostPhotoUrl($post),
             'post_file' => $post->postFile,
             'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
             'post_youtube' => $post->postYoutube,
@@ -1724,7 +1724,7 @@ class PostController extends Controller
             'postLinkContent' => $post->postLinkContent ?? '',
             'postYoutube' => $post->postYoutube ?? '',
             'postPlaytube' => $post->postPlaytube ?? '',
-            'postPhoto' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
+            'postPhoto' => $this->getPostPhotoUrl($post),
             'time' => $post->time ?? time(),
             'publisher' => $publisher,
             'page' => $page,
@@ -2231,5 +2231,34 @@ class PostController extends Controller
         ]);
         
         return $this->insertNewPost($request);
+    }
+
+    /**
+     * Get post photo URL - handles both storage paths and external URLs (GIFs)
+     * 
+     * @param object|Post $post
+     * @return string|null
+     */
+    private function getPostPhotoUrl($post): ?string
+    {
+        $postPhoto = $post->postPhoto ?? '';
+        
+        if (empty($postPhoto)) {
+            return null;
+        }
+        
+        // Check if postPhoto is already a full URL (for GIF posts from Giphy, Tenor, etc.)
+        // Also check if post type is 'gif'
+        $isGifPost = ($post->postType ?? '') === 'gif';
+        $isUrl = filter_var($postPhoto, FILTER_VALIDATE_URL) !== false;
+        
+        // If it's a GIF post or already a URL, return as-is
+        if ($isGifPost || $isUrl) {
+            // Clean up any double slashes that might have been introduced
+            return preg_replace('#([^:])//+#', '$1/', $postPhoto);
+        }
+        
+        // Otherwise, it's a storage path - prepend storage URL
+        return asset('storage/' . $postPhoto);
     }
 }

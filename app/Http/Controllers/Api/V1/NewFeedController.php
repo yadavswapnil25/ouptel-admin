@@ -393,7 +393,7 @@ class NewFeedController extends Controller
                 
                 // Media content
                 'post_photo' => $post->postPhoto ?? '',
-                'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
+                'post_photo_url' => $this->getPostPhotoUrl($post),
                 'post_file' => $post->postFile ?? '',
                 'post_file_url' => ($post->postFile ?? '') ? asset('storage/' . $post->postFile) : null,
                 'post_record' => $post->postRecord ?? '',
@@ -751,5 +751,34 @@ class NewFeedController extends Controller
             // If there's an error, return empty array
             return [];
         }
+    }
+
+    /**
+     * Get post photo URL - handles both storage paths and external URLs (GIFs)
+     * 
+     * @param object $post
+     * @return string|null
+     */
+    private function getPostPhotoUrl($post): ?string
+    {
+        $postPhoto = $post->postPhoto ?? '';
+        
+        if (empty($postPhoto)) {
+            return null;
+        }
+        
+        // Check if postPhoto is already a full URL (for GIF posts from Giphy, Tenor, etc.)
+        // Also check if post type is 'gif'
+        $isGifPost = ($post->postType ?? '') === 'gif';
+        $isUrl = filter_var($postPhoto, FILTER_VALIDATE_URL) !== false;
+        
+        // If it's a GIF post or already a URL, return as-is
+        if ($isGifPost || $isUrl) {
+            // Clean up any double slashes that might have been introduced
+            return preg_replace('#([^:])//+#', '$1/', $postPhoto);
+        }
+        
+        // Otherwise, it's a storage path - prepend storage URL
+        return asset('storage/' . $postPhoto);
     }
 }
