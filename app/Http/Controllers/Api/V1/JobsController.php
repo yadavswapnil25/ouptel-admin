@@ -244,6 +244,14 @@ class JobsController extends Controller
 
     public function show(Request $request, $id): JsonResponse
     {
+        // Auth is optional - public jobs can be viewed without auth
+        $tokenUserId = null;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+        
         $job = Job::where('id', $id)->first();
         if (!$job) {
             return response()->json(['ok' => false, 'message' => 'Job not found'], 404);
@@ -272,6 +280,52 @@ class JobsController extends Controller
                 ],
             ];
         });
+        
+        // Check if user has applied (only if authenticated)
+        $isApplied = false;
+        if ($tokenUserId) {
+            $isApplied = $job->isAppliedByUser($tokenUserId);
+        }
+        
+        // Check if user is the owner
+        $ownerUserId = $job->attributes['user_id'] ?? $job->attributes['user'] ?? null;
+        $isOwner = $ownerUserId && (string) $ownerUserId === (string) $tokenUserId;
+        
+        // Get owner details
+        $owner = [
+            'user_id' => $ownerUserId,
+            'username' => 'Unknown',
+            'avatar_url' => null,
+        ];
+        
+        if ($ownerUserId && Schema::hasTable('Wo_Users')) {
+            try {
+                $ownerUser = DB::table('Wo_Users')->where('user_id', $ownerUserId)->first();
+                if ($ownerUser) {
+                    $owner['username'] = $ownerUser->username ?? 'Unknown';
+                    $avatar = $ownerUser->avatar ?? '';
+                    if ($avatar) {
+                        $owner['avatar_url'] = asset('storage/' . $avatar);
+                    }
+                }
+            } catch (\Exception $e) {
+                // Keep default values
+            }
+        }
+        
+        // Get applications count
+        $applicationsCount = 0;
+        if (Schema::hasTable('Wo_Job_Apply') || Schema::hasTable('Wo_JobApplications')) {
+            $applyTable = Schema::hasTable('Wo_Job_Apply') ? 'Wo_Job_Apply' : 'Wo_JobApplications';
+            $jobIdColumn = Schema::hasColumn($applyTable, 'job_id') ? 'job_id' : 'job';
+            try {
+                $applicationsCount = DB::table($applyTable)
+                    ->where($jobIdColumn, $id)
+                    ->count();
+            } catch (\Exception $e) {
+                // Keep default value
+            }
+        }
 
         return response()->json([
             'ok' => true,
@@ -285,14 +339,10 @@ class JobsController extends Controller
                     'salary' => 0, // Default value since column doesn't exist
                     'type' => 'full-time', // Default value since column doesn't exist
                     'status' => $job->status,
-                    'applications_count' => $job->applications_count,
-                    'is_applied' => $job->is_applied,
-                    'is_owner' => false, // Simplified since user_id doesn't exist
-                    'owner' => [
-                        'user_id' => null,
-                        'username' => 'Unknown',
-                        'avatar_url' => null,
-                    ],
+                    'applications_count' => $applicationsCount,
+                    'is_applied' => $isApplied, // Now correctly checks if authenticated user has applied
+                    'is_owner' => $isOwner,
+                    'owner' => $owner,
                     'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
                 ],
                 'applications' => $applicationsData,

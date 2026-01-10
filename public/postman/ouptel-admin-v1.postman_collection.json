@@ -2292,7 +2292,7 @@
           "host": ["{{base_url}}"],
           "path": ["api","v1","posts","colored"]
         },
-        "description": "Get list of available colored post backgrounds. Returns array of colors with id, name, and color code. Used for creating colored text posts. No authentication required."
+        "description": "Get list of available colored post backgrounds. Returns array of colors with id, color_id (same as id - use this value), color_1, color_2, text_color, image, and image_url. Use the 'color_id' value when creating a colored post via POST /api/v1/posts?type=colored. No authentication required."
       }
     },
     {

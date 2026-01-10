@@ -2149,6 +2149,7 @@ class PostController extends Controller
                 ->map(function ($coloredPost) {
                     return [
                         'id' => $coloredPost->id,
+                        'color_id' => $coloredPost->id, // Alias for clarity - use this in POST /api/v1/posts?type=colored
                         'color_1' => $coloredPost->color_1 ?? '',
                         'color_2' => $coloredPost->color_2 ?? '',
                         'text_color' => $coloredPost->text_color ?? '',

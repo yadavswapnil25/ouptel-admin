@@ -128,10 +128,51 @@ class Job extends Model
         return 0;
     }
 
-    public function getIsAppliedAttribute($userId = null): bool
+    public function getIsAppliedAttribute(): bool
     {
-        // Simplified since user_id and applications table might not exist
+        // This accessor is called without parameters, so it will always return false
+        // The actual check should be done in the controller with the authenticated user ID
         return false;
+    }
+    
+    /**
+     * Check if a specific user has applied to this job
+     * 
+     * @param string|int $userId
+     * @return bool
+     */
+    public function isAppliedByUser($userId): bool
+    {
+        if (!$userId) {
+            return false;
+        }
+        
+        $userIdStr = (string) $userId;
+        $jobId = $this->id;
+        
+        // Check both possible table names
+        if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Job_Apply')) {
+            $applyTable = 'Wo_Job_Apply';
+        } elseif (\Illuminate\Support\Facades\Schema::hasTable('Wo_JobApplications')) {
+            $applyTable = 'Wo_JobApplications';
+        } else {
+            return false;
+        }
+        
+        // Determine column names
+        $jobIdColumn = \Illuminate\Support\Facades\Schema::hasColumn($applyTable, 'job_id') ? 'job_id' : 'job';
+        $userIdColumn = \Illuminate\Support\Facades\Schema::hasColumn($applyTable, 'user_id') ? 'user_id' : 'user';
+        
+        // Check if application exists (handle both string and integer user_id)
+        $exists = \Illuminate\Support\Facades\DB::table($applyTable)
+            ->where($jobIdColumn, $jobId)
+            ->where(function($query) use ($userIdColumn, $userIdStr) {
+                $query->where($userIdColumn, $userIdStr)
+                      ->orWhere($userIdColumn, (int) $userIdStr);
+            })
+            ->exists();
+        
+        return $exists;
     }
 
     /**
