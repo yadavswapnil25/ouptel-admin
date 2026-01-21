@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class PagesController extends BaseController
 {
@@ -287,11 +288,9 @@ class PagesController extends BaseController
                 $updateData['page_description'] = $request->input('page_description');
             }
             if ($request->has('about')) {
-                $updateData['about'] = $request->input('about');
-                // Also update page_description if about is provided and page_description doesn't exist
-                if (!isset($updateData['page_description'])) {
-                    $updateData['page_description'] = $request->input('about');
-                }
+                // Map 'about' to 'page_description' since Wo_Pages table doesn't have 'about' column
+                $updateData['page_description'] = $request->input('about');
+                // Don't try to update 'about' column as it doesn't exist in Wo_Pages table
             }
 
             // Update page_category if provided
@@ -402,6 +401,12 @@ class PagesController extends BaseController
 
             // Update the page if there are changes
             if (!empty($updateData)) {
+                // Remove 'about' from updateData if it exists (column doesn't exist in Wo_Pages table)
+                // 'about' should be mapped to 'page_description' instead
+                if (isset($updateData['about'])) {
+                    unset($updateData['about']);
+                }
+                
                 foreach ($updateData as $key => $value) {
                     $page->$key = $value;
                 }
@@ -419,7 +424,7 @@ class PagesController extends BaseController
                     'page_name' => $page->page_name,
                     'page_title' => $page->page_title,
                     'page_description' => $page->page_description ?? '',
-                    'about' => $page->about ?? $page->page_description ?? '',
+                    'about' => $page->page_description ?? '', // 'about' is mapped to page_description since column doesn't exist
                     'category' => $page->page_category ?? 0,
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
@@ -735,8 +740,8 @@ class PagesController extends BaseController
                     'page_id' => $page->page_id,
                     'page_name' => $page->page_name ?? '',
                     'page_title' => $page->page_title ?? $page->page_name ?? '',
-                    'page_description' => $page->page_description ?? $page->about ?? '',
-                    'about' => $page->about ?? $page->page_description ?? '',
+                    'page_description' => $page->page_description ?? '',
+                    'about' => $page->page_description ?? '', // 'about' is mapped to page_description since column doesn't exist
                     'category' => $page->page_category ?? 0,
                     'category_name' => $categoryName,
                     'verified' => (bool) ($page->verified ?? false),
@@ -772,6 +777,655 @@ class PagesController extends BaseController
     }
 
     /**
+     * Search pages by name, title, or description
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function search(Request $request): JsonResponse
+    {
+        // Optional auth - search can be public but auth provides additional info
+        $authHeader = $request->header('Authorization');
+        $tokenUserId = null;
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        $term = $request->query('term', '');
+        if (empty($term)) {
+            return response()->json([
+                'data' => [
+                    'pages' => [],
+                    'total' => 0,
+                ],
+            ]);
+        }
+
+        $perPage = (int) ($request->query('per_page', 12));
+        $perPage = max(1, min($perPage, 50));
+        $page = (int) ($request->query('page', 1));
+        $page = max(1, $page);
+
+        try {
+            // Search pages by page_name, page_title, and page_description
+            $query = Page::query()
+                ->where('active', '1');
+
+            // Search in page_name, page_title, and page_description
+            $searchTerm = '%' . $term . '%';
+            $query->where(function($q) use ($searchTerm) {
+                $q->where('page_name', 'LIKE', $searchTerm)
+                  ->orWhere('page_title', 'LIKE', $searchTerm)
+                  ->orWhere('page_description', 'LIKE', $searchTerm);
+            });
+
+            // Filter by category if provided
+            if ($request->filled('category')) {
+                $query->where('page_category', $request->query('category'));
+            }
+
+            // Get total count
+            $total = $query->count();
+
+            // Apply pagination
+            $offset = ($page - 1) * $perPage;
+            $pagesData = $query->orderByDesc('page_id')
+                ->offset($offset)
+                ->limit($perPage)
+                ->get();
+
+            // Format pages
+            $pages = [];
+            foreach ($pagesData as $pageItem) {
+                // Check if user liked the page
+                $isLiked = false;
+                $likesCount = 0;
+                if (DB::getSchemaBuilder()->hasTable('Wo_Pages_Likes')) {
+                    $likesCount = DB::table('Wo_Pages_Likes')
+                        ->where('page_id', $pageItem->page_id)
+                        ->count();
+                    
+                    if ($tokenUserId) {
+                        $isLiked = DB::table('Wo_Pages_Likes')
+                            ->where('page_id', $pageItem->page_id)
+                            ->where('user_id', $tokenUserId)
+                            ->exists();
+                    }
+                }
+
+                // Get page owner data
+                $owner = null;
+                if ($pageItem->user_id) {
+                    $ownerData = DB::table('Wo_Users')
+                        ->where('user_id', $pageItem->user_id)
+                        ->first();
+                    
+                    if ($ownerData) {
+                        $owner = [
+                            'user_id' => $ownerData->user_id,
+                            'username' => $ownerData->username ?? '',
+                            'name' => $this->getUserName($ownerData),
+                            'avatar_url' => $ownerData->avatar ? asset('storage/' . $ownerData->avatar) : null,
+                        ];
+                    }
+                }
+
+                // Get category name if available
+                $categoryName = '';
+                if ($pageItem->page_category && DB::getSchemaBuilder()->hasTable('Wo_Page_Categories')) {
+                    $category = DB::table('Wo_Page_Categories')
+                        ->where('id', $pageItem->page_category)
+                        ->first();
+                    if ($category) {
+                        $categoryName = $category->name ?? '';
+                    }
+                }
+
+                $pages[] = [
+                    'page_id' => $pageItem->page_id,
+                    'page_name' => $pageItem->page_name ?? '',
+                    'page_title' => $pageItem->page_title ?? $pageItem->page_name ?? '',
+                    'page_description' => $pageItem->page_description ?? '',
+                    'category' => $pageItem->page_category ?? 0,
+                    'category_name' => $categoryName,
+                    'verified' => (bool) ($pageItem->verified ?? false),
+                    'avatar' => $pageItem->avatar ?? '',
+                    'avatar_url' => $pageItem->avatar ? asset('storage/' . $pageItem->avatar) : null,
+                    'cover' => $pageItem->cover ?? '',
+                    'cover_url' => $pageItem->cover ? asset('storage/' . $pageItem->cover) : null,
+                    'website' => $pageItem->website ?? '',
+                    'phone' => $pageItem->phone ?? '',
+                    'address' => $pageItem->address ?? '',
+                    'url' => $pageItem->url ?? url('/page/' . ($pageItem->page_name ?? '')),
+                    'likes_count' => $likesCount,
+                    'is_liked' => $isLiked,
+                    'is_owner' => $tokenUserId && $pageItem->user_id == $tokenUserId,
+                    'owner' => $owner,
+                ];
+            }
+
+            // Calculate pagination metadata
+            $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
+
+            return response()->json([
+                'data' => [
+                    'pages' => $pages,
+                    'total' => $total,
+                    'pagination' => [
+                        'current_page' => $page,
+                        'per_page' => $perPage,
+                        'total' => $total,
+                        'last_page' => $lastPage,
+                        'from' => $total > 0 ? $offset + 1 : 0,
+                        'to' => min($offset + $perPage, $total),
+                        'has_more' => $page < $lastPage,
+                    ],
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to search pages: ' . $e->getMessage(),
+                'data' => [
+                    'pages' => [],
+                    'total' => 0,
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Get posts for a specific page
+     * 
+     * @param Request $request
+     * @param int $id Page ID
+     * @return JsonResponse
+     */
+    public function getPosts(Request $request, $id): JsonResponse
+    {
+        // Optional auth - public pages can be viewed without auth
+        $authHeader = $request->header('Authorization');
+        $tokenUserId = null;
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        try {
+            // Check if page exists
+            $page = Page::where('page_id', $id)->first();
+            if (!$page) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Page not found'
+                ], 404);
+            }
+
+            // Check if page is active (unless user is the owner)
+            if ($page->active != '1') {
+                if (!$tokenUserId || $page->user_id != $tokenUserId) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => 'Page not found'
+                    ], 404);
+                }
+            }
+
+            $perPage = (int) ($request->query('per_page', 12));
+            $perPage = max(1, min($perPage, 50));
+            $pageNum = (int) ($request->query('page', 1));
+            $pageNum = max(1, $pageNum);
+
+            // Get posts for this page
+            $query = DB::table('Wo_Posts')
+                ->where('page_id', $id)
+                ->where('active', '1')
+                ->orderByDesc('time');
+
+            // Get total count
+            $total = $query->count();
+
+            // Apply pagination
+            $offset = ($pageNum - 1) * $perPage;
+            $posts = $query->offset($offset)
+                ->limit($perPage)
+                ->get();
+
+            // Format posts
+            $formattedPosts = $posts->map(function ($post) use ($tokenUserId) {
+                return $this->formatPostForPage($post, $tokenUserId);
+            })->toArray();
+
+            // Calculate pagination metadata
+            $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
+
+            return response()->json([
+                'ok' => true,
+                'data' => [
+                    'page_id' => $id,
+                    'page_name' => $page->page_name,
+                    'page_title' => $page->page_title,
+                    'posts' => $formattedPosts,
+                    'pagination' => [
+                        'current_page' => $pageNum,
+                        'per_page' => $perPage,
+                        'total' => $total,
+                        'last_page' => $lastPage,
+                        'from' => $total > 0 ? $offset + 1 : 0,
+                        'to' => min($offset + $perPage, $total),
+                        'has_more' => $pageNum < $lastPage,
+                    ],
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to fetch page posts: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Format post data for page posts response
+     * 
+     * @param object $post
+     * @param string|null $userId
+     * @return array
+     */
+    private function formatPostForPage($post, $userId = null): array
+    {
+        // Get user information
+        $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
+        
+        // Get post reactions count
+        $postIdForReactions = $post->post_id ?? $post->id;
+        $reactionsCount = $this->getPostReactionsCount($postIdForReactions);
+        
+        // Get post comments count
+        $postIdForComments = $post->post_id ?? $post->id;
+        $commentsCount = $this->getPostCommentsCount($postIdForComments);
+        
+        // Get album images if it's an album post
+        $albumImages = [];
+        if ($post->album_name && $post->multi_image_post) {
+            $albumImages = $this->getAlbumImages($post->id);
+        }
+        
+        // Get poll options if it's a poll post
+        $pollOptions = [];
+        if (isset($post->poll_id) && $post->poll_id == 1) {
+            $pollOptions = $this->getPollOptions($post->id, $userId);
+        }
+        
+        // Get color data if it's a colored post
+        $colorData = null;
+        $colorId = $post->color_id ?? 0;
+        if ($colorId > 0) {
+            $colorData = $this->getColorData($colorId);
+        }
+
+        // Determine post type
+        $postType = $this->getPostType($post);
+
+        return [
+            'id' => $post->id,
+            'post_id' => $post->post_id ?? $post->id,
+            'user_id' => $post->user_id,
+            'post_text' => $post->postText ?? '',
+            'post_type' => $postType,
+            'post_privacy' => $post->postPrivacy ?? '0',
+            'post_privacy_text' => $this->getPostPrivacyText($post->postPrivacy ?? '0'),
+            
+            // Media content
+            'post_photo' => $post->postPhoto ?? '',
+            'post_photo_url' => $this->getPostPhotoUrl($post),
+            'post_file' => $post->postFile ?? '',
+            'post_file_url' => ($post->postFile ?? '') ? asset('storage/' . $post->postFile) : null,
+            'post_record' => $post->postRecord ?? '',
+            'post_record_url' => ($post->postRecord ?? '') ? asset('storage/' . $post->postRecord) : null,
+            'post_youtube' => $post->postYoutube ?? '',
+            'post_vimeo' => $post->postVimeo ?? '',
+            'post_dailymotion' => $post->postDailymotion ?? '',
+            'post_facebook' => $post->postFacebook ?? '',
+            'post_vine' => $post->postVine ?? '',
+            'post_soundcloud' => $post->postSoundCloud ?? '',
+            'post_playtube' => $post->postPlaytube ?? '',
+            'post_deepsound' => $post->postDeepsound ?? '',
+            'post_link' => $post->postLink ?? '',
+            'post_link_title' => $post->postLinkTitle ?? '',
+            'post_link_image' => $post->postLinkImage ?? '',
+            'post_link_content' => $post->postLinkContent ?? '',
+            'post_sticker' => $post->postSticker ?? '',
+            'post_map' => $post->postMap ?? '',
+            
+            // Album data
+            'album_name' => $post->album_name ?? '',
+            'multi_image_post' => (bool) ($post->multi_image_post ?? false),
+            'album_images' => $albumImages,
+            'album_images_count' => count($albumImages),
+            
+            // Poll data
+            'poll_id' => $post->poll_id ?? null,
+            'poll_options' => $pollOptions,
+            
+            // Color data (for colored posts)
+            'color_id' => $post->color_id ?? null,
+            'color' => $colorData,
+            
+            // Engagement metrics
+            'reactions_count' => $reactionsCount,
+            'comments_count' => $commentsCount,
+            'shares_count' => $post->postShare ?? 0,
+            'views_count' => $post->videoViews ?? 0,
+            
+            // User interaction
+            'is_liked' => $userId ? $this->isPostLiked($post->id, $userId) : false,
+            'is_owner' => $userId && $post->user_id == $userId,
+            'is_boosted' => (bool) ($post->boosted ?? false),
+            'comments_disabled' => (bool) ($post->comments_status ?? false),
+            
+            // Author information
+            'author' => [
+                'user_id' => $post->user_id,
+                'username' => $user?->username ?? 'Unknown',
+                'name' => $this->getUserName($user),
+                'avatar_url' => ($user?->avatar) ? asset('storage/' . $user?->avatar) : null,
+                'verified' => (bool) ($user?->verified ?? false),
+            ],
+            
+            // Timestamps
+            'created_at' => $post->time ? date('c', $post->time) : null,
+            'created_at_human' => $post->time ? $this->getHumanTime($post->time) : null,
+            'time' => $post->time,
+        ];
+    }
+
+    /**
+     * Get post reactions count
+     * 
+     * @param int $postId
+     * @return int
+     */
+    private function getPostReactionsCount(int $postId): int
+    {
+        if (Schema::hasTable('Wo_Reactions')) {
+            try {
+                return DB::table('Wo_Reactions')
+                    ->where('post_id', $postId)
+                    ->where('comment_id', 0)
+                    ->count();
+            } catch (\Exception $e) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Get post comments count
+     * 
+     * @param int $postId
+     * @return int
+     */
+    private function getPostCommentsCount(int $postId): int
+    {
+        if (Schema::hasTable('Wo_Comments')) {
+            try {
+                return DB::table('Wo_Comments')
+                    ->where('post_id', $postId)
+                    ->count();
+            } catch (\Exception $e) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Get album images for a post
+     * 
+     * @param int $postId
+     * @return array
+     */
+    private function getAlbumImages(int $postId): array
+    {
+        if (!Schema::hasTable('Wo_Albums_Media')) {
+            return [];
+        }
+
+        $albumImages = DB::table('Wo_Albums_Media')
+            ->where('post_id', $postId)
+            ->get();
+
+        return $albumImages->map(function($image) {
+            return [
+                'id' => $image->id,
+                'image_path' => $image->image,
+                'image_url' => asset('storage/' . $image->image),
+            ];
+        })->toArray();
+    }
+
+    /**
+     * Get poll options with vote counts
+     * 
+     * @param int $postId
+     * @param string|null $userId
+     * @return array
+     */
+    private function getPollOptions(int $postId, $userId = null): array
+    {
+        if (!Schema::hasTable('Wo_Polls')) {
+            return [];
+        }
+
+        try {
+            $options = DB::table('Wo_Polls')
+                ->where('post_id', $postId)
+                ->get();
+
+            if ($options->isEmpty()) {
+                return [];
+            }
+
+            $votesTable = 'Wo_Votes';
+            if (!Schema::hasTable($votesTable)) {
+                if (Schema::hasTable('Wo_PollVotes')) {
+                    $votesTable = 'Wo_PollVotes';
+                } else {
+                    return $options->map(function ($option) {
+                        return [
+                            'id' => $option->id,
+                            'text' => $option->text ?? '',
+                            'votes' => 0,
+                            'percentage' => 0,
+                            'is_voted' => false,
+                        ];
+                    })->toArray();
+                }
+            }
+
+            $totalVotes = DB::table($votesTable)
+                ->where('post_id', $postId)
+                ->count();
+
+            $userVote = null;
+            if ($userId) {
+                $userVote = DB::table($votesTable)
+                    ->where('post_id', $postId)
+                    ->where('user_id', $userId)
+                    ->value('option_id');
+            }
+
+            return $options->map(function ($option) use ($votesTable, $postId, $totalVotes, $userVote) {
+                $optionVotes = DB::table($votesTable)
+                    ->where('post_id', $postId)
+                    ->where('option_id', $option->id)
+                    ->count();
+
+                $percentage = $totalVotes > 0 ? round(($optionVotes / $totalVotes) * 100, 2) : 0;
+
+                return [
+                    'id' => $option->id,
+                    'text' => $option->text ?? '',
+                    'votes' => $optionVotes,
+                    'percentage' => $percentage,
+                    'is_voted' => $userVote == $option->id,
+                ];
+            })->toArray();
+
+        } catch (\Exception $e) {
+            return [];
+        }
+    }
+
+    /**
+     * Get color data for a colored post
+     * 
+     * @param int $colorId
+     * @return array|null
+     */
+    private function getColorData(int $colorId): ?array
+    {
+        if (!Schema::hasTable('Wo_Colored_Posts')) {
+            return null;
+        }
+
+        try {
+            $coloredPost = DB::table('Wo_Colored_Posts')
+                ->where('id', $colorId)
+                ->first();
+            
+            if (!$coloredPost) {
+                return null;
+            }
+
+            return [
+                'color_id' => $coloredPost->id,
+                'color_1' => $coloredPost->color_1 ?? '',
+                'color_2' => $coloredPost->color_2 ?? '',
+                'text_color' => $coloredPost->text_color ?? '',
+                'image' => $coloredPost->image ?? '',
+                'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+            ];
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Get post type based on content
+     * 
+     * @param object $post
+     * @return string
+     */
+    private function getPostType($post): string
+    {
+        if (!empty($post->postType)) {
+            return $post->postType;
+        }
+        
+        if (!empty($post->job_id) && $post->job_id > 0) return 'job';
+        if (!empty($post->blog_id) && $post->blog_id > 0) return 'blog';
+        if (!empty($post->postPhoto)) return 'photo';
+        if (!empty($post->postYoutube) || !empty($post->postVimeo) || !empty($post->postFacebook)) return 'video';
+        if (!empty($post->postFile)) return 'file';
+        if (!empty($post->postLink)) return 'link';
+        if (!empty($post->postMap)) return 'location';
+        if (!empty($post->postRecord)) return 'audio';
+        if (!empty($post->postSticker)) return 'sticker';
+        if (!empty($post->album_name)) return 'album';
+        return 'text';
+    }
+
+    /**
+     * Get post privacy text
+     * 
+     * @param string $privacy
+     * @return string
+     */
+    private function getPostPrivacyText(string $privacy): string
+    {
+        return match($privacy) {
+            '0' => 'Public',
+            '1' => 'Friends',
+            '2' => 'Only Me',
+            '3' => 'Custom',
+            '4' => 'Group',
+            default => 'Public'
+        };
+    }
+
+    /**
+     * Get post photo URL
+     * 
+     * @param object $post
+     * @return string|null
+     */
+    private function getPostPhotoUrl($post): ?string
+    {
+        $postPhoto = $post->postPhoto ?? '';
+        
+        if (empty($postPhoto)) {
+            return null;
+        }
+        
+        $isGifPost = ($post->postType ?? '') === 'gif';
+        $isUrl = filter_var($postPhoto, FILTER_VALIDATE_URL) !== false;
+        
+        if ($isGifPost || $isUrl) {
+            return preg_replace('#([^:])//+#', '$1/', $postPhoto);
+        }
+        
+        return asset('storage/' . $postPhoto);
+    }
+
+    /**
+     * Check if user liked a post
+     * 
+     * @param int $postId
+     * @param string $userId
+     * @return bool
+     */
+    private function isPostLiked(int $postId, string $userId): bool
+    {
+        if (!Schema::hasTable('Wo_Reactions')) {
+            return false;
+        }
+
+        try {
+            return DB::table('Wo_Reactions')
+                ->where('post_id', $postId)
+                ->where('user_id', $userId)
+                ->where('comment_id', 0)
+                ->exists();
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Get human readable time
+     * 
+     * @param int $timestamp
+     * @return string
+     */
+    private function getHumanTime(int $timestamp): string
+    {
+        $time = time() - $timestamp;
+        
+        if ($time < 60) return 'Just now';
+        if ($time < 3600) return floor($time / 60) . 'm';
+        if ($time < 86400) return floor($time / 3600) . 'h';
+        if ($time < 2592000) return floor($time / 86400) . 'd';
+        if ($time < 31536000) return floor($time / 2592000) . 'mo';
+        return floor($time / 31536000) . 'y';
+    }
+
+    /**
      * Get user name from user object (handles different column structures)
      * 
      * @param object $user
@@ -779,6 +1433,10 @@ class PagesController extends BaseController
      */
     private function getUserName($user): string
     {
+        if (!$user) {
+            return 'Unknown User';
+        }
+        
         // Try name column first
         if (isset($user->name) && !empty($user->name)) {
             return $user->name;

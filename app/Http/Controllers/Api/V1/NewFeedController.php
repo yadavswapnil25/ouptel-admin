@@ -382,6 +382,13 @@ class NewFeedController extends Controller
                 $pollOptions = $this->getPollOptions($post->id, $userId);
             }
             
+            // Get color data if it's a colored post
+            $colorData = null;
+            $colorId = $post->color_id ?? 0;
+            if ($colorId > 0) {
+                $colorData = $this->getColorData($colorId);
+            }
+            
             return [
                 'id' => $post->id,
                 'post_id' => $post->post_id ?? $post->id,
@@ -422,6 +429,10 @@ class NewFeedController extends Controller
                 // Poll data
                 'poll_id' => $post->poll_id ?? null,
                 'poll_options' => $pollOptions,
+                
+                // Color data (for colored posts)
+                'color_id' => $post->color_id ?? null,
+                'color' => $colorData,
                 
                 // Engagement metrics
                 'reactions_count' => $reactionsCount,
@@ -780,5 +791,41 @@ class NewFeedController extends Controller
         
         // Otherwise, it's a storage path - prepend storage URL
         return asset('storage/' . $postPhoto);
+    }
+
+    /**
+     * Get color data for a colored post
+     * 
+     * @param int $colorId
+     * @return array|null
+     */
+    private function getColorData(int $colorId): ?array
+    {
+        // Check if colored posts table exists
+        if (!Schema::hasTable('Wo_Colored_Posts')) {
+            return null;
+        }
+
+        try {
+            $coloredPost = DB::table('Wo_Colored_Posts')
+                ->where('id', $colorId)
+                ->first();
+            
+            if (!$coloredPost) {
+                return null;
+            }
+
+            return [
+                'color_id' => $coloredPost->id,
+                'color_1' => $coloredPost->color_1 ?? '',
+                'color_2' => $coloredPost->color_2 ?? '',
+                'text_color' => $coloredPost->text_color ?? '',
+                'image' => $coloredPost->image ?? '',
+                'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+            ];
+        } catch (\Exception $e) {
+            // If query fails, return null
+            return null;
+        }
     }
 }

@@ -76,6 +76,8 @@ Route::get('/groups/{id}', [GroupsController::class, 'show']); // Get single gro
 Route::post('/groups', [GroupsController::class, 'store']);
 Route::get('/pages', [PagesController::class, 'index']);
 Route::get('/pages/meta', [PagesController::class, 'meta']);
+Route::get('/pages/search', [PagesController::class, 'search']); // Search pages
+Route::get('/pages/{id}/posts', [PagesController::class, 'getPosts']); // Get posts for a page (must be before /pages/{id})
 Route::get('/pages/{id}', [PagesController::class, 'show']); // Get page by ID
 Route::post('/pages', [PagesController::class, 'store']);
 Route::put('/pages/{id}', [PagesController::class, 'update']); // Update page (Edit page)

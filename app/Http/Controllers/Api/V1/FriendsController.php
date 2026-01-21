@@ -75,15 +75,146 @@ class FriendsController extends Controller
             ]);
         }
 
-        // Note: Wo_Users table might not exist, so return empty results
-        $users = [];
+        $perPage = (int) ($request->query('per_page', 12));
+        $perPage = max(1, min($perPage, 50));
+        $page = (int) ($request->query('page', 1));
+        $page = max(1, $page);
 
-        return response()->json([
-            'data' => [
-                'users' => $users,
-                'total' => count($users),
-            ],
-        ]);
+        try {
+            // Check if Wo_Users table exists
+            if (!Schema::hasTable('Wo_Users')) {
+                return response()->json([
+                    'data' => [
+                        'users' => [],
+                        'total' => 0,
+                    ],
+                ]);
+            }
+
+            // Get blocked users to exclude from search
+            $blockedIds = [$tokenUserId]; // Exclude self
+            if (Schema::hasTable('Wo_Blocks')) {
+                $blocked = DB::table('Wo_Blocks')
+                    ->where('blocker', $tokenUserId)
+                    ->pluck('blocked')
+                    ->toArray();
+                $blockedIds = array_merge($blockedIds, $blocked);
+                
+                // Also exclude users who blocked the current user
+                $blockedBy = DB::table('Wo_Blocks')
+                    ->where('blocked', $tokenUserId)
+                    ->pluck('blocker')
+                    ->toArray();
+                $blockedIds = array_merge($blockedIds, $blockedBy);
+            }
+            $blockedIds = array_unique($blockedIds);
+
+            // Search users by username, name, first_name, and last_name
+            $query = DB::table('Wo_Users')
+                ->where('active', '1')
+                ->where('user_id', '!=', $tokenUserId);
+
+            // Exclude blocked users
+            if (!empty($blockedIds)) {
+                $query->whereNotIn('user_id', $blockedIds);
+            }
+
+            // Search in username, first_name, and last_name
+            $searchTerm = '%' . $term . '%';
+            $query->where(function($q) use ($searchTerm) {
+                $q->where('username', 'LIKE', $searchTerm)
+                  ->orWhere('first_name', 'LIKE', $searchTerm)
+                  ->orWhere('last_name', 'LIKE', $searchTerm)
+                  ->orWhereRaw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) LIKE ?", [$searchTerm]);
+            });
+
+            // Get total count
+            $total = $query->count();
+
+            // Apply pagination
+            $offset = ($page - 1) * $perPage;
+            $usersData = $query->orderByDesc('lastseen')
+                ->orderByDesc('user_id')
+                ->offset($offset)
+                ->limit($perPage)
+                ->get();
+
+            // Format users
+            $users = [];
+            foreach ($usersData as $user) {
+                // Check if user is following current user
+                $isFollowing = $this->isFollowing($tokenUserId, $user->user_id);
+                $isFollowingMe = $this->isFollowing($user->user_id, $tokenUserId);
+                $isFriend = $this->isFriend($tokenUserId, $user->user_id);
+
+                // Get mutual friends count
+                $mutualFriendsCount = 0;
+                if (Schema::hasTable('Wo_Followers')) {
+                    $currentUserFollowing = DB::table('Wo_Followers')
+                        ->where('follower_id', $tokenUserId)
+                        ->where('active', '1')
+                        ->pluck('following_id')
+                        ->toArray();
+                    
+                    $userFollowing = DB::table('Wo_Followers')
+                        ->where('follower_id', $user->user_id)
+                        ->where('active', '1')
+                        ->pluck('following_id')
+                        ->toArray();
+                    
+                    $mutualFriendsCount = count(array_intersect($currentUserFollowing, $userFollowing));
+                }
+
+                $users[] = [
+                    'user_id' => $user->user_id,
+                    'username' => $user->username ?? 'Unknown',
+                    'name' => $this->getUserName($user),
+                    'first_name' => $user->first_name ?? '',
+                    'last_name' => $user->last_name ?? '',
+                    'email' => $user->email ?? '',
+                    'avatar' => $user->avatar ?? '',
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'cover' => $user->cover ?? '',
+                    'cover_url' => $user->cover ? asset('storage/' . $user->cover) : null,
+                    'verified' => (bool) ($user->verified ?? false),
+                    'is_following' => $isFollowing,
+                    'is_following_me' => $isFollowingMe,
+                    'is_friend' => $isFriend,
+                    'mutual_friends_count' => $mutualFriendsCount,
+                    'lastseen' => $user->lastseen ?? time(),
+                    'lastseen_time_text' => $this->getTimeElapsedString($user->lastseen ?? time()),
+                ];
+            }
+
+            // Calculate pagination metadata
+            $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
+
+            return response()->json([
+                'data' => [
+                    'users' => $users,
+                    'total' => $total,
+                    'pagination' => [
+                        'current_page' => $page,
+                        'per_page' => $perPage,
+                        'total' => $total,
+                        'last_page' => $lastPage,
+                        'from' => $total > 0 ? $offset + 1 : 0,
+                        'to' => min($offset + $perPage, $total),
+                        'has_more' => $page < $lastPage,
+                    ],
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to search users: ' . $e->getMessage(),
+                'data' => [
+                    'users' => [],
+                    'total' => 0,
+                ],
+            ], 500);
+        }
     }
 
     public function requests(Request $request): JsonResponse
@@ -105,12 +236,30 @@ class FriendsController extends Controller
         $page = max(1, $page);
 
         try {
-            // Friend requests are stored in Wo_Followers table with active = '0'
+            // Check if Wo_Followers table exists
+            if (!Schema::hasTable('Wo_Followers')) {
+                return response()->json([
+                    'ok' => true,
+                    'data' => [],
+                    'meta' => [
+                        'current_page' => $page,
+                        'per_page' => $perPage,
+                        'total' => 0,
+                        'last_page' => 1,
+                        'from' => 0,
+                        'to' => 0,
+                        'has_more' => false,
+                    ],
+                ]);
+            }
+
+            // Friend requests are stored in Wo_Followers table with active = '0' or 0
             // following_id = current user (who receives the request)
             // follower_id = user who sent the request
+            // Handle both string '0' and integer 0 for active field
             $query = DB::table('Wo_Followers')
                 ->where('following_id', $tokenUserId) // Requests received by current user
-                ->where('active', '0'); // Pending requests
+                ->whereIn('active', ['0', 0]); // Pending requests (handle both string and integer)
 
             // Get total count
             $total = $query->count();
@@ -118,6 +267,7 @@ class FriendsController extends Controller
             // Get paginated results
             $offset = ($page - 1) * $perPage;
             $requests = $query->orderByDesc('time')
+                ->orderByDesc('id') // Secondary sort for consistency
                 ->offset($offset)
                 ->limit($perPage)
                 ->get();
@@ -128,9 +278,10 @@ class FriendsController extends Controller
                 $requesterId = $requestItem->follower_id; // User who sent the request
                 
                 // Get requester user data
+                // Handle both string '1' and integer 1 for active field
                 $requester = DB::table('Wo_Users')
                     ->where('user_id', $requesterId)
-                    ->where('active', '1')
+                    ->whereIn('active', ['1', 1])
                     ->first();
 
                 if ($requester) {
@@ -289,16 +440,17 @@ class FriendsController extends Controller
             $followMessage = 'invalid';
 
             // Check if already following or has pending request (matching old API logic)
+            // Handle both string and integer values for active field
             $isFollowing = DB::table('Wo_Followers')
                 ->where('follower_id', $tokenUserId)
                 ->where('following_id', $recipientId)
-                ->where('active', '1')
+                ->whereIn('active', ['1', 1])
                 ->exists();
 
             $isFollowRequested = DB::table('Wo_Followers')
                 ->where('follower_id', $tokenUserId)
                 ->where('following_id', $recipientId)
-                ->where('active', '0')
+                ->whereIn('active', ['0', 0])
                 ->exists();
 
             // If already following or has pending request, unfollow/remove request
@@ -315,19 +467,29 @@ class FriendsController extends Controller
                 }
             } else {
                 // Check if recipient requires follow approval
+                // Handle both string and integer values for confirm_followers and follow_privacy
                 $requiresApproval = false;
-                if ($recipientData->confirm_followers === '1') {
+                
+                // Check confirm_followers setting (handle both '1' and 1)
+                $confirmFollowers = $recipientData->confirm_followers ?? null;
+                if (in_array($confirmFollowers, ['1', 1, true])) {
                     $requiresApproval = true;
-                } elseif ($recipientData->follow_privacy === '2') {
+                } 
+                // Check follow_privacy setting (2 = only friends can follow)
+                elseif (in_array($recipientData->follow_privacy ?? null, ['2', 2])) {
                     // Only friends can follow - check if they're friends
                     $requiresApproval = !$this->isFriend($tokenUserId, $recipientId);
                 }
 
                 // Register follow (matching old API: Wo_RegisterFollow)
+                // Determine active value - use integer 0 for pending, 1 for accepted
+                // This ensures consistency with database storage
+                $activeValue = $requiresApproval ? 0 : 1;
+                
                 $followData = [
                     'follower_id' => $tokenUserId,
                     'following_id' => $recipientId,
-                    'active' => $requiresApproval ? '0' : '1', // 0 = pending, 1 = accepted
+                    'active' => $activeValue, // 0 = pending, 1 = accepted
                     'time' => time(),
                 ];
 

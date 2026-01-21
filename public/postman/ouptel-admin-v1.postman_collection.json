@@ -209,6 +209,27 @@
       "request": {"method":"GET","header":[],"url":{"raw":"{{base_url}}/api/v1/pages/meta","host":["{{base_url}}"],"path":["api","v1","pages","meta"]}}
     },
     {
+      "name": "Pages - Search",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text","disabled":true}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/pages/search?term=tech&per_page=12&page=1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","pages","search"],
+          "query": [
+            {"key":"term","value":"tech","description":"Search term (searches in page_name, page_title, page_description)"},
+            {"key":"per_page","value":"12","description":"Results per page (1-50, default: 12)"},
+            {"key":"page","value":"1","description":"Page number (default: 1)"},
+            {"key":"category","value":"","description":"Optional: Filter by category ID","disabled":true}
+          ]
+        },
+        "description": "Search pages by name, title, or description. Authentication is optional - if provided, shows is_liked and is_owner status. Supports pagination and optional category filtering."
+      }
+    },
+    {
       "name": "Pages - Create",
       "request": {
         "method": "POST",
