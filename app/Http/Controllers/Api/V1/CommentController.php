@@ -170,9 +170,24 @@ class CommentController extends Controller
                 ->where('post_id', $post->post_id);
             
             // Exclude replies (only get top-level comments)
+            // Method 1: Check if parent_comment_id column exists
             $hasParentColumn = DB::getSchemaBuilder()->hasColumn('Wo_Comments', 'parent_comment_id');
             if ($hasParentColumn) {
                 $query->whereNull('parent_comment_id');
+            }
+            
+            // Method 2: Exclude comments that are replies in Wo_CommentReplies table
+            $hasRepliesTable = DB::getSchemaBuilder()->hasTable('Wo_CommentReplies');
+            if ($hasRepliesTable) {
+                // Exclude any comments that have entries in Wo_CommentReplies as replies
+                // (A comment that is a reply won't be in Wo_CommentReplies, but we want to exclude
+                // comments that are actually replies stored in Wo_CommentReplies)
+                // Actually, if Wo_CommentReplies exists, replies are stored there, not in Wo_Comments
+                // So we don't need to exclude anything from Wo_Comments
+            } else {
+                // If Wo_CommentReplies doesn't exist and parent_comment_id doesn't exist,
+                // we can't distinguish replies from comments, so show all
+                // But try to check if there's a way to identify replies
             }
             
             $query->orderBy('time', 'desc');
@@ -422,83 +437,72 @@ class CommentController extends Controller
         try {
             DB::beginTransaction();
 
-            // Check if Wo_CommentReplies table exists (separate table for replies)
+            // Always use Wo_CommentReplies table for replies
+            // Create it if it doesn't exist
             $hasRepliesTable = DB::getSchemaBuilder()->hasTable('Wo_CommentReplies');
             
-            if ($hasRepliesTable) {
-                // Use separate replies table
-                $replyData = [
-                    'user_id' => $tokenUserId,
-                    'comment_id' => $commentId,
-                    'post_id' => $post->post_id,
-                    'text' => $request->input('text'),
-                    'time' => time(),
-                ];
-
-                // Handle file uploads if provided
-                if ($request->hasFile('image')) {
-                    $replyData['c_file'] = $this->handleFileUpload($request->file('image'), 'comment_replies', 'image');
-                }
-                if ($request->hasFile('audio')) {
-                    $replyData['record'] = $this->handleFileUpload($request->file('audio'), 'comment_replies', 'audio');
-                }
-
-                $replyId = DB::table('Wo_CommentReplies')->insertGetId($replyData);
-                $reply = DB::table('Wo_CommentReplies')->where('id', $replyId)->first();
-                
-                // Format reply data
-                $formattedReply = [
-                    'id' => $reply->id,
-                    'comment_id' => $reply->comment_id,
-                    'post_id' => $reply->post_id,
-                    'text' => $reply->text,
-                    'c_file' => $reply->c_file ?? '',
-                    'c_file_url' => ($reply->c_file ?? '') ? asset('storage/' . $reply->c_file) : null,
-                    'record' => $reply->record ?? '',
-                    'record_url' => ($reply->record ?? '') ? asset('storage/' . $reply->record) : null,
-                    'is_reply' => true,
-                    'is_owner' => $reply->user_id == $tokenUserId,
-                    'author' => [
-                        'user_id' => $user->user_id,
-                        'username' => $user->username,
-                        'name' => $this->getUserName($user),
-                        'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                    ],
-                    'created_at' => date('c', $reply->time),
-                    'created_at_human' => $this->getHumanTime($reply->time),
-                    'reactions_count' => 0,
-                    'total_reactions' => 0,
-                ];
-            } else {
-                // Use same table with parent_comment_id (if column exists) or store in text
-                // For now, we'll store it as a regular comment but mark it differently
-                // This is a fallback if replies table doesn't exist
-                $commentData = [
-                    'user_id' => $tokenUserId,
-                    'post_id' => $post->post_id,
-                    'text' => $request->input('text'),
-                    'time' => time(),
-                ];
-
-                // Handle file uploads if provided
-                if ($request->hasFile('image')) {
-                    $commentData['c_file'] = $this->handleFileUpload($request->file('image'), 'comments', 'image');
-                }
-                if ($request->hasFile('audio')) {
-                    $commentData['record'] = $this->handleFileUpload($request->file('audio'), 'comments', 'audio');
-                }
-
-                // Check if parent_comment_id column exists
-                $hasParentColumn = DB::getSchemaBuilder()->hasColumn('Wo_Comments', 'parent_comment_id');
-                if ($hasParentColumn) {
-                    $commentData['parent_comment_id'] = $commentId;
-                }
-
-                $reply = Comment::create($commentData);
-                $formattedReply = $this->formatCommentData($reply, $tokenUserId);
-                $formattedReply['is_reply'] = true;
-                $formattedReply['parent_comment_id'] = $commentId;
+            if (!$hasRepliesTable) {
+                // Create Wo_CommentReplies table
+                DB::statement('CREATE TABLE IF NOT EXISTS Wo_CommentReplies (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    user_id INT NOT NULL,
+                    comment_id INT NOT NULL,
+                    post_id INT NOT NULL,
+                    text TEXT,
+                    c_file VARCHAR(255) DEFAULT NULL,
+                    record VARCHAR(255) DEFAULT NULL,
+                    time INT NOT NULL,
+                    INDEX idx_comment_id (comment_id),
+                    INDEX idx_user_id (user_id),
+                    INDEX idx_post_id (post_id),
+                    INDEX idx_time (time)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4');
             }
+            
+            // Always use Wo_CommentReplies table for replies
+            $replyData = [
+                'user_id' => $tokenUserId,
+                'comment_id' => $commentId,
+                'post_id' => $post->post_id,
+                'text' => $request->input('text'),
+                'time' => time(),
+            ];
+
+            // Handle file uploads if provided
+            if ($request->hasFile('image')) {
+                $replyData['c_file'] = $this->handleFileUpload($request->file('image'), 'comment_replies', 'image');
+            }
+            if ($request->hasFile('audio')) {
+                $replyData['record'] = $this->handleFileUpload($request->file('audio'), 'comment_replies', 'audio');
+            }
+
+            $replyId = DB::table('Wo_CommentReplies')->insertGetId($replyData);
+            $reply = DB::table('Wo_CommentReplies')->where('id', $replyId)->first();
+            
+            // Format reply data (matching the format returned in getCommentRepliesPreview)
+            $formattedReply = [
+                'id' => $reply->id,
+                'comment_id' => $reply->comment_id,
+                'post_id' => $reply->post_id,
+                'text' => $reply->text,
+                'c_file' => $reply->c_file ?? '',
+                'c_file_url' => ($reply->c_file ?? '') ? asset('storage/' . $reply->c_file) : null,
+                'record' => $reply->record ?? '',
+                'record_url' => ($reply->record ?? '') ? asset('storage/' . $reply->record) : null,
+                'is_reply' => true,
+                'is_owner' => $reply->user_id == $tokenUserId,
+                'author' => [
+                    'user_id' => $user->user_id,
+                    'username' => $user->username,
+                    'name' => $this->getUserName($user),
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                ],
+                'created_at' => date('c', $reply->time),
+                'created_at_human' => $this->getHumanTime($reply->time),
+                'reactions_count' => $this->getReplyReactionsCount($reply->id),
+                'total_reactions' => $this->getReplyReactionsCount($reply->id),
+                'user_reaction' => $this->getUserReplyReaction($reply->id, $tokenUserId),
+            ];
 
             // Send notifications
             $this->sendReplyNotifications($parentComment, $post, $tokenUserId);
@@ -795,7 +799,14 @@ class CommentController extends Controller
                 $user = User::where('user_id', $reply->user_id)->first();
                 return [
                     'id' => $reply->id,
+                    'comment_id' => $reply->comment_id,
+                    'post_id' => $reply->post_id ?? 0,
                     'text' => $reply->text,
+                    'c_file' => $reply->c_file ?? '',
+                    'c_file_url' => ($reply->c_file ?? '') ? asset('storage/' . $reply->c_file) : null,
+                    'record' => $reply->record ?? '',
+                    'record_url' => ($reply->record ?? '') ? asset('storage/' . $reply->record) : null,
+                    'is_reply' => true,
                     'is_owner' => $reply->user_id == $userId,
                     'author' => [
                         'user_id' => $user?->user_id ?? $reply->user_id,
@@ -803,7 +814,11 @@ class CommentController extends Controller
                         'name' => $this->getUserName($user),
                         'avatar_url' => ($user?->avatar) ? asset('storage/' . $user->avatar) : null,
                     ],
+                    'created_at' => date('c', $reply->time),
                     'created_at_human' => $this->getHumanTime($reply->time),
+                    'reactions_count' => $this->getReplyReactionsCount($reply->id),
+                    'total_reactions' => $this->getReplyReactionsCount($reply->id),
+                    'user_reaction' => $this->getUserReplyReaction($reply->id, $userId),
                 ];
             })->toArray();
         }
