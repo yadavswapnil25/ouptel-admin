@@ -1015,36 +1015,140 @@ class StoriesController extends Controller
         }
 
         // Get story views (excluding story owner)
-        $views = collect([]);
+        $usersData = [];
         
         if (Schema::hasTable('Wo_StorySeen')) {
-            $query = DB::table('Wo_StorySeen')
-                ->where('story_id', $storyId)
-                ->where('user_id', '!=', $tokenUserId);
+            try {
+                // First, try with join to get user data
+                $query = DB::table('Wo_StorySeen')
+                    ->join('Wo_Users', 'Wo_StorySeen.user_id', '=', 'Wo_Users.user_id')
+                    ->where('Wo_StorySeen.story_id', $storyId)
+                    ->where('Wo_StorySeen.user_id', '!=', $tokenUserId); // Exclude story owner from views
 
-            if ($offset > 0) {
-                $query->where('id', '>', $offset);
-            }
+                // Only filter by active if column exists
+                if (Schema::hasColumn('Wo_Users', 'active')) {
+                    $query->whereIn('Wo_Users.active', ['1', 1]); // Only active users
+                }
 
-            $views = $query->orderBy('id', 'asc')
-                ->limit($limit)
-                ->get();
-        }
+                // Handle offset - if offset is provided and is numeric, use it as record offset
+                // If offset looks like an ID (larger number), use it as ID-based pagination
+                if ($offset > 0) {
+                    // Check if offset is likely an ID (if it's > 1000, treat as ID, otherwise as record offset)
+                    if ($offset > 1000) {
+                        // ID-based pagination (for infinite scroll)
+                        $query->where('Wo_StorySeen.id', '>', $offset);
+                    } else {
+                        // Record-based offset (skip N records)
+                        $query->offset($offset);
+                    }
+                }
 
-        // Format users data
-        $usersData = [];
-        foreach ($views as $view) {
-            $user = DB::table('Wo_Users')->where('user_id', $view->user_id)->first();
-            if ($user) {
-                $usersData[] = [
-                    'user_id' => $user->user_id,
-                    'username' => $user->username ?? 'Unknown',
-                    'name' => $user->name ?? $user->username ?? 'Unknown User',
-                    'avatar' => $user->avatar ?? '',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                    'verified' => (bool) ($user->verified ?? false),
-                    'offset_id' => $view->id,
+                // Order by time if column exists, otherwise by id
+                $hasTimeColumn = Schema::hasColumn('Wo_StorySeen', 'time');
+                if ($hasTimeColumn) {
+                    $query->orderBy('Wo_StorySeen.time', 'desc');
+                } else {
+                    $query->orderBy('Wo_StorySeen.id', 'desc');
+                }
+
+                // Build select statement based on available columns
+                $selectFields = [
+                    'Wo_StorySeen.id as view_id',
+                    'Wo_StorySeen.user_id',
+                    'Wo_StorySeen.story_id',
+                    'Wo_Users.username',
+                    'Wo_Users.name',
+                    'Wo_Users.first_name',
+                    'Wo_Users.last_name',
+                    'Wo_Users.avatar',
+                    'Wo_Users.verified'
                 ];
+                
+                if ($hasTimeColumn) {
+                    $selectFields[] = 'Wo_StorySeen.time as viewed_at';
+                }
+
+                $views = $query->select($selectFields)
+                    ->limit($limit)
+                    ->get();
+
+                // Format users data
+                foreach ($views as $view) {
+                    $userName = $view->name ?? '';
+                    if (empty($userName)) {
+                        $firstName = $view->first_name ?? '';
+                        $lastName = $view->last_name ?? '';
+                        $userName = trim($firstName . ' ' . $lastName);
+                    }
+                    if (empty($userName)) {
+                        $userName = $view->username ?? 'Unknown User';
+                    }
+
+                    $usersData[] = [
+                        'user_id' => $view->user_id,
+                        'username' => $view->username ?? 'Unknown',
+                        'name' => $userName,
+                        'avatar' => $view->avatar ?? '',
+                        'avatar_url' => $view->avatar ? asset('storage/' . $view->avatar) : null,
+                        'verified' => (bool) ($view->verified ?? false),
+                        'offset_id' => $view->view_id,
+                        'viewed_at' => isset($view->viewed_at) && $view->viewed_at ? date('c', $view->viewed_at) : null,
+                    ];
+                }
+            } catch (\Exception $e) {
+                // If join fails, try without join (fallback)
+                try {
+                    $query = DB::table('Wo_StorySeen')
+                        ->where('story_id', $storyId)
+                        ->where('user_id', '!=', $tokenUserId);
+
+                    if ($offset > 0) {
+                        if ($offset > 1000) {
+                            $query->where('id', '>', $offset);
+                        } else {
+                            $query->offset($offset);
+                        }
+                    }
+
+                    $hasTimeColumn = Schema::hasColumn('Wo_StorySeen', 'time');
+                    if ($hasTimeColumn) {
+                        $query->orderBy('time', 'desc');
+                    } else {
+                        $query->orderBy('id', 'desc');
+                    }
+
+                    $views = $query->limit($limit)->get();
+
+                    // Format users data by fetching user info separately
+                    foreach ($views as $view) {
+                        $user = DB::table('Wo_Users')->where('user_id', $view->user_id)->first();
+                        if ($user) {
+                            $userName = $user->name ?? '';
+                            if (empty($userName)) {
+                                $firstName = $user->first_name ?? '';
+                                $lastName = $user->last_name ?? '';
+                                $userName = trim($firstName . ' ' . $lastName);
+                            }
+                            if (empty($userName)) {
+                                $userName = $user->username ?? 'Unknown User';
+                            }
+
+                            $usersData[] = [
+                                'user_id' => $user->user_id,
+                                'username' => $user->username ?? 'Unknown',
+                                'name' => $userName,
+                                'avatar' => $user->avatar ?? '',
+                                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                                'verified' => (bool) ($user->verified ?? false),
+                                'offset_id' => $view->id,
+                                'viewed_at' => ($hasTimeColumn && isset($view->time)) ? date('c', $view->time) : null,
+                            ];
+                        }
+                    }
+                } catch (\Exception $e2) {
+                    // If both queries fail, return empty array
+                    $usersData = [];
+                }
             }
         }
 

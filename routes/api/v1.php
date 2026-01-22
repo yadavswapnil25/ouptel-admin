@@ -47,6 +47,8 @@ use App\Http\Controllers\Api\V1\PollController;
 use App\Http\Controllers\Api\V1\StoriesController;
 use App\Http\Controllers\Api\V1\NotificationsController;
 use App\Http\Controllers\Api\V1\ShareController;
+use App\Http\Controllers\Api\V1\WalletController;
+use App\Http\Controllers\Api\V1\SubscriptionsController;
 use App\Http\Controllers\Api\V1\AnnouncementsController;
 
 Route::get('/ping', [PingController::class, 'index']);
@@ -98,6 +100,7 @@ Route::get('/products', [ProductsController::class, 'index']);
 Route::get('/products/meta', [ProductsController::class, 'meta']);
 Route::get('/my-products', [ProductsController::class, 'my']);
 Route::get('/purchased-products', [ProductsController::class, 'purchased']);
+Route::post('/market/buy', [ProductsController::class, 'buy']); // Buy products from cart (old API: market.php?type=buy)
 Route::post('/products', [ProductsController::class, 'store']);
 Route::get('/directory', [DirectoryController::class, 'index']);
 Route::get('/events', [EventsController::class, 'index']);
@@ -107,8 +110,14 @@ Route::get('/events/invited', [EventsController::class, 'invited']);
 Route::get('/events/interested', [EventsController::class, 'interested']);
 Route::get('/my-events', [EventsController::class, 'mine']);
 Route::post('/events/go', [EventsController::class, 'goEvent']); // Go/not going to event (old API: requests.php?f=go_event)
-Route::get('/games', [GamesController::class, 'index']);
-Route::post('/games', [GamesController::class, 'store']);
+Route::get('/games', [GamesController::class, 'index']); // Legacy endpoint
+Route::post('/games', [GamesController::class, 'store']); // Legacy endpoint
+Route::post('/games/handle', [GamesController::class, 'handle']); // Unified endpoint (old API: games.php with type parameter)
+Route::post('/games/get', [GamesController::class, 'getAll']); // Get all games (old API: games.php?type=get)
+Route::post('/games/get-my', [GamesController::class, 'getMy']); // Get my games (old API: games.php?type=get_my)
+Route::post('/games/add-to-my', [GamesController::class, 'addToMy']); // Add game to my games (old API: games.php?type=add_to_my)
+Route::post('/games/search', [GamesController::class, 'search']); // Search games (old API: games.php?type=search)
+Route::post('/games/popular', [GamesController::class, 'popular']); // Get popular games (old API: games.php?type=popular)
 
 // Forum routes
 Route::get('/forums', [ForumsController::class, 'index']);
@@ -222,6 +231,8 @@ Route::get('/posts/{postId}/comments', [CommentController::class, 'getComments']
 Route::put('/comments/{commentId}', [CommentController::class, 'updateComment']);
 Route::delete('/comments/{commentId}', [CommentController::class, 'deleteComment']);
 Route::post('/comments/{commentId}/reactions', [CommentController::class, 'registerCommentReaction']);
+Route::post('/comments/{commentId}/replies', [CommentController::class, 'replyToComment']); // Reply to a comment
+Route::get('/comments/{commentId}/replies', [CommentController::class, 'getReplies']); // Get replies for a comment
 
 Route::post('/posts/{postId}/save', [PostController::class, 'savePost']);
 Route::get('/posts/{postId}/saved', [PostController::class, 'checkSavedPost']);
@@ -249,6 +260,15 @@ Route::post('/stories/{id}', [StoriesController::class, 'getStoryById']); // Get
 
 // Share routes (matching old API structure: requests.php?f=share_post_on)
 Route::post('/share/post', [ShareController::class, 'sharePostOn']); // Share post on timeline/page/group (old API: share_post_on)
+
+// Wallet routes (matching old API structure: wallet.php)
+Route::post('/wallet/send', [WalletController::class, 'send']); // Send money from wallet (old API: wallet.php?type=send)
+Route::post('/wallet/top-up', [WalletController::class, 'topUp']); // Top up wallet (old API: wallet.php?type=top_up)
+Route::post('/wallet/pay', [WalletController::class, 'pay']); // Pay using wallet (old API: wallet.php?type=pay)
+Route::get('/wallet/balance', [WalletController::class, 'getBalance']); // Get wallet balance
+
+// Subscriptions routes
+Route::get('/my-subscriptions', [SubscriptionsController::class, 'getMySubscriptions']); // Get my subscriptions (users, pages, groups)
 
 Route::post('/users/{followingId}/follow', [FollowController::class, 'followUser']);
 Route::delete('/users/{followingId}/follow', [FollowController::class, 'unfollowUser']);

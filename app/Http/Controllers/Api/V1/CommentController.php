@@ -63,9 +63,6 @@ class CommentController extends Controller
             return response()->json(['ok' => false, 'message' => 'Access denied or comments disabled'], 403);
         }
 
-        // Comment replies are not supported in this simplified version
-        // Only basic comments are supported
-
         // Check if user exists
         $user = User::where('user_id', $tokenUserId)->first();
         if (!$user) {
@@ -85,6 +82,14 @@ class CommentController extends Controller
                 'text' => $request->input('text'),
                 'time' => time(),
             ];
+
+            // Handle file uploads if provided
+            if ($request->hasFile('image')) {
+                $commentData['c_file'] = $this->handleFileUpload($request->file('image'), 'comments', 'image');
+            }
+            if ($request->hasFile('audio')) {
+                $commentData['record'] = $this->handleFileUpload($request->file('audio'), 'comments', 'audio');
+            }
 
             // Create the comment
             $comment = Comment::create($commentData);
@@ -162,13 +167,35 @@ class CommentController extends Controller
             $page = $request->input('page', 1);
 
             $query = Comment::with('user')
-                ->where('post_id', $post->post_id)
-                ->orderBy('time', 'desc');
+                ->where('post_id', $post->post_id);
+            
+            // Exclude replies (only get top-level comments)
+            $hasParentColumn = DB::getSchemaBuilder()->hasColumn('Wo_Comments', 'parent_comment_id');
+            if ($hasParentColumn) {
+                $query->whereNull('parent_comment_id');
+            }
+            
+            $query->orderBy('time', 'desc');
 
             $comments = $query->paginate($perPage, ['*'], 'page', $page);
 
-            $formattedComments = $comments->map(function ($comment) use ($tokenUserId) {
-                return $this->formatCommentData($comment, $tokenUserId);
+            $includeReplies = $request->input('include_replies', false);
+            
+            $formattedComments = $comments->map(function ($comment) use ($tokenUserId, $includeReplies) {
+                $formatted = $this->formatCommentData($comment, $tokenUserId);
+                
+                // Optionally include replies count
+                if ($includeReplies) {
+                    $formatted['replies_count'] = $this->getCommentRepliesCount($comment->id);
+                    // Optionally include first few replies
+                    if ($request->input('include_replies_data', false)) {
+                        $formatted['replies'] = $this->getCommentRepliesPreview($comment->id, $tokenUserId, 3);
+                    }
+                } else {
+                    $formatted['replies_count'] = $this->getCommentRepliesCount($comment->id);
+                }
+                
+                return $formatted;
             });
 
             return response()->json([
@@ -328,6 +355,489 @@ class CommentController extends Controller
                 'error' => $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Reply to a comment
+     * 
+     * @param Request $request
+     * @param int $commentId
+     * @return JsonResponse
+     */
+    public function replyToComment(Request $request, int $commentId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        // Validate request parameters
+        $validator = Validator::make($request->all(), [
+            'text' => 'required|string|max:5000',
+            'hash' => 'nullable|string', // For compatibility with WoWonder hash system
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Check if parent comment exists
+        $parentComment = Comment::where('id', $commentId)->first();
+        if (!$parentComment) {
+            return response()->json(['ok' => false, 'message' => 'Comment not found'], 404);
+        }
+
+        // Get the post from parent comment
+        $post = Post::where('post_id', $parentComment->post_id)->first();
+        if (!$post) {
+            return response()->json(['ok' => false, 'message' => 'Post not found'], 404);
+        }
+
+        // Check if user can comment on this post
+        if (!$this->canCommentOnPost($post, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Access denied or comments disabled'], 403);
+        }
+
+        // Check if user exists
+        $user = User::where('user_id', $tokenUserId)->first();
+        if (!$user) {
+            return response()->json(['ok' => false, 'message' => 'User not found'], 404);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Check if Wo_CommentReplies table exists (separate table for replies)
+            $hasRepliesTable = DB::getSchemaBuilder()->hasTable('Wo_CommentReplies');
+            
+            if ($hasRepliesTable) {
+                // Use separate replies table
+                $replyData = [
+                    'user_id' => $tokenUserId,
+                    'comment_id' => $commentId,
+                    'post_id' => $post->post_id,
+                    'text' => $request->input('text'),
+                    'time' => time(),
+                ];
+
+                // Handle file uploads if provided
+                if ($request->hasFile('image')) {
+                    $replyData['c_file'] = $this->handleFileUpload($request->file('image'), 'comment_replies', 'image');
+                }
+                if ($request->hasFile('audio')) {
+                    $replyData['record'] = $this->handleFileUpload($request->file('audio'), 'comment_replies', 'audio');
+                }
+
+                $replyId = DB::table('Wo_CommentReplies')->insertGetId($replyData);
+                $reply = DB::table('Wo_CommentReplies')->where('id', $replyId)->first();
+                
+                // Format reply data
+                $formattedReply = [
+                    'id' => $reply->id,
+                    'comment_id' => $reply->comment_id,
+                    'post_id' => $reply->post_id,
+                    'text' => $reply->text,
+                    'c_file' => $reply->c_file ?? '',
+                    'c_file_url' => ($reply->c_file ?? '') ? asset('storage/' . $reply->c_file) : null,
+                    'record' => $reply->record ?? '',
+                    'record_url' => ($reply->record ?? '') ? asset('storage/' . $reply->record) : null,
+                    'is_reply' => true,
+                    'is_owner' => $reply->user_id == $tokenUserId,
+                    'author' => [
+                        'user_id' => $user->user_id,
+                        'username' => $user->username,
+                        'name' => $this->getUserName($user),
+                        'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    ],
+                    'created_at' => date('c', $reply->time),
+                    'created_at_human' => $this->getHumanTime($reply->time),
+                    'reactions_count' => 0,
+                    'total_reactions' => 0,
+                ];
+            } else {
+                // Use same table with parent_comment_id (if column exists) or store in text
+                // For now, we'll store it as a regular comment but mark it differently
+                // This is a fallback if replies table doesn't exist
+                $commentData = [
+                    'user_id' => $tokenUserId,
+                    'post_id' => $post->post_id,
+                    'text' => $request->input('text'),
+                    'time' => time(),
+                ];
+
+                // Handle file uploads if provided
+                if ($request->hasFile('image')) {
+                    $commentData['c_file'] = $this->handleFileUpload($request->file('image'), 'comments', 'image');
+                }
+                if ($request->hasFile('audio')) {
+                    $commentData['record'] = $this->handleFileUpload($request->file('audio'), 'comments', 'audio');
+                }
+
+                // Check if parent_comment_id column exists
+                $hasParentColumn = DB::getSchemaBuilder()->hasColumn('Wo_Comments', 'parent_comment_id');
+                if ($hasParentColumn) {
+                    $commentData['parent_comment_id'] = $commentId;
+                }
+
+                $reply = Comment::create($commentData);
+                $formattedReply = $this->formatCommentData($reply, $tokenUserId);
+                $formattedReply['is_reply'] = true;
+                $formattedReply['parent_comment_id'] = $commentId;
+            }
+
+            // Send notifications
+            $this->sendReplyNotifications($parentComment, $post, $tokenUserId);
+
+            DB::commit();
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Reply posted successfully',
+                'data' => $formattedReply
+            ], 201);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to post reply',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get replies for a comment
+     * 
+     * @param Request $request
+     * @param int $commentId
+     * @return JsonResponse
+     */
+    public function getReplies(Request $request, int $commentId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        // Check if parent comment exists
+        $parentComment = Comment::where('id', $commentId)->first();
+        if (!$parentComment) {
+            return response()->json(['ok' => false, 'message' => 'Comment not found'], 404);
+        }
+
+        try {
+            $perPage = (int) ($request->input('per_page', 10));
+            $perPage = max(1, min($perPage, 50));
+            $page = (int) ($request->input('page', 1));
+            $page = max(1, $page);
+
+            // Check if Wo_CommentReplies table exists
+            $hasRepliesTable = DB::getSchemaBuilder()->hasTable('Wo_CommentReplies');
+            
+            if ($hasRepliesTable) {
+                // Get replies from separate table
+                $offset = ($page - 1) * $perPage;
+                $replies = DB::table('Wo_CommentReplies')
+                    ->where('comment_id', $commentId)
+                    ->orderBy('time', 'asc')
+                    ->offset($offset)
+                    ->limit($perPage)
+                    ->get();
+
+                $total = DB::table('Wo_CommentReplies')
+                    ->where('comment_id', $commentId)
+                    ->count();
+
+                $formattedReplies = $replies->map(function ($reply) use ($tokenUserId) {
+                    $user = User::where('user_id', $reply->user_id)->first();
+                    return [
+                        'id' => $reply->id,
+                        'comment_id' => $reply->comment_id,
+                        'post_id' => $reply->post_id,
+                        'text' => $reply->text,
+                        'c_file' => $reply->c_file ?? '',
+                        'c_file_url' => ($reply->c_file ?? '') ? asset('storage/' . $reply->c_file) : null,
+                        'record' => $reply->record ?? '',
+                        'record_url' => ($reply->record ?? '') ? asset('storage/' . $reply->record) : null,
+                        'is_reply' => true,
+                        'is_owner' => $reply->user_id == $tokenUserId,
+                        'author' => [
+                            'user_id' => $user?->user_id ?? $reply->user_id,
+                            'username' => $user?->username ?? 'Unknown',
+                            'name' => $this->getUserName($user),
+                            'avatar_url' => ($user?->avatar) ? asset('storage/' . $user->avatar) : null,
+                        ],
+                        'created_at' => date('c', $reply->time),
+                        'created_at_human' => $this->getHumanTime($reply->time),
+                        'reactions_count' => $this->getReplyReactionsCount($reply->id),
+                        'total_reactions' => $this->getReplyReactionsCount($reply->id),
+                        'user_reaction' => $this->getUserReplyReaction($reply->id, $tokenUserId),
+                    ];
+                });
+            } else {
+                // Get replies from same table using parent_comment_id
+                $hasParentColumn = DB::getSchemaBuilder()->hasColumn('Wo_Comments', 'parent_comment_id');
+                
+                if ($hasParentColumn) {
+                    $query = Comment::where('parent_comment_id', $commentId)
+                        ->orderBy('time', 'asc');
+                    
+                    $replies = $query->paginate($perPage, ['*'], 'page', $page);
+                    $total = $replies->total();
+                    
+                    $formattedReplies = $replies->map(function ($reply) use ($tokenUserId) {
+                        $formatted = $this->formatCommentData($reply, $tokenUserId);
+                        $formatted['is_reply'] = true;
+                        $formatted['parent_comment_id'] = $commentId;
+                        return $formatted;
+                    });
+                } else {
+                    // No replies support
+                    $formattedReplies = collect([]);
+                    $total = 0;
+                }
+            }
+
+            $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
+
+            return response()->json([
+                'ok' => true,
+                'data' => [
+                    'replies' => $formattedReplies,
+                    'pagination' => [
+                        'current_page' => $page,
+                        'last_page' => $lastPage,
+                        'per_page' => $perPage,
+                        'total' => $total,
+                        'has_more' => $page < $lastPage,
+                    ],
+                    'comment_id' => $commentId,
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to get replies',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get reaction count for a reply
+     * 
+     * @param int $replyId
+     * @return int
+     */
+    private function getReplyReactionsCount(int $replyId): int
+    {
+        // Check if Wo_PostReactions table has replay_id column
+        if (!DB::getSchemaBuilder()->hasTable('Wo_PostReactions')) {
+            return 0;
+        }
+
+        $hasReplayId = DB::getSchemaBuilder()->hasColumn('Wo_PostReactions', 'replay_id');
+        
+        if ($hasReplayId) {
+            return DB::table('Wo_PostReactions')
+                ->where('replay_id', $replyId)
+                ->where('post_id', 0)
+                ->count();
+        }
+
+        return 0;
+    }
+
+    /**
+     * Get user's reaction for a reply
+     * 
+     * @param int $replyId
+     * @param string $userId
+     * @return int|null
+     */
+    private function getUserReplyReaction(int $replyId, string $userId): ?int
+    {
+        if (!DB::getSchemaBuilder()->hasTable('Wo_PostReactions')) {
+            return null;
+        }
+
+        $hasReplayId = DB::getSchemaBuilder()->hasColumn('Wo_PostReactions', 'replay_id');
+        
+        if ($hasReplayId) {
+            $reaction = DB::table('Wo_PostReactions')
+                ->where('replay_id', $replyId)
+                ->where('user_id', $userId)
+                ->where('post_id', 0)
+                ->first();
+            
+            return $reaction ? $reaction->reaction : null;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get user name helper
+     * 
+     * @param object|null $user
+     * @return string
+     */
+    private function getUserName($user): string
+    {
+        if (!$user) {
+            return 'Unknown User';
+        }
+        
+        if (isset($user->name) && !empty($user->name)) {
+            return $user->name;
+        }
+        
+        $firstName = $user->first_name ?? '';
+        $lastName = $user->last_name ?? '';
+        $fullName = trim($firstName . ' ' . $lastName);
+        if (!empty($fullName)) {
+            return $fullName;
+        }
+        
+        return $user->username ?? 'Unknown User';
+    }
+
+    /**
+     * Get human readable time
+     * 
+     * @param int $timestamp
+     * @return string
+     */
+    private function getHumanTime(int $timestamp): string
+    {
+        $time = time() - $timestamp;
+        
+        if ($time < 60) return 'Just now';
+        if ($time < 3600) return floor($time / 60) . 'm';
+        if ($time < 86400) return floor($time / 3600) . 'h';
+        if ($time < 2592000) return floor($time / 86400) . 'd';
+        if ($time < 31536000) return floor($time / 2592000) . 'mo';
+        return floor($time / 31536000) . 'y';
+    }
+
+    /**
+     * Get replies count for a comment
+     * 
+     * @param int $commentId
+     * @return int
+     */
+    private function getCommentRepliesCount(int $commentId): int
+    {
+        // Check if Wo_CommentReplies table exists
+        $hasRepliesTable = DB::getSchemaBuilder()->hasTable('Wo_CommentReplies');
+        
+        if ($hasRepliesTable) {
+            return DB::table('Wo_CommentReplies')
+                ->where('comment_id', $commentId)
+                ->count();
+        }
+        
+        // Check if parent_comment_id column exists in Wo_Comments
+        $hasParentColumn = DB::getSchemaBuilder()->hasColumn('Wo_Comments', 'parent_comment_id');
+        if ($hasParentColumn) {
+            return Comment::where('parent_comment_id', $commentId)->count();
+        }
+        
+        return 0;
+    }
+
+    /**
+     * Get preview of replies for a comment
+     * 
+     * @param int $commentId
+     * @param string $userId
+     * @param int $limit
+     * @return array
+     */
+    private function getCommentRepliesPreview(int $commentId, string $userId, int $limit = 3): array
+    {
+        // Check if Wo_CommentReplies table exists
+        $hasRepliesTable = DB::getSchemaBuilder()->hasTable('Wo_CommentReplies');
+        
+        if ($hasRepliesTable) {
+            $replies = DB::table('Wo_CommentReplies')
+                ->where('comment_id', $commentId)
+                ->orderBy('time', 'asc')
+                ->limit($limit)
+                ->get();
+
+            return $replies->map(function ($reply) use ($userId) {
+                $user = User::where('user_id', $reply->user_id)->first();
+                return [
+                    'id' => $reply->id,
+                    'text' => $reply->text,
+                    'is_owner' => $reply->user_id == $userId,
+                    'author' => [
+                        'user_id' => $user?->user_id ?? $reply->user_id,
+                        'username' => $user?->username ?? 'Unknown',
+                        'name' => $this->getUserName($user),
+                        'avatar_url' => ($user?->avatar) ? asset('storage/' . $user->avatar) : null,
+                    ],
+                    'created_at_human' => $this->getHumanTime($reply->time),
+                ];
+            })->toArray();
+        }
+        
+        // Check if parent_comment_id column exists
+        $hasParentColumn = DB::getSchemaBuilder()->hasColumn('Wo_Comments', 'parent_comment_id');
+        if ($hasParentColumn) {
+            $replies = Comment::where('parent_comment_id', $commentId)
+                ->orderBy('time', 'asc')
+                ->limit($limit)
+                ->get();
+            
+            return $replies->map(function ($reply) use ($userId) {
+                $formatted = $this->formatCommentData($reply, $userId);
+                $formatted['is_reply'] = true;
+                return $formatted;
+            })->toArray();
+        }
+        
+        return [];
+    }
+
+    /**
+     * Send notifications for new reply
+     * 
+     * @param Comment $parentComment
+     * @param Post $post
+     * @param string $userId
+     * @return void
+     */
+    private function sendReplyNotifications(Comment $parentComment, Post $post, string $userId): void
+    {
+        // In a real implementation, you would:
+        // 1. Notify the parent comment author
+        // 2. Notify the post author (if different)
+        // 3. Send push notifications if enabled
+        
+        Log::info("Reply created by user {$userId} on comment {$parentComment->id} for post {$post->id}");
     }
 
     /**
@@ -603,8 +1113,8 @@ class CommentController extends Controller
             'file_url' => $comment->file_url,
             'c_file' => $comment->c_file ?? '',
             'record' => $comment->record ?? '',
-            'is_reply' => $comment->is_reply, // Always false - replies not supported
-            'has_replies' => $comment->has_replies, // Always false - replies not supported
+            'is_reply' => false, // This is a top-level comment
+            'has_replies' => $this->getCommentRepliesCount($comment->id) > 0,
             'is_owner' => $comment->user_id == $userId,
             'author' => [
                 'user_id' => $comment->user->user_id ?? $comment->user_id,

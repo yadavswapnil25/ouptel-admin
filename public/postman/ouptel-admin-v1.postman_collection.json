@@ -36,7 +36,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"username\": \"john\",\n  \"password\": \"secret\"\n}"
+          "raw": "{\n  \"username\": \"swap_yadav\",\n  \"password\": \"Password.0!\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/api/v1/login",
@@ -388,8 +388,180 @@
       "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/my-products","host":["{{base_url}}"],"path":["api","v1","my-products"]}}
     },
     {
+      "name": "Market - Buy Products",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"address_id\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/market/buy",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","market","buy"]
+        },
+        "description": "Buy products from cart using wallet (matching old API: market.php?type=buy). address_id: shipping address ID. Requires items in cart (Wo_UserCard table). Deducts total amount from wallet, creates orders, and clears cart."
+      }
+    },
+    {
+      "name": "My Subscriptions",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/my-subscriptions?type=all&per_page=20&page=1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","my-subscriptions"],
+          "query": [
+            {"key":"type","value":"all","description":"Type filter: 'all' (default), 'users', 'pages', or 'groups'"},
+            {"key":"per_page","value":"20","description":"Number of items per page (default: 20, max: 100)"},
+            {"key":"page","value":"1","description":"Page number (default: 1)"}
+          ]
+        },
+        "description": "Get my subscriptions - users I follow, pages I like, and groups I joined. type: 'all' (returns all), 'users' (only users), 'pages' (only pages), 'groups' (only groups). Returns formatted data with subscription details and timestamps."
+      }
+    },
+    {
       "name": "Products - Purchased",
       "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/purchased-products","host":["{{base_url}}"],"path":["api","v1","purchased-products"]}}
+    },
+    {
+      "name": "Games - Unified Endpoint (Old API Style)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"get\",\n  \"limit\": 20,\n  \"offset\": 0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/games/handle",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","games","handle"]
+        },
+        "description": "Unified games endpoint matching old API structure (games.php). type: 'get' (all games), 'get_my' (my games), 'add_to_my' (add game), 'search' (search games), 'popular' (popular games). limit: number of games (default: 20, max: 50). offset: pagination offset (default: 0)."
+      }
+    },
+    {
+      "name": "Games - Get All",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"limit\": 20,\n  \"offset\": 0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/games/get?limit=20&offset=0",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","games","get"],
+          "query": [
+            {"key":"limit","value":"20","description":"Number of games to return (default: 20, max: 50)"},
+            {"key":"offset","value":"0","description":"Offset for pagination (default: 0)"}
+          ]
+        },
+        "description": "Get all active games (matching old API: games.php?type=get). limit: number of games (default: 20, max: 50). offset: pagination offset (default: 0)."
+      }
+    },
+    {
+      "name": "Games - Get My Games",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"limit\": 20,\n  \"offset\": 0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/games/get-my?limit=20&offset=0",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","games","get-my"],
+          "query": [
+            {"key":"limit","value":"20","description":"Number of games to return (default: 20, max: 50)"},
+            {"key":"offset","value":"0","description":"Offset for pagination (default: 0)"}
+          ]
+        },
+        "description": "Get games added to my list (matching old API: games.php?type=get_my). Requires authentication. limit: number of games (default: 20, max: 50). offset: pagination offset (default: 0)."
+      }
+    },
+    {
+      "name": "Games - Add to My Games",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"game_id\": 1\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/games/add-to-my",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","games","add-to-my"]
+        },
+        "description": "Add a game to my games list (matching old API: games.php?type=add_to_my). game_id: game ID to add. Requires authentication."
+      }
+    },
+    {
+      "name": "Games - Search",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"query\": \"puzzle\",\n  \"limit\": 20,\n  \"offset\": 0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/games/search",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","games","search"]
+        },
+        "description": "Search games by name, link, or description (matching old API: games.php?type=search). query: search term (required). limit: number of results (default: 20, max: 50). offset: pagination offset (default: 0)."
+      }
+    },
+    {
+      "name": "Games - Popular",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"limit\": 20,\n  \"offset\": 0\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/games/popular?limit=20&offset=0",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","games","popular"],
+          "query": [
+            {"key":"limit","value":"20","description":"Number of games to return (default: 20, max: 50)"},
+            {"key":"offset","value":"0","description":"Offset for pagination (default: 0)"}
+          ]
+        },
+        "description": "Get popular games sorted by players count (matching old API: games.php?type=popular). limit: number of games (default: 20, max: 50). offset: pagination offset (default: 0)."
+      }
     },
     {
       "name": "Products - Create",
@@ -2134,12 +2306,16 @@
           {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
         ],
         "url": {
-          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/comments?per_page=20",
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/comments?per_page=20&include_replies=true&include_replies_data=false",
           "host": ["{{base_url}}"],
           "path": ["api","v1","posts","{{post_id}}","comments"],
-          "query": [{"key":"per_page","value":"20"}]
+          "query": [
+            {"key":"per_page","value":"20","description":"Number of comments per page"},
+            {"key":"include_replies","value":"true","description":"Include replies count for each comment (default: false)"},
+            {"key":"include_replies_data","value":"false","description":"Include first 3 replies in response (default: false, requires include_replies=true)"}
+          ]
         },
-        "description": "Get all comments for a specific post with pagination"
+        "description": "Get all comments for a specific post with pagination. Each comment includes replies_count and has_replies fields. Optional: include_replies (boolean) to include replies count, include_replies_data (boolean) to include first 3 replies in response."
       }
     },
     {
@@ -2198,6 +2374,61 @@
       }
     },
     {
+      "name": "Comments - Reply to Comment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"text\": \"This is my reply to the comment\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/comments/{{comment_id}}/replies",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","comments","{{comment_id}}","replies"]
+        },
+        "description": "Reply to a comment. text: required (max 5000 chars). Optional: image (file upload), audio (file upload). Returns the created reply with author information."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "try {",
+              "  var json = pm.response.json();",
+              "  if (json && json.data && json.data.id) {",
+              "    pm.collectionVariables.set('reply_id', json.data.id);",
+              "  }",
+              "} catch (e) { }"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Comments - Get Replies",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/comments/{{comment_id}}/replies?per_page=10&page=1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","comments","{{comment_id}}","replies"],
+          "query": [
+            {"key":"per_page","value":"10","description":"Number of replies per page (default: 10, max: 50)"},
+            {"key":"page","value":"1","description":"Page number (default: 1)"}
+          ]
+        },
+        "description": "Get all replies for a specific comment with pagination. Returns replies with author information, reactions, and timestamps."
+      }
+    },
+    {
       "name": "Posts - Disable/Enable Comments (Old API Style)",
       "request": {
         "method": "POST",
@@ -2215,6 +2446,101 @@
           "path": ["api","v1","posts","disable-comment"]
         },
         "description": "Disable or enable comments on a post (matching old API: requests.php?f=posts&s=disable_comment). post_id: post ID. type: optional (0 = disable, 1 = enable). If type is not provided, toggles the current status. Only post owner, page admin, or group admin can disable/enable comments."
+      }
+    },
+    {
+      "name": "Wallet - Get Balance",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/wallet/balance",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","wallet","balance"]
+        },
+        "description": "Get current wallet balance and account balance for the authenticated user."
+      }
+    },
+    {
+      "name": "Wallet - Send Money",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": 123456,\n  \"amount\": 10.50\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/wallet/send",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","wallet","send"]
+        },
+        "description": "Send money from your wallet to another user (matching old API: wallet.php?type=send). user_id: recipient user ID. amount: amount to send (must be positive and not exceed your wallet balance)."
+      }
+    },
+    {
+      "name": "Wallet - Top Up",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"user_id\": {{user_id}},\n  \"amount\": 50.00,\n  \"payment_method\": \"paypal\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/wallet/top-up",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","wallet","top-up"]
+        },
+        "description": "Add money to wallet (matching old API: wallet.php?type=top_up). user_id: user ID to top up. amount: amount to add. payment_method: optional payment method name (e.g., paypal, razorpay)."
+      }
+    },
+    {
+      "name": "Wallet - Pay for Pro",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pay_type\": \"pro\",\n  \"pro_type\": \"star\",\n  \"price\": 9.99,\n  \"verified_badge\": false\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/wallet/pay",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","wallet","pay"]
+        },
+        "description": "Pay for pro membership using wallet (matching old API: wallet.php?type=pay&pay_type=pro). pay_type: 'pro'. pro_type: pro package type (e.g., star, hot, ultra). price: pro package price. verified_badge: optional boolean to include verified badge."
+      }
+    },
+    {
+      "name": "Wallet - Pay for Fund",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"pay_type\": \"fund\",\n  \"fund_id\": 123,\n  \"price\": 25.00\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/wallet/pay",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","wallet","pay"]
+        },
+        "description": "Donate to a fund using wallet (matching old API: wallet.php?type=pay&pay_type=fund). pay_type: 'fund'. fund_id: funding campaign ID. price: donation amount."
       }
     },
     {
