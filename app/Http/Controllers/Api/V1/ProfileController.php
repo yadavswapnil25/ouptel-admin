@@ -221,32 +221,36 @@ class ProfileController extends Controller
         $userData['is_following'] = 0;
         $userData['can_follow'] = 0;
         $userData['is_following_me'] = 0;
+        $userData['friend_request_sent'] = 0; // New field: 1 if request sent, 0 if not
 
-        // Check if logged user is following this profile
+        // Check if logged user is following this profile (active = 1 means accepted/following)
         $isFollowing = DB::table('Wo_Followers')
             ->where('following_id', $user->user_id)
             ->where('follower_id', $loggedUserId)
+            ->where(function($q) {
+                $q->where('active', '=', '1')
+                  ->orWhere('active', '=', 1);
+            })
             ->exists();
 
         if ($isFollowing) {
             $userData['is_following'] = 1;
             $userData['can_follow'] = 1;
         } else {
-            // Check if follow request is pending (table may not exist)
-            $isPending = false;
-            try {
-                $isPending = DB::table('Wo_FollowRequests')
-                    ->where('recipient_id', $user->user_id)
-                    ->where('user_id', $loggedUserId)
-                    ->exists();
-            } catch (\Exception $e) {
-                // Table doesn't exist, assume no pending requests
-                $isPending = false;
-            }
+            // Check if friend request is pending (active = 0 means pending request)
+            $isPendingRequest = DB::table('Wo_Followers')
+                ->where('following_id', $user->user_id) // Profile user receives the request
+                ->where('follower_id', $loggedUserId) // Logged user sent the request
+                ->where(function($q) {
+                    $q->where('active', '=', '0')
+                      ->orWhere('active', '=', 0);
+                })
+                ->exists();
 
-            if ($isPending) {
+            if ($isPendingRequest) {
                 $userData['is_following'] = 2; // Pending request
                 $userData['can_follow'] = 1;
+                $userData['friend_request_sent'] = 1; // Request sent by logged user
             } else {
                 // Check follow privacy
                 if ($user->follow_privacy == 1) {
@@ -254,6 +258,10 @@ class ProfileController extends Controller
                     $isFollower = DB::table('Wo_Followers')
                         ->where('following_id', $loggedUserId)
                         ->where('follower_id', $user->user_id)
+                        ->where(function($q) {
+                            $q->where('active', '=', '1')
+                              ->orWhere('active', '=', 1);
+                        })
                         ->exists();
                     if ($isFollower) {
                         $userData['can_follow'] = 1;
@@ -264,12 +272,27 @@ class ProfileController extends Controller
             }
         }
 
-        // Check if this user is following the logged user
+        // Check if this user is following the logged user (active = 1 means accepted/following)
         $isFollowingMe = DB::table('Wo_Followers')
             ->where('following_id', $loggedUserId)
             ->where('follower_id', $user->user_id)
+            ->where(function($q) {
+                $q->where('active', '=', '1')
+                  ->orWhere('active', '=', 1);
+            })
             ->exists();
         $userData['is_following_me'] = $isFollowingMe ? 1 : 0;
+        
+        // Check if profile user has sent a friend request to logged user (pending request)
+        $hasRequestFromProfileUser = DB::table('Wo_Followers')
+            ->where('following_id', $loggedUserId) // Logged user receives the request
+            ->where('follower_id', $user->user_id) // Profile user sent the request
+            ->where(function($q) {
+                $q->where('active', '=', '0')
+                  ->orWhere('active', '=', 0);
+            })
+            ->exists();
+        $userData['friend_request_received'] = $hasRequestFromProfileUser ? 1 : 0; // 1 if profile user sent request to logged user
 
         // Add counts
         $userData['post_count'] = DB::table('Wo_Posts')
