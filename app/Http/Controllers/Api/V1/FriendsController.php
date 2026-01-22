@@ -470,25 +470,14 @@ class FriendsController extends Controller
                     $this->updateFollowCounts($tokenUserId, $recipientId);
                 }
             } else {
-                // Check if recipient requires follow approval
-                // Handle both string and integer values for confirm_followers and follow_privacy
-                $requiresApproval = false;
-                
-                // Check confirm_followers setting (handle both '1' and 1)
-                $confirmFollowers = $recipientData->confirm_followers ?? null;
-                if (in_array($confirmFollowers, ['1', 1, true])) {
-                    $requiresApproval = true;
-                } 
-                // Check follow_privacy setting (2 = only friends can follow)
-                elseif (in_array($recipientData->follow_privacy ?? null, ['2', 2])) {
-                    // Only friends can follow - check if they're friends
-                    $requiresApproval = !$this->isFriend($tokenUserId, $recipientId);
-                }
+                // Friend requests should ALWAYS require approval (pending state)
+                // This creates a proper "friend request" system where users must accept requests
+                // All requests are stored as pending (active = 0) until recipient accepts
+                $requiresApproval = true;
 
                 // Register follow (matching old API: Wo_RegisterFollow)
-                // Determine active value - use integer 0 for pending, 1 for accepted
-                // This ensures consistency with database storage
-                $activeValue = $requiresApproval ? 0 : 1;
+                // Always use 0 for pending requests
+                $activeValue = 0; // Always pending until accepted
                 
                 $followData = [
                     'follower_id' => $tokenUserId,
@@ -518,7 +507,7 @@ class FriendsController extends Controller
             // Return response matching old API format
             return response()->json([
                 'api_status' => 200,
-                'follow_status' => $followMessage
+                'follow_status' => $followMessage,
             ]);
 
         } catch (\Exception $e) {
