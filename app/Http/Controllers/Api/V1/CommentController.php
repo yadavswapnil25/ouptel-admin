@@ -179,20 +179,24 @@ class CommentController extends Controller
 
             $comments = $query->paginate($perPage, ['*'], 'page', $page);
 
-            $includeReplies = $request->input('include_replies', false);
+            $includeReplies = $request->input('include_replies', true); // Default to true
+            $includeRepliesData = $request->input('include_replies_data', true); // Default to true - include replies in response
+            $repliesLimit = (int) ($request->input('replies_limit', 3));
+            $repliesLimit = max(1, min($repliesLimit, 10)); // Limit between 1-10
             
-            $formattedComments = $comments->map(function ($comment) use ($tokenUserId, $includeReplies) {
+            $formattedComments = $comments->map(function ($comment) use ($tokenUserId, $includeReplies, $includeRepliesData, $repliesLimit) {
                 $formatted = $this->formatCommentData($comment, $tokenUserId);
                 
-                // Optionally include replies count
-                if ($includeReplies) {
-                    $formatted['replies_count'] = $this->getCommentRepliesCount($comment->id);
-                    // Optionally include first few replies
-                    if ($request->input('include_replies_data', false)) {
-                        $formatted['replies'] = $this->getCommentRepliesPreview($comment->id, $tokenUserId, 3);
-                    }
+                // Always include replies count
+                $repliesCount = $this->getCommentRepliesCount($comment->id);
+                $formatted['replies_count'] = $repliesCount;
+                
+                // Include replies data if requested (default: true)
+                if ($includeReplies && $includeRepliesData && $repliesCount > 0) {
+                    // Get first few replies (default: 3)
+                    $formatted['replies'] = $this->getCommentRepliesPreview($comment->id, $tokenUserId, $repliesLimit);
                 } else {
-                    $formatted['replies_count'] = $this->getCommentRepliesCount($comment->id);
+                    $formatted['replies'] = [];
                 }
                 
                 return $formatted;
@@ -1126,7 +1130,7 @@ class CommentController extends Controller
             'created_at_human' => $comment->human_time,
             'reaction_counts' => $comment->reaction_counts,
             'total_reactions' => $comment->total_reactions,
-            'replies_count' => 0, // Replies not supported
+            'replies_count' => $this->getCommentRepliesCount($comment->id),
             'user_reaction' => $comment->getUserReaction($userId),
         ];
     }
