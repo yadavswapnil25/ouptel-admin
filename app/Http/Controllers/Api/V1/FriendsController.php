@@ -259,7 +259,11 @@ class FriendsController extends Controller
             // Handle both string '0' and integer 0 for active field
             $query = DB::table('Wo_Followers')
                 ->where('following_id', $tokenUserId) // Requests received by current user
-                ->whereIn('active', ['0', 0]); // Pending requests (handle both string and integer)
+                ->where(function($q) {
+                    // Check for both string '0' and integer 0
+                    $q->where('active', '=', '0')
+                      ->orWhere('active', '=', 0);
+                }); // Pending requests
 
             // Get total count
             $total = $query->count();
