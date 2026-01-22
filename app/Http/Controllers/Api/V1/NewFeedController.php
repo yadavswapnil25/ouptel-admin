@@ -84,9 +84,9 @@ class NewFeedController extends Controller
         $page = (int) ($request->query('page', 1));
         $page = max(1, $page);
 
-        // Get filter parameter (Image, File, Jobs, Audio, Video, Blogs, Articles)
+        // Get filter parameter (Image, File, Jobs, Audio, Video, Blogs, Articles, Feeling)
         $filter = $request->query('filter');
-        $validFilters = ['image', 'file', 'jobs', 'audio', 'video', 'blogs', 'articles'];
+        $validFilters = ['image', 'file', 'jobs', 'audio', 'video', 'blogs', 'articles', 'feeling'];
         if ($filter && !in_array(strtolower($filter), $validFilters)) {
             return response()->json([
                 'ok' => false,
@@ -302,6 +302,12 @@ class NewFeedController extends Controller
                           });
                     });
                     break;
+                
+                case 'feeling':
+                    // Filter for feeling posts only
+                    $query->whereNotNull('postFeeling')
+                          ->where('postFeeling', '!=', '');
+                    break;
             }
         }
 
@@ -389,6 +395,12 @@ class NewFeedController extends Controller
                 $colorData = $this->getColorData($colorId);
             }
             
+            // Get feeling data if it's a feeling post
+            $feelingData = null;
+            if (!empty($post->postFeeling)) {
+                $feelingData = $this->getFeelingData($post->postFeeling);
+            }
+            
             return [
                 'id' => $post->id,
                 'post_id' => $post->post_id ?? $post->id,
@@ -433,6 +445,11 @@ class NewFeedController extends Controller
                 // Color data (for colored posts)
                 'color_id' => $post->color_id ?? null,
                 'color' => $colorData,
+                
+                // Feeling data (for feeling posts)
+                'post_feeling' => $post->postFeeling ?? null,
+                'feeling' => $feelingData,
+                'is_feeling_post' => !empty($post->postFeeling),
                 
                 // Engagement metrics
                 'reactions_count' => $reactionsCount,
@@ -827,5 +844,62 @@ class NewFeedController extends Controller
             // If query fails, return null
             return null;
         }
+    }
+
+    /**
+     * Get feeling data for a feeling post
+     * 
+     * @param string $feelingKey
+     * @return array|null
+     */
+    private function getFeelingData(string $feelingKey): ?array
+    {
+        $feelingIcons = [
+            'happy' => 'smile',
+            'loved' => 'heart-eyes',
+            'sad' => 'disappointed',
+            'so_sad' => 'sob',
+            'angry' => 'angry',
+            'confused' => 'confused',
+            'smirk' => 'smirk',
+            'broke' => 'broken-heart',
+            'expressionless' => 'expressionless',
+            'cool' => 'sunglasses',
+            'funny' => 'joy',
+            'tired' => 'tired-face',
+            'lovely' => 'heart',
+            'blessed' => 'innocent',
+            'shocked' => 'scream',
+            'sleepy' => 'sleeping',
+            'pretty' => 'relaxed',
+            'bored' => 'unamused'
+        ];
+        
+        $feelingLabels = [
+            'happy' => 'Happy',
+            'loved' => 'Loved',
+            'sad' => 'Sad',
+            'so_sad' => 'So Sad',
+            'angry' => 'Angry',
+            'confused' => 'Confused',
+            'smirk' => 'Smirk',
+            'broke' => 'Broke',
+            'expressionless' => 'Expressionless',
+            'cool' => 'Cool',
+            'funny' => 'Funny',
+            'tired' => 'Tired',
+            'lovely' => 'Lovely',
+            'blessed' => 'Blessed',
+            'shocked' => 'Shocked',
+            'sleepy' => 'Sleepy',
+            'pretty' => 'Pretty',
+            'bored' => 'Bored'
+        ];
+
+        return [
+            'key' => $feelingKey,
+            'label' => $feelingLabels[$feelingKey] ?? ucfirst($feelingKey),
+            'icon' => $feelingIcons[$feelingKey] ?? 'smile',
+        ];
     }
 }

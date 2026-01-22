@@ -271,12 +271,8 @@ class GamesController extends BaseController
             ->where('active', 1)
             ->where(function ($q) use ($like) {
                 $q->where('game_name', 'LIKE', $like)
-                  ->orWhere('game_link', 'LIKE', $like);
-                
-                // Only search in game_description if column exists
-                if (Schema::hasColumn('Wo_Games', 'game_description')) {
-                    $q->orWhere('game_description', 'LIKE', $like);
-                }
+                  ->orWhere('game_link', 'LIKE', $like)
+                  ->orWhere('game_description', 'LIKE', $like);
             })
             ->orderByDesc('id');
 
