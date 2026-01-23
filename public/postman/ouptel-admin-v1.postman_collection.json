@@ -3695,6 +3695,26 @@
       }
     },
     {
+      "name": "Notifications - Mark All as Seen",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/mark-all-seen",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","notifications","mark-all-seen"]
+        },
+        "description": "Mark all notifications as seen (matching old API: get_notifications.php?seen=1). Updates all unseen notifications to seen=time(). Returns updated_count with number of notifications marked as seen."
+      }
+    },
+    {
       "name": "Notifications - Delete Notification",
       "request": {
         "method": "POST",

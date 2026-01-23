@@ -337,6 +337,7 @@ Route::post('/notifications/settings/disable-all', [NotificationSettingsControll
 
 // Notifications routes (matching old API structure: requests.php?f=get_notifications)
 Route::post('/notifications/get', [NotificationsController::class, 'getNotifications']); // Get notifications (old API: get_notifications)
+Route::post('/notifications/mark-all-seen', [NotificationsController::class, 'markAllSeen']); // Mark all notifications as seen (old API: get_notifications.php?seen=1)
 Route::post('/notifications/delete', [NotificationsController::class, 'delete']); // Delete notification (old API: notifications.php?type=delete)
 Route::post('/notifications/stop-notify', [NotificationsController::class, 'stopNotify']); // Stop notify from user (old API: stop_notify.php)
 
