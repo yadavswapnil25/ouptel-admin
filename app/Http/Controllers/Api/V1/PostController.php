@@ -214,19 +214,19 @@ class PostController extends Controller
             // Handle file uploads
             $postPhotoPath = '';
             $postFilePath = '';
-            $postVideoPath = '';
             $postRecordPath = '';
+            $isVideoFile = false;
 
             if ($postPhoto) {
                 $postPhotoPath = $this->handleFileUpload($postPhoto, 'posts/photos', 'photo');
             }
 
-            if ($postFile) {
-                $postFilePath = $this->handleFileUpload($postFile, 'posts/files', 'file');
-            }
-
+            // Handle video files - store in postFile (matching old WoWonder behavior)
             if ($postVideo) {
-                $postVideoPath = $this->handleFileUpload($postVideo, 'posts/videos', 'video');
+                $postFilePath = $this->handleFileUpload($postVideo, 'posts/videos', 'video');
+                $isVideoFile = true;
+            } elseif ($postFile) {
+                $postFilePath = $this->handleFileUpload($postFile, 'posts/files', 'file');
             }
 
             if ($postRecord) {
@@ -234,7 +234,7 @@ class PostController extends Controller
             }
 
             // Determine post type
-            $postType = $this->determinePostType($request, $postPhotoPath, $postFilePath, $postRecordPath, $postVideoPath);
+            $postType = $this->determinePostType($request, $postPhotoPath, $postFilePath, $postRecordPath, $isVideoFile);
 
             // Prepare post data with proper null handling
             $postData = [
@@ -254,9 +254,8 @@ class PostController extends Controller
                 'postDailymotion' => $request->input('postDailymotion', ''),
                 'postFacebook' => $request->input('postFacebook', ''),
                 'postFile' => $postFilePath,
-                'postFileName' => $postFile ? $postFile->getClientOriginalName() : '',
+                'postFileName' => ($postVideo ? $postVideo : $postFile) ? (($postVideo ? $postVideo : $postFile)->getClientOriginalName()) : '',
                 'postFileThumb' => $this->generateFileThumbnail($postFilePath),
-                'postVideo' => $postVideoPath,
                 'postYoutube' => $postYoutube,
                 'postVine' => $request->input('postVine', ''),
                 'postSoundCloud' => $request->input('postSoundCloud', ''),
@@ -441,7 +440,7 @@ class PostController extends Controller
             // Clean up uploaded files if post creation failed
             if ($postPhotoPath) Storage::delete($postPhotoPath);
             if ($postFilePath) Storage::delete($postFilePath);
-            if ($postVideoPath) Storage::delete($postVideoPath);
+            // Video files are stored in postFile, so they're handled by postFilePath cleanup above
             if ($postRecordPath) Storage::delete($postRecordPath);
 
             return response()->json([
@@ -503,10 +502,10 @@ class PostController extends Controller
      * @param string|null $postPhotoPath
      * @param string|null $postFilePath
      * @param string|null $postRecordPath
-     * @param string|null $postVideoPath
+     * @param bool $isVideoFile
      * @return string
      */
-    private function determinePostType(Request $request, ?string $postPhotoPath, ?string $postFilePath, ?string $postRecordPath, ?string $postVideoPath = null): string
+    private function determinePostType(Request $request, ?string $postPhotoPath, ?string $postFilePath, ?string $postRecordPath, bool $isVideoFile = false): string
     {
         // Check for GIF first (GIF URLs are stored in postPhotoPath)
         if ($request->input('postGif')) return 'gif';
@@ -514,7 +513,8 @@ class PostController extends Controller
             return 'gif';
         }
         if ($postPhotoPath) return 'photo';
-        if ($postVideoPath) return 'video';
+        // Check if postFile is a video (matching old WoWonder behavior)
+        if ($isVideoFile && $postFilePath) return 'video';
         if ($postRecordPath) return 'audio';
         if ($postFilePath) return 'file';
         if ($request->input('postYoutube') || $request->input('postVimeo') || $request->input('postFacebook') || $request->input('postPlaytube')) return 'video';
@@ -865,8 +865,8 @@ class PostController extends Controller
             'post_photo_url' => $this->getPostPhotoUrl($post),
             'post_file' => $post->postFile,
             'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
-            'post_video' => $post->postVideo ?? null,
-            'post_video_url' => $post->postVideo ? asset('storage/' . $post->postVideo) : null,
+            'post_video' => ($post->postType === 'video' && !empty($post->postFile)) ? $post->postFile : null,
+            'post_video_url' => ($post->postType === 'video' && !empty($post->postFile)) ? asset('storage/' . $post->postFile) : null,
             'post_youtube' => $post->postYoutube,
             'post_link' => $post->postLink,
             'post_link_title' => $post->postLinkTitle,
@@ -2004,8 +2004,8 @@ class PostController extends Controller
             'post_file' => $post->postFile ?? '',
             'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
             'post_file_thumb' => $post->postFileThumb ? asset('storage/' . $post->postFileThumb) : null,
-            'post_video' => $post->postVideo ?? '',
-            'post_video_url' => $post->postVideo ? asset('storage/' . $post->postVideo) : null,
+            'post_video' => ($post->postType === 'video' && !empty($post->postFile)) ? $post->postFile : '',
+            'post_video_url' => ($post->postType === 'video' && !empty($post->postFile)) ? asset('storage/' . $post->postFile) : null,
             'post_record' => $post->postRecord ?? '',
             'post_record_url' => $post->postRecord ? asset('storage/' . $post->postRecord) : null,
             'post_youtube' => $post->postYoutube ?? '',
