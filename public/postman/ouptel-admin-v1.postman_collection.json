@@ -2,7 +2,7 @@
   "info": {
     "name": "Ouptel Admin API v1",
     "_postman_id": "c2a9ec9d-6d8b-4b1e-9d2e-ouptel-admin-v1",
-    "description": "Complete API collection for Ouptel Admin Panel - includes authentication, posts, comments, social features, and comprehensive settings management (12 setting categories). All APIs mimic old WoWonder API structure for backward compatibility.",
+    "description": "Complete API collection for Ouptel Admin Panel - includes authentication, posts, comments, social features, account verification with Blue & Golden badges, and comprehensive settings management (12 setting categories). All APIs mimic old WoWonder API structure for backward compatibility.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -3695,26 +3695,6 @@
       }
     },
     {
-      "name": "Notifications - Mark All as Seen",
-      "request": {
-        "method": "POST",
-        "header": [
-          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
-          {"key":"Content-Type","value":"application/json","type":"text"}
-        ],
-        "body": {
-          "mode": "raw",
-          "raw": "{}"
-        },
-        "url": {
-          "raw": "{{base_url}}/api/v1/notifications/mark-all-seen",
-          "host": ["{{base_url}}"],
-          "path": ["api","v1","notifications","mark-all-seen"]
-        },
-        "description": "Mark all notifications as seen (matching old API: get_notifications.php?seen=1). Updates all unseen notifications to seen=time(). Returns updated_count with number of notifications marked as seen."
-      }
-    },
-    {
       "name": "Notifications - Delete Notification",
       "request": {
         "method": "POST",
@@ -4064,6 +4044,127 @@
         },
         "description": "Get all active announcements with viewed status for the current user. Returns array of announcements with: id, text (HTML), text_decode (plain text), time, time_text, active, viewed (boolean)."
       }
+    },
+    {
+      "name": "Account Verification - Get Options",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/verification/options",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","verification","options"]
+        },
+        "description": "Get available ID proof types and badge types for account verification.\n\nID Proof Types:\n- aadhar: Aadhar Card\n- voter_id: Voter ID\n- passport: Passport\n- driving_license: Driving License\n- pan_card: PAN Card\n\nBadge Types:\n- blue: Blue Badge (for all regular users)\n- golden: Golden Badge (for VIPs, Celebrities and Well Known People)"
+      }
+    },
+    {
+      "name": "Account Verification - Submit Request",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"id_proof_type","value":"aadhar","type":"text","description":"Type of ID proof: aadhar, voter_id, passport, driving_license, pan_card"},
+            {"key":"id_proof_number","value":"1234-5678-9012","type":"text","description":"ID proof number"},
+            {"key":"id_proof_front_image","type":"file","description":"Front image of ID proof (JPEG/PNG, max 5MB)"},
+            {"key":"id_proof_back_image","type":"file","description":"Back image of ID proof (JPEG/PNG, max 5MB)"},
+            {"key":"badge_type","value":"blue","type":"text","description":"Type of badge: blue or golden"}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/verification/submit",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","verification","submit"]
+        },
+        "description": "Submit account verification request for Blue or Golden badge.\n\nRequired Fields:\n- id_proof_type: Government ID type (aadhar, voter_id, passport, driving_license, pan_card)\n- id_proof_number: ID proof number\n- id_proof_front_image: Front side image of ID (file upload, max 5MB)\n- id_proof_back_image: Back side image of ID (file upload, max 5MB)\n- badge_type: blue (for all users) or golden (for VIPs/Celebrities)\n\nNote: User cannot submit if already verified or has a pending request."
+      }
+    },
+    {
+      "name": "Account Verification - Get Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/verification/status",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","verification","status"]
+        },
+        "description": "Get current verification status for the logged-in user.\n\nReturns:\n- is_verified: Whether user is currently verified\n- current_badge_type: blue or golden (if verified)\n- verification_request: Latest verification request details including status, rejection reason, timestamps"
+      }
+    },
+    {
+      "name": "Account Verification - Get History",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/verification/history",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","verification","history"]
+        },
+        "description": "Get all verification request history for the logged-in user.\n\nReturns array of all verification requests with:\n- id_proof_type and name\n- badge_type and name\n- status (pending/approved/rejected)\n- rejection_reason and text (if rejected)\n- submitted_at and reviewed_at timestamps"
+      }
+    },
+    {
+      "name": "Account Verification - Resubmit",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key":"id_proof_type","value":"passport","type":"text","description":"Type of ID proof: aadhar, voter_id, passport, driving_license, pan_card"},
+            {"key":"id_proof_number","value":"A1234567","type":"text","description":"ID proof number"},
+            {"key":"id_proof_front_image","type":"file","description":"Front image of ID proof (JPEG/PNG, max 5MB)"},
+            {"key":"id_proof_back_image","type":"file","description":"Back image of ID proof (JPEG/PNG, max 5MB)"},
+            {"key":"badge_type","value":"blue","type":"text","description":"Type of badge: blue or golden"}
+          ]
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/verification/resubmit",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","verification","resubmit"]
+        },
+        "description": "Resubmit verification request after a previous rejection.\n\nSame parameters as Submit Request. Use this endpoint specifically after a rejection to submit corrected documents.\n\nNote: Will fail if no previous rejected request exists or if there's already a pending request."
+      }
+    },
+    {
+      "name": "Account Verification - Cancel Request",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/verification/cancel",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","verification","cancel"]
+        },
+        "description": "Cancel a pending verification request.\n\nThis will delete the pending request and remove uploaded ID proof images.\n\nNote: Only works if there is a pending request. Cannot cancel approved or rejected requests."
+      }
+    },
+    {
+      "name": "Account Verification - Get User Badge",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/users/1/badge",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","users","1","badge"]
+        },
+        "description": "Get badge information for any user (public endpoint).\n\nReplace '1' with the actual user_id.\n\nReturns:\n- user_id and username\n- is_verified: boolean\n- badge_type: blue or golden (null if not verified)\n- badge_info: Object with type, name, and description\n\nBadge Descriptions:\n- Blue Badge: 'This user has verified their identity.'\n- Golden Badge: 'This user is a verified VIP, Celebrity or Well Known Person.'"
+      }
     }
   ],
   "variable": [
@@ -4090,6 +4191,14 @@
     {
       "key": "story_id",
       "value": ""
+    },
+    {
+      "key": "verification_id",
+      "value": ""
+    },
+    {
+      "key": "target_user_id",
+      "value": "1"
     }
   ]
 }

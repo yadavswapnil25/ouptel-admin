@@ -50,6 +50,7 @@ use App\Http\Controllers\Api\V1\ShareController;
 use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\Api\V1\SubscriptionsController;
 use App\Http\Controllers\Api\V1\AnnouncementsController;
+use App\Http\Controllers\Api\V1\AccountVerificationController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -337,7 +338,6 @@ Route::post('/notifications/settings/disable-all', [NotificationSettingsControll
 
 // Notifications routes (matching old API structure: requests.php?f=get_notifications)
 Route::post('/notifications/get', [NotificationsController::class, 'getNotifications']); // Get notifications (old API: get_notifications)
-Route::post('/notifications/mark-all-seen', [NotificationsController::class, 'markAllSeen']); // Mark all notifications as seen (old API: get_notifications.php?seen=1)
 Route::post('/notifications/delete', [NotificationsController::class, 'delete']); // Delete notification (old API: notifications.php?type=delete)
 Route::post('/notifications/stop-notify', [NotificationsController::class, 'stopNotify']); // Stop notify from user (old API: stop_notify.php)
 
@@ -371,4 +371,14 @@ Route::get('/countries/meta', [CountriesController::class, 'meta']); // Get coun
 Route::get('/announcements/home', [AnnouncementsController::class, 'getHomeAnnouncement']); // Get home announcement (old API: Wo_GetHomeAnnouncements)
 Route::post('/announcements/mark-viewed', [AnnouncementsController::class, 'markAsViewed']); // Mark announcement as viewed
 Route::get('/announcements', [AnnouncementsController::class, 'getAllActive']); // Get all active announcements
+
+// Account Verification routes (Blue & Golden Badge)
+// Settings -> Verify Account feature for end users
+Route::get('/verification/options', [AccountVerificationController::class, 'getVerificationOptions']); // Get available ID proof types and badge types
+Route::post('/verification/submit', [AccountVerificationController::class, 'submit']); // Submit verification request
+Route::get('/verification/status', [AccountVerificationController::class, 'getStatus']); // Get current verification status
+Route::get('/verification/history', [AccountVerificationController::class, 'getHistory']); // Get verification history
+Route::post('/verification/resubmit', [AccountVerificationController::class, 'resubmit']); // Resubmit after rejection
+Route::post('/verification/cancel', [AccountVerificationController::class, 'cancel']); // Cancel pending request
+Route::get('/users/{userId}/badge', [AccountVerificationController::class, 'getUserBadge']); // Get user's badge info (public)
 

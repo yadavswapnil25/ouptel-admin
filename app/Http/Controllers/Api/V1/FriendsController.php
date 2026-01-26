@@ -28,189 +28,28 @@ class FriendsController extends Controller
         $type = $request->query('type', 'all');
         $perPage = (int) ($request->query('per_page', 12));
         $perPage = max(1, min($perPage, 50));
-        $page = (int) ($request->query('page', 1));
-        $page = max(1, $page);
 
-        try {
-            // Check if Wo_Followers table exists
-            if (!Schema::hasTable('Wo_Followers')) {
-                return response()->json([
-                    'ok' => true,
-                    'data' => [],
-                    'meta' => [
-                        'current_page' => $page,
-                        'per_page' => $perPage,
-                        'total' => 0,
-                        'last_page' => 1,
-                    ],
-                ]);
-            }
+        // Note: Wo_Friends table doesn't exist, so return empty results
+        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
+            collect([]), // Empty collection
+            0, // Total count
+            $perPage, // Per page
+            1, // Current page
+            ['path' => $request->url()]
+        );
 
-            // Get friends (mutual followers - users who both follow each other with active = '1')
-            // WoWonder logic: Friends = users where current user follows them AND they follow current user back
-            
-            // Step 1: Get IDs of users that current user is following (active = '1')
-            $followingIds = DB::table('Wo_Followers')
-                ->where('follower_id', $tokenUserId)
-                ->whereIn('active', ['1', 1])
-                ->pluck('following_id')
-                ->toArray();
+        $data = [];
 
-            if (empty($followingIds)) {
-                return response()->json([
-                    'ok' => true,
-                    'data' => [],
-                    'meta' => [
-                        'current_page' => $page,
-                        'per_page' => $perPage,
-                        'total' => 0,
-                        'last_page' => 1,
-                    ],
-                ]);
-            }
-
-            // Step 2: Get IDs of users who follow current user back (mutual = friends)
-            $friendIds = DB::table('Wo_Followers')
-                ->where('following_id', $tokenUserId)
-                ->whereIn('follower_id', $followingIds)
-                ->whereIn('active', ['1', 1])
-                ->pluck('follower_id')
-                ->toArray();
-
-            if (empty($friendIds)) {
-                return response()->json([
-                    'ok' => true,
-                    'data' => [],
-                    'meta' => [
-                        'current_page' => $page,
-                        'per_page' => $perPage,
-                        'total' => 0,
-                        'last_page' => 1,
-                    ],
-                ]);
-            }
-
-            // Get total count
-            $total = count($friendIds);
-
-            // Get paginated friend user data
-            $offset = ($page - 1) * $perPage;
-            $paginatedFriendIds = array_slice($friendIds, $offset, $perPage);
-
-            $friendsData = DB::table('Wo_Users')
-                ->whereIn('user_id', $paginatedFriendIds)
-                ->whereIn('active', ['1', 1])
-                ->orderByDesc('lastseen')
-                ->get();
-
-            // Format friends data
-            $data = [];
-            foreach ($friendsData as $friend) {
-                // Get mutual friends count
-                $mutualFriendsCount = $this->getMutualFriendsCount($tokenUserId, $friend->user_id, $friendIds);
-
-                $data[] = [
-                    'user_id' => $friend->user_id,
-                    'username' => $friend->username ?? 'Unknown',
-                    'name' => $this->getUserName($friend),
-                    'first_name' => $friend->first_name ?? '',
-                    'last_name' => $friend->last_name ?? '',
-                    'email' => $friend->email ?? '',
-                    'avatar' => $friend->avatar ?? '',
-                    'avatar_url' => $friend->avatar ? asset('storage/' . $friend->avatar) : null,
-                    'cover' => $friend->cover ?? '',
-                    'cover_url' => $friend->cover ? asset('storage/' . $friend->cover) : null,
-                    'verified' => (bool) ($friend->verified ?? false),
-                    'is_following' => true, // They are mutual friends
-                    'is_following_me' => true, // They are mutual friends
-                    'is_friend' => true,
-                    'mutual_friends_count' => $mutualFriendsCount,
-                    'lastseen' => $friend->lastseen ?? time(),
-                    'lastseen_time_text' => $this->getTimeElapsedString($friend->lastseen ?? time()),
-                ];
-            }
-
-            // Calculate pagination metadata
-            $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
-
-            return response()->json([
-                'ok' => true,
-                'data' => $data,
-                'meta' => [
-                    'current_page' => $page,
-                    'per_page' => $perPage,
-                    'total' => $total,
-                    'last_page' => $lastPage,
-                    'from' => $total > 0 ? $offset + 1 : 0,
-                    'to' => min($offset + $perPage, $total),
-                    'has_more' => $page < $lastPage,
-                ],
-            ]);
-
-        } catch (\Exception $e) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Failed to fetch friends: ' . $e->getMessage(),
-                'data' => [],
-                'meta' => [
-                    'current_page' => $page,
-                    'per_page' => $perPage,
-                    'total' => 0,
-                    'last_page' => 1,
-                ],
-            ], 500);
-        }
-    }
-
-    /**
-     * Get mutual friends count between two users
-     * 
-     * @param string $userId1
-     * @param string $userId2
-     * @param array $user1FriendIds Optional pre-fetched friend IDs for user1
-     * @return int
-     */
-    private function getMutualFriendsCount(string $userId1, string $userId2, array $user1FriendIds = []): int
-    {
-        // Get user2's friends (mutual followers)
-        $user2FollowingIds = DB::table('Wo_Followers')
-            ->where('follower_id', $userId2)
-            ->whereIn('active', ['1', 1])
-            ->pluck('following_id')
-            ->toArray();
-
-        if (empty($user2FollowingIds)) {
-            return 0;
-        }
-
-        $user2FriendIds = DB::table('Wo_Followers')
-            ->where('following_id', $userId2)
-            ->whereIn('follower_id', $user2FollowingIds)
-            ->whereIn('active', ['1', 1])
-            ->pluck('follower_id')
-            ->toArray();
-
-        // If user1 friend IDs not provided, fetch them
-        if (empty($user1FriendIds)) {
-            $user1FollowingIds = DB::table('Wo_Followers')
-                ->where('follower_id', $userId1)
-                ->whereIn('active', ['1', 1])
-                ->pluck('following_id')
-                ->toArray();
-
-            $user1FriendIds = DB::table('Wo_Followers')
-                ->where('following_id', $userId1)
-                ->whereIn('follower_id', $user1FollowingIds)
-                ->whereIn('active', ['1', 1])
-                ->pluck('follower_id')
-                ->toArray();
-        }
-
-        // Count mutual friends (excluding user2 from the count)
-        $mutualFriends = array_intersect($user1FriendIds, $user2FriendIds);
-        $mutualFriends = array_diff($mutualFriends, [$userId2]); // Exclude user2 from count
-
-        return count($mutualFriends);
+        return response()->json([
+            'ok' => true,
+            'data' => $data,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+            ],
+        ]);
     }
 
     public function search(Request $request): JsonResponse
