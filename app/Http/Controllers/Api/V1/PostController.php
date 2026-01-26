@@ -947,7 +947,7 @@ class PostController extends Controller
                 'type' => 'feeling',
                 'label' => 'Feeling',
                 'value' => $post->postFeeling,
-                'text' => "is feeling {$feelingData['name']}",
+                'text' => "is feeling {$feelingData['label']}",
                 'icon' => $feelingData['icon'] ?? null,
             ];
         }
@@ -956,35 +956,60 @@ class PostController extends Controller
     }
 
     /**
-     * Get feeling data (icon and name)
+     * Get feeling data (matching new-feed format)
      * 
-     * @param string $feeling
-     * @return array
+     * @param string $feelingKey
+     * @return array|null
      */
-    private function getFeelingData(string $feeling): array
+    private function getFeelingData(string $feelingKey): ?array
     {
-        $feelings = [
-            'happy' => ['name' => 'Happy', 'icon' => '😊'],
-            'loved' => ['name' => 'Loved', 'icon' => '❤️'],
-            'sad' => ['name' => 'Sad', 'icon' => '😢'],
-            'so_sad' => ['name' => 'Very Sad', 'icon' => '😭'],
-            'angry' => ['name' => 'Angry', 'icon' => '😠'],
-            'confused' => ['name' => 'Confused', 'icon' => '😕'],
-            'smirk' => ['name' => 'Smirk', 'icon' => '😏'],
-            'broke' => ['name' => 'Broke', 'icon' => '💔'],
-            'expressionless' => ['name' => 'Expressionless', 'icon' => '😑'],
-            'cool' => ['name' => 'Cool', 'icon' => '😎'],
-            'funny' => ['name' => 'Funny', 'icon' => '😄'],
-            'tired' => ['name' => 'Tired', 'icon' => '😴'],
-            'lovely' => ['name' => 'Lovely', 'icon' => '🥰'],
-            'blessed' => ['name' => 'Blessed', 'icon' => '🙏'],
-            'shocked' => ['name' => 'Shocked', 'icon' => '😱'],
-            'sleepy' => ['name' => 'Sleepy', 'icon' => '😪'],
-            'pretty' => ['name' => 'Pretty', 'icon' => '😍'],
-            'bored' => ['name' => 'Bored', 'icon' => '😐'],
+        $feelingIcons = [
+            'happy' => 'smile',
+            'loved' => 'heart-eyes',
+            'sad' => 'disappointed',
+            'so_sad' => 'sob',
+            'angry' => 'angry',
+            'confused' => 'confused',
+            'smirk' => 'smirk',
+            'broke' => 'broken-heart',
+            'expressionless' => 'expressionless',
+            'cool' => 'sunglasses',
+            'funny' => 'joy',
+            'tired' => 'tired-face',
+            'lovely' => 'heart',
+            'blessed' => 'innocent',
+            'shocked' => 'scream',
+            'sleepy' => 'sleeping',
+            'pretty' => 'relaxed',
+            'bored' => 'unamused'
+        ];
+        
+        $feelingLabels = [
+            'happy' => 'Happy',
+            'loved' => 'Loved',
+            'sad' => 'Sad',
+            'so_sad' => 'So Sad',
+            'angry' => 'Angry',
+            'confused' => 'Confused',
+            'smirk' => 'Smirk',
+            'broke' => 'Broke',
+            'expressionless' => 'Expressionless',
+            'cool' => 'Cool',
+            'funny' => 'Funny',
+            'tired' => 'Tired',
+            'lovely' => 'Lovely',
+            'blessed' => 'Blessed',
+            'shocked' => 'Shocked',
+            'sleepy' => 'Sleepy',
+            'pretty' => 'Pretty',
+            'bored' => 'Bored'
         ];
 
-        return $feelings[$feeling] ?? ['name' => ucfirst(str_replace('_', ' ', $feeling)), 'icon' => null];
+        return [
+            'key' => $feelingKey,
+            'label' => $feelingLabels[$feelingKey] ?? ucfirst($feelingKey),
+            'icon' => $feelingIcons[$feelingKey] ?? 'smile',
+        ];
     }
 
     /**
@@ -1989,6 +2014,12 @@ class PostController extends Controller
         // Get views count (for videos)
         $viewsCount = (int) ($post->videoViews ?? 0);
 
+        // Get feeling data if it's a feeling post
+        $feelingData = null;
+        if (!empty($post->postFeeling)) {
+            $feelingData = $this->getFeelingData($post->postFeeling);
+        }
+
         return [
             'id' => $post->id,
             'post_id' => $post->post_id ?? $post->id,
@@ -2026,6 +2057,11 @@ class PostController extends Controller
             // Album data
             'album_name' => $post->album_name ?? '',
             'multi_image_post' => (bool) ($post->multi_image_post ?? false),
+            
+            // Feeling data (for feeling posts) - matching new-feed format
+            'post_feeling' => $post->postFeeling ?? null,
+            'feeling' => $feelingData,
+            'is_feeling_post' => !empty($post->postFeeling),
             
             // Engagement metrics (matching new-feed format)
             'reactions_count' => $totalReactions,
