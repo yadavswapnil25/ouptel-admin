@@ -62,8 +62,13 @@ class PagesController extends BaseController
 
         $paginator = $query->paginate($perPage);
 
-        $data = $paginator->getCollection()->map(function (Page $page) {
-            return [
+        // Check if user wants to include posts
+        $includePosts = $request->query('include_posts', false);
+        $postsLimit = (int) ($request->query('posts_limit', 3)); // Default 3 recent posts
+        $postsLimit = max(0, min($postsLimit, 10)); // Limit between 0-10
+
+        $data = $paginator->getCollection()->map(function (Page $page) use ($tokenUserId, $includePosts, $postsLimit) {
+            $pageData = [
                 'page_id' => $page->page_id,
                 'page_name' => $page->page_name,
                 'page_title' => $page->page_title,
@@ -83,6 +88,30 @@ class PagesController extends BaseController
                     'avatar_url' => optional($page->owner)->avatar_url,
                 ],
             ];
+
+            // Get posts count
+            $postsCount = DB::table('Wo_Posts')
+                ->where('page_id', $page->page_id)
+                ->where('active', '1')
+                ->count();
+            
+            $pageData['posts_count'] = $postsCount;
+
+            // Include recent posts if requested
+            if ($includePosts && $postsLimit > 0) {
+                $recentPosts = DB::table('Wo_Posts')
+                    ->where('page_id', $page->page_id)
+                    ->where('active', '1')
+                    ->orderByDesc('time')
+                    ->limit($postsLimit)
+                    ->get();
+
+                $pageData['posts'] = $recentPosts->map(function ($post) use ($tokenUserId) {
+                    return $this->formatPostForPage($post, $tokenUserId);
+                })->toArray();
+            }
+
+            return $pageData;
         });
 
         return response()->json([
