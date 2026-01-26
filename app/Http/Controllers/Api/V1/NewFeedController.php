@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class NewFeedController extends Controller
 {
@@ -259,6 +260,10 @@ class NewFeedController extends Controller
                     $query->where(function($q) {
                         $q->where('postType', 'video')
                           ->orWhere(function($q2) {
+                              $q2->whereNotNull('postVideo')
+                                 ->where('postVideo', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
                               $q2->whereNotNull('postYoutube')
                                  ->where('postYoutube', '!=', '');
                           })
@@ -414,9 +419,11 @@ class NewFeedController extends Controller
                 'post_photo' => $post->postPhoto ?? '',
                 'post_photo_url' => $this->getPostPhotoUrl($post),
                 'post_file' => $post->postFile ?? '',
-                'post_file_url' => ($post->postFile ?? '') ? asset('storage/' . $post->postFile) : null,
+                'post_file_url' => $this->getPostFileUrl($post),
+                'post_video' => $post->postVideo ?? '',
+                'post_video_url' => $this->getPostVideoUrl($post),
                 'post_record' => $post->postRecord ?? '',
-                'post_record_url' => ($post->postRecord ?? '') ? asset('storage/' . $post->postRecord) : null,
+                'post_record_url' => $this->getPostRecordUrl($post),
                 'post_youtube' => $post->postYoutube ?? '',
                 'post_vimeo' => $post->postVimeo ?? '',
                 'post_dailymotion' => $post->postDailymotion ?? '',
@@ -561,7 +568,7 @@ class NewFeedController extends Controller
         
         // Check media types
         if (!empty($post->postPhoto)) return 'photo';
-        if (!empty($post->postYoutube) || !empty($post->postVimeo) || !empty($post->postFacebook)) return 'video';
+        if (!empty($post->postVideo) || !empty($post->postYoutube) || !empty($post->postVimeo) || !empty($post->postFacebook) || !empty($post->postPlaytube)) return 'video';
         if (!empty($post->postFile)) return 'file';
         if (!empty($post->postLink)) return 'link';
         if (!empty($post->postMap)) return 'location';
@@ -808,6 +815,114 @@ class NewFeedController extends Controller
         
         // Otherwise, it's a storage path - prepend storage URL
         return asset('storage/' . $postPhoto);
+    }
+
+    /**
+     * Get post file URL - handles storage paths properly
+     * 
+     * @param object $post
+     * @return string|null
+     */
+    private function getPostFileUrl($post): ?string
+    {
+        $postFile = $post->postFile ?? '';
+        
+        if (empty($postFile)) {
+            return null;
+        }
+        
+        // Check if it's already a full URL
+        if (filter_var($postFile, FILTER_VALIDATE_URL) !== false) {
+            return $postFile;
+        }
+        
+        // Remove 'storage/' prefix if it already exists in the path
+        $filePath = str_replace('storage/', '', $postFile);
+        $filePath = ltrim($filePath, '/');
+        
+        // Check if file exists in storage
+        if (Storage::disk('public')->exists($filePath)) {
+            // Use Storage::url() for proper URL generation
+            $url = Storage::disk('public')->url($filePath);
+        } else {
+            // Fallback to asset() if Storage::url() doesn't work
+            $url = asset('storage/' . $filePath);
+        }
+        
+        // Clean up any double slashes
+        return preg_replace('#([^:])//+#', '$1/', $url);
+    }
+
+    /**
+     * Get post video URL - handles storage paths properly
+     * 
+     * @param object $post
+     * @return string|null
+     */
+    private function getPostVideoUrl($post): ?string
+    {
+        $postVideo = $post->postVideo ?? '';
+        
+        if (empty($postVideo)) {
+            return null;
+        }
+        
+        // Check if it's already a full URL
+        if (filter_var($postVideo, FILTER_VALIDATE_URL) !== false) {
+            return $postVideo;
+        }
+        
+        // Remove 'storage/' prefix if it already exists in the path
+        $videoPath = str_replace('storage/', '', $postVideo);
+        $videoPath = ltrim($videoPath, '/');
+        
+        // Check if file exists in storage
+        if (Storage::disk('public')->exists($videoPath)) {
+            // Use Storage::url() for proper URL generation
+            $url = Storage::disk('public')->url($videoPath);
+        } else {
+            // Fallback to asset() if Storage::url() doesn't work
+            $url = asset('storage/' . $videoPath);
+        }
+        
+        // Clean up any double slashes
+        return preg_replace('#([^:])//+#', '$1/', $url);
+    }
+
+    /**
+     * Get post record (audio) URL - handles storage paths properly
+     * 
+     * @param object $post
+     * @return string|null
+     */
+    private function getPostRecordUrl($post): ?string
+    {
+        $postRecord = $post->postRecord ?? '';
+        
+        if (empty($postRecord)) {
+            return null;
+        }
+        
+        // Check if it's already a full URL
+        if (filter_var($postRecord, FILTER_VALIDATE_URL) !== false) {
+            return $postRecord;
+        }
+        
+        // Remove 'storage/' prefix if it already exists in the path
+        $recordPath = str_replace('storage/', '', $postRecord);
+        $recordPath = ltrim($recordPath, '/');
+        
+        // Check if file exists in storage
+        if (Storage::disk('public')->exists($recordPath)) {
+            // Use Storage::url() for proper URL generation
+            $url = Storage::disk('public')->url($recordPath);
+        } else {
+            // Fallback to asset() if Storage::url() doesn't work
+            $url = asset('storage/' . $recordPath);
+        }
+        
+        // Clean up any double slashes
+        return preg_replace('#([^:])//+#', '$1/', $url);
     }
 
     /**

@@ -51,6 +51,7 @@ use App\Http\Controllers\Api\V1\WalletController;
 use App\Http\Controllers\Api\V1\SubscriptionsController;
 use App\Http\Controllers\Api\V1\AnnouncementsController;
 use App\Http\Controllers\Api\V1\AccountVerificationController;
+use App\Http\Controllers\Api\V1\ReportController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -219,6 +220,7 @@ Route::post('/posts', [PostController::class, 'insertNewPost']);
 // These endpoints still work but are redirected to the unified endpoint for optimization
 Route::post('/feelings/post', [FeelingsController::class, 'createFeelingPost']); // Create feeling post (use POST /posts?type=feeling)
 Route::post('/posts/gif', [PostController::class, 'createGifPost']); // Create GIF post (use POST /posts?type=gif)
+Route::get('/posts', [PostController::class, 'getPosts']); // Get posts with optional type filter (playing, travelling, watching, listening, feeling)
 Route::get('/posts/colored', [PostController::class, 'getColoredPosts']); // Get available colored posts
 Route::get('/posts/{postId}', [PostController::class, 'getPost']);
 Route::post('/posts/get-data', [PostController::class, 'getPostData']); // Get post data for new tab (old API: get-post-data.php)
@@ -241,6 +243,13 @@ Route::delete('/posts/{postId}/save', [PostController::class, 'unsavePost']);
 Route::get('/saved-posts', [PostController::class, 'getSavedPosts']);
 Route::post('/posts/disable-comment', [PostController::class, 'disableComment']); // Disable/enable comments (old API: requests.php?f=posts&s=disable_comment)
 Route::post('/posts/hide', [PostController::class, 'hidePost']); // Hide post (old API: requests.php?f=posts&s=hide_post)
+
+// Report routes (matching old WoWonder API: post-actions.php?action=report)
+Route::post('/posts/{postId}/report', [ReportController::class, 'reportPost']); // Report/unreport post (old API: post-actions.php?action=report)
+Route::get('/posts/{postId}/report-status', [ReportController::class, 'getPostReportStatus']); // Check if post is reported
+Route::post('/comments/{commentId}/report', [ReportController::class, 'reportComment']); // Report/unreport comment (old API: report_comment.php)
+Route::post('/users/{userId}/report', [ReportController::class, 'reportUser']); // Report/unreport user (old API: report_user.php)
+Route::get('/reports/reasons', [ReportController::class, 'getReportReasons']); // Get available report reasons
 
 // Poll routes (matching old API structure: requests.php?f=posts&s=insert_new_post with answer array)
 Route::post('/polls/create', [PollController::class, 'createPoll']); // Create poll post (like insert_new_post with answer array)

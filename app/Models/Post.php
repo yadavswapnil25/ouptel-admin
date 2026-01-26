@@ -32,6 +32,7 @@ class Post extends Model
         'postFile',
         'postFileName',
         'postFileThumb',
+        'postVideo',
         'postYoutube',
         'postVine',
         'postSoundCloud',

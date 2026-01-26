@@ -95,6 +95,7 @@ class PostController extends Controller
             'color_id' => 'nullable|integer',
             'postPhoto' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240', // 10MB max
             'postFile' => 'nullable|file|mimes:pdf,doc,docx,txt,zip,rar|max:51200', // 50MB max
+            'postVideo' => 'nullable|file|mimes:mp4,avi,mov,wmv,flv,webm,mkv|max:102400', // 100MB max for videos
             'postRecord' => 'nullable|file|mimes:mp3,wav,ogg|max:51200', // 50MB max
             'postSticker' => 'nullable|string|max:500',
             'postGif' => 'nullable|url|max:2000', // GIF URL from Giphy or similar service
@@ -183,16 +184,21 @@ class PostController extends Controller
         $postText = $request->input('postText', '');
         $postPhoto = $request->file('postPhoto');
         $postFile = $request->file('postFile');
+        $postVideo = $request->file('postVideo');
         $postRecord = $request->file('postRecord');
         $postYoutube = $request->input('postYoutube', '');
+        $postVimeo = $request->input('postVimeo', '');
+        $postFacebook = $request->input('postFacebook', '');
+        $postPlaytube = $request->input('postPlaytube', '');
         $postLink = $request->input('postLink', '');
         $postMap = $request->input('postMap', '');
         $postSticker = $request->input('postSticker', '');
         $postGif = $request->input('postGif', '');
 
         // At least one content field must be provided
-        if (empty($postText) && !$postPhoto && !$postFile && !$postRecord && 
-            empty($postYoutube) && empty($postLink) && empty($postMap) && empty($postSticker) && empty($postGif)) {
+        if (empty($postText) && !$postPhoto && !$postFile && !$postVideo && !$postRecord && 
+            empty($postYoutube) && empty($postVimeo) && empty($postFacebook) && empty($postPlaytube) && 
+            empty($postLink) && empty($postMap) && empty($postSticker) && empty($postGif)) {
             return response()->json([
                 'ok' => false,
                 'message' => 'At least one content field must be provided (text, photo, file, video, link, location, sticker, or gif)'
@@ -208,6 +214,7 @@ class PostController extends Controller
             // Handle file uploads
             $postPhotoPath = '';
             $postFilePath = '';
+            $postVideoPath = '';
             $postRecordPath = '';
 
             if ($postPhoto) {
@@ -218,12 +225,16 @@ class PostController extends Controller
                 $postFilePath = $this->handleFileUpload($postFile, 'posts/files', 'file');
             }
 
+            if ($postVideo) {
+                $postVideoPath = $this->handleFileUpload($postVideo, 'posts/videos', 'video');
+            }
+
             if ($postRecord) {
                 $postRecordPath = $this->handleFileUpload($postRecord, 'posts/audio', 'audio');
             }
 
             // Determine post type
-            $postType = $this->determinePostType($request, $postPhotoPath, $postFilePath, $postRecordPath);
+            $postType = $this->determinePostType($request, $postPhotoPath, $postFilePath, $postRecordPath, $postVideoPath);
 
             // Prepare post data with proper null handling
             $postData = [
@@ -245,6 +256,7 @@ class PostController extends Controller
                 'postFile' => $postFilePath,
                 'postFileName' => $postFile ? $postFile->getClientOriginalName() : '',
                 'postFileThumb' => $this->generateFileThumbnail($postFilePath),
+                'postVideo' => $postVideoPath,
                 'postYoutube' => $postYoutube,
                 'postVine' => $request->input('postVine', ''),
                 'postSoundCloud' => $request->input('postSoundCloud', ''),
@@ -429,6 +441,7 @@ class PostController extends Controller
             // Clean up uploaded files if post creation failed
             if ($postPhotoPath) Storage::delete($postPhotoPath);
             if ($postFilePath) Storage::delete($postFilePath);
+            if ($postVideoPath) Storage::delete($postVideoPath);
             if ($postRecordPath) Storage::delete($postRecordPath);
 
             return response()->json([
@@ -490,9 +503,10 @@ class PostController extends Controller
      * @param string|null $postPhotoPath
      * @param string|null $postFilePath
      * @param string|null $postRecordPath
+     * @param string|null $postVideoPath
      * @return string
      */
-    private function determinePostType(Request $request, ?string $postPhotoPath, ?string $postFilePath, ?string $postRecordPath): string
+    private function determinePostType(Request $request, ?string $postPhotoPath, ?string $postFilePath, ?string $postRecordPath, ?string $postVideoPath = null): string
     {
         // Check for GIF first (GIF URLs are stored in postPhotoPath)
         if ($request->input('postGif')) return 'gif';
@@ -500,9 +514,10 @@ class PostController extends Controller
             return 'gif';
         }
         if ($postPhotoPath) return 'photo';
+        if ($postVideoPath) return 'video';
         if ($postRecordPath) return 'audio';
         if ($postFilePath) return 'file';
-        if ($request->input('postYoutube')) return 'video';
+        if ($request->input('postYoutube') || $request->input('postVimeo') || $request->input('postFacebook') || $request->input('postPlaytube')) return 'video';
         if ($request->input('postLink')) return 'link';
         if ($request->input('postMap')) return 'location';
         if ($request->input('postSticker')) return 'sticker';
@@ -626,6 +641,97 @@ class PostController extends Controller
     }
 
     /**
+     * Get posts with optional filtering by activity type
+     * 
+     * Endpoint: GET /api/v1/posts?type=playing|travelling|watching|listening|feeling
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function getPosts(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+        }
+
+        // Get filter parameters
+        $type = $request->input('type'); // playing, travelling, watching, listening, feeling
+        $perPage = (int) ($request->input('per_page', 20));
+        $perPage = max(1, min($perPage, 100));
+        $page = (int) ($request->input('page', 1));
+        $page = max(1, $page);
+        $offset = ($page - 1) * $perPage;
+
+        // Build query
+        $query = Post::where('active', 1)
+            ->with('user')
+            ->orderBy('time', 'desc');
+
+        // Filter by activity type
+        if ($type) {
+            $validTypes = ['playing', 'travelling', 'watching', 'listening', 'feeling'];
+            if (!in_array($type, $validTypes)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Invalid type. Valid types are: ' . implode(', ', $validTypes)
+                ], 400);
+            }
+
+            // Map type to database column
+            $columnMap = [
+                'playing' => 'postPlaying',
+                'travelling' => 'postTraveling',
+                'watching' => 'postWatching',
+                'listening' => 'postListening',
+                'feeling' => 'postFeeling',
+            ];
+
+            $column = $columnMap[$type];
+            $query->whereNotNull($column)
+                  ->where($column, '!=', '');
+        }
+
+        // Get total count for pagination
+        $total = $query->count();
+
+        // Get paginated posts
+        $posts = $query->offset($offset)
+                      ->limit($perPage)
+                      ->get();
+
+        // Format posts
+        $formattedPosts = [];
+        foreach ($posts as $post) {
+            $formattedPosts[] = $this->formatPostData($post, $tokenUserId);
+        }
+
+        $lastPage = (int) ceil($total / $perPage);
+
+        return response()->json([
+            'ok' => true,
+            'data' => $formattedPosts,
+            'pagination' => [
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => $lastPage,
+                'has_more' => $page < $lastPage,
+                'from' => $total > 0 ? $offset + 1 : 0,
+                'to' => $total > 0 ? min($offset + $perPage, $total) : 0,
+            ],
+            'filter' => $type ? ['type' => $type] : null,
+        ]);
+    }
+
+    /**
      * Get single post by ID
      * 
      * @param Request $request
@@ -744,6 +850,9 @@ class PostController extends Controller
      */
     private function formatPostData(Post $post, string $userId): array
     {
+        // Get activity data
+        $activityData = $this->getActivityData($post);
+
         return [
             'id' => $post->id,
             'post_id' => $post->post_id,
@@ -756,6 +865,8 @@ class PostController extends Controller
             'post_photo_url' => $this->getPostPhotoUrl($post),
             'post_file' => $post->postFile,
             'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
+            'post_video' => $post->postVideo ?? null,
+            'post_video_url' => $post->postVideo ? asset('storage/' . $post->postVideo) : null,
             'post_youtube' => $post->postYoutube,
             'post_link' => $post->postLink,
             'post_link_title' => $post->postLinkTitle,
@@ -770,6 +881,13 @@ class PostController extends Controller
             'is_owner' => $post->user_id == $userId,
             'is_active' => $post->is_active,
             'is_boosted' => $post->is_boosted,
+            // Activity fields
+            'post_playing' => $post->postPlaying ?? null,
+            'post_travelling' => $post->postTraveling ?? null,
+            'post_watching' => $post->postWatching ?? null,
+            'post_listening' => $post->postListening ?? null,
+            'post_feeling' => $post->postFeeling ?? null,
+            'activity' => $activityData,
             'author' => [
                 'user_id' => $post->user->user_id ?? $post->user_id,
                 'username' => $post->user->username ?? 'Unknown',
@@ -783,6 +901,90 @@ class PostController extends Controller
             'created_at_human' => $this->getHumanTime($post->time),
             'time' => $post->time,
         ];
+    }
+
+    /**
+     * Get activity data for a post
+     * 
+     * @param Post $post
+     * @return array|null
+     */
+    private function getActivityData(Post $post): ?array
+    {
+        $activity = null;
+
+        if (!empty($post->postPlaying)) {
+            $activity = [
+                'type' => 'playing',
+                'label' => 'Playing',
+                'value' => $post->postPlaying,
+                'text' => "is playing {$post->postPlaying}",
+            ];
+        } elseif (!empty($post->postTraveling)) {
+            $activity = [
+                'type' => 'travelling',
+                'label' => 'Travelling',
+                'value' => $post->postTraveling,
+                'text' => "is travelling to {$post->postTraveling}",
+            ];
+        } elseif (!empty($post->postWatching)) {
+            $activity = [
+                'type' => 'watching',
+                'label' => 'Watching',
+                'value' => $post->postWatching,
+                'text' => "is watching {$post->postWatching}",
+            ];
+        } elseif (!empty($post->postListening)) {
+            $activity = [
+                'type' => 'listening',
+                'label' => 'Listening',
+                'value' => $post->postListening,
+                'text' => "is listening to {$post->postListening}",
+            ];
+        } elseif (!empty($post->postFeeling)) {
+            $feelingData = $this->getFeelingData($post->postFeeling);
+            $activity = [
+                'type' => 'feeling',
+                'label' => 'Feeling',
+                'value' => $post->postFeeling,
+                'text' => "is feeling {$feelingData['name']}",
+                'icon' => $feelingData['icon'] ?? null,
+            ];
+        }
+
+        return $activity;
+    }
+
+    /**
+     * Get feeling data (icon and name)
+     * 
+     * @param string $feeling
+     * @return array
+     */
+    private function getFeelingData(string $feeling): array
+    {
+        $feelings = [
+            'happy' => ['name' => 'Happy', 'icon' => '😊'],
+            'loved' => ['name' => 'Loved', 'icon' => '❤️'],
+            'sad' => ['name' => 'Sad', 'icon' => '😢'],
+            'so_sad' => ['name' => 'Very Sad', 'icon' => '😭'],
+            'angry' => ['name' => 'Angry', 'icon' => '😠'],
+            'confused' => ['name' => 'Confused', 'icon' => '😕'],
+            'smirk' => ['name' => 'Smirk', 'icon' => '😏'],
+            'broke' => ['name' => 'Broke', 'icon' => '💔'],
+            'expressionless' => ['name' => 'Expressionless', 'icon' => '😑'],
+            'cool' => ['name' => 'Cool', 'icon' => '😎'],
+            'funny' => ['name' => 'Funny', 'icon' => '😄'],
+            'tired' => ['name' => 'Tired', 'icon' => '😴'],
+            'lovely' => ['name' => 'Lovely', 'icon' => '🥰'],
+            'blessed' => ['name' => 'Blessed', 'icon' => '🙏'],
+            'shocked' => ['name' => 'Shocked', 'icon' => '😱'],
+            'sleepy' => ['name' => 'Sleepy', 'icon' => '😪'],
+            'pretty' => ['name' => 'Pretty', 'icon' => '😍'],
+            'bored' => ['name' => 'Bored', 'icon' => '😐'],
+        ];
+
+        return $feelings[$feeling] ?? ['name' => ucfirst(str_replace('_', ' ', $feeling)), 'icon' => null];
     }
 
     /**
@@ -1586,6 +1788,61 @@ class PostController extends Controller
     }
 
     /**
+     * Get post comments count
+     * 
+     * @param int $postId
+     * @param object|null $post Optional post object to use post_comments column as fallback
+     * @return int
+     */
+    private function getPostCommentsCount(int $postId, $post = null): int
+    {
+        // Try to count from Wo_Comments table (more accurate, real-time count)
+        if (Schema::hasTable('Wo_Comments')) {
+            try {
+                $count = DB::table('Wo_Comments')
+                    ->where('post_id', $postId)
+                    ->count();
+                return $count;
+            } catch (\Exception $e) {
+                // If query fails, fall through to post_comments column
+            }
+        }
+        
+        // Fallback: Use post_comments column if available (cached count)
+        if ($post && isset($post->post_comments)) {
+            return (int) ($post->post_comments ?? 0);
+        }
+        
+        // Last resort: Query post_comments column
+        try {
+            $postComments = DB::table('Wo_Posts')
+                ->where('id', $postId)
+                ->value('post_comments');
+            return (int) ($postComments ?? 0);
+        } catch (\Exception $e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Get post privacy text
+     * 
+     * @param string $privacy
+     * @return string
+     */
+    private function getPostPrivacyText(string $privacy): string
+    {
+        return match($privacy) {
+            '0' => 'Public',
+            '1' => 'Friends',
+            '2' => 'Only Me',
+            '3' => 'Custom',
+            '4' => 'Group',
+            default => 'Public'
+        };
+    }
+
+    /**
      * Get formatted post data
      * 
      * @param int $postId
@@ -1709,10 +1966,111 @@ class PostController extends Controller
             }
         }
 
+        // Get post ID for reactions (use post_id field if available, fallback to id)
+        $postIdForReactions = $post->post_id ?? $post->id;
+        
+        // Get reaction counts (detailed breakdown by reaction type)
+        $reactionCounts = $this->getPostReactionCounts($postIdForReactions);
+        $totalReactions = array_sum($reactionCounts);
+        
+        // Get user's reaction
+        $userReaction = $this->getUserReaction($postIdForReactions, $tokenUserId);
+        
+        // Check if user liked the post (has any reaction)
+        $isLiked = $userReaction !== null;
+        
+        // Get comments count
+        $postIdForComments = $post->post_id ?? $post->id;
+        $commentsCount = $this->getPostCommentsCount($postIdForComments, $post);
+        
+        // Get shares count
+        $sharesCount = (int) ($post->postShare ?? 0);
+        
+        // Get views count (for videos)
+        $viewsCount = (int) ($post->videoViews ?? 0);
+
         return [
             'id' => $post->id,
-            'post_id' => $post->id,
+            'post_id' => $post->post_id ?? $post->id,
             'user_id' => $post->user_id,
+            'post_text' => $post->postText ?? '',
+            'post_type' => $post->postType ?? 'post',
+            'post_privacy' => $post->postPrivacy ?? '0',
+            'post_privacy_text' => $this->getPostPrivacyText($post->postPrivacy ?? '0'),
+            
+            // Media content
+            'post_photo' => $post->postPhoto ?? '',
+            'post_photo_url' => $this->getPostPhotoUrl($post),
+            'post_file' => $post->postFile ?? '',
+            'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
+            'post_file_thumb' => $post->postFileThumb ? asset('storage/' . $post->postFileThumb) : null,
+            'post_video' => $post->postVideo ?? '',
+            'post_video_url' => $post->postVideo ? asset('storage/' . $post->postVideo) : null,
+            'post_record' => $post->postRecord ?? '',
+            'post_record_url' => $post->postRecord ? asset('storage/' . $post->postRecord) : null,
+            'post_youtube' => $post->postYoutube ?? '',
+            'post_vimeo' => $post->postVimeo ?? '',
+            'post_playtube' => $post->postPlaytube ?? '',
+            'post_dailymotion' => $post->postDailymotion ?? '',
+            'post_facebook' => $post->postFacebook ?? '',
+            'post_vine' => $post->postVine ?? '',
+            'post_soundcloud' => $post->postSoundCloud ?? '',
+            'post_deepsound' => $post->postDeepsound ?? '',
+            'post_link' => $post->postLink ?? '',
+            'post_link_title' => $post->postLinkTitle ?? '',
+            'post_link_image' => $post->postLinkImage ?? '',
+            'post_link_content' => $post->postLinkContent ?? '',
+            'post_sticker' => $post->postSticker ?? '',
+            'post_map' => $post->postMap ?? '',
+            
+            // Album data
+            'album_name' => $post->album_name ?? '',
+            'multi_image_post' => (bool) ($post->multi_image_post ?? false),
+            
+            // Engagement metrics (matching new-feed format)
+            'reactions_count' => $totalReactions,
+            'comments_count' => $commentsCount,
+            'shares_count' => $sharesCount,
+            'views_count' => $viewsCount,
+            
+            // Reaction details (matching new-feed format)
+            'reaction_counts' => $reactionCounts,
+            'total_reactions' => $totalReactions,
+            'user_reaction' => $userReaction,
+            'is_liked' => $isLiked ? 1 : 0,
+            
+            // User interaction
+            'is_owner' => $post->user_id == $tokenUserId,
+            'is_boosted' => (bool) ($post->boosted ?? false),
+            'comments_disabled' => (bool) ($post->comments_status ?? false),
+            
+            // Author information
+            'author' => $publisher ? [
+                'user_id' => $publisher['user_id'],
+                'username' => $publisher['username'],
+                'name' => $publisher['name'],
+                'avatar_url' => $publisher['avatar_url'],
+                'verified' => $publisher['verified'] ?? false,
+                'is_following' => $publisher['is_following'] ?? false,
+            ] : null,
+            
+            // Context
+            'page' => $page,
+            'group' => $group,
+            'blog' => $blog,
+            'event' => $event,
+            'shared_from' => $sharedFrom,
+            'page_id' => $post->page_id ?? 0,
+            'group_id' => $post->group_id ?? 0,
+            'event_id' => $post->event_id ?? 0,
+            'parent_id' => $post->parent_id ?? null,
+            
+            // Timestamps
+            'created_at' => $post->time ? date('c', $post->time) : null,
+            'created_at_human' => $post->time ? $this->getHumanTime($post->time) : null,
+            'time' => $post->time ?? time(),
+            
+            // Legacy fields for backward compatibility
             'postText' => $post->postText ?? '',
             'postType' => $post->postType ?? 'post',
             'postPrivacy' => $post->postPrivacy ?? '0',
@@ -1725,19 +2083,9 @@ class PostController extends Controller
             'postYoutube' => $post->postYoutube ?? '',
             'postPlaytube' => $post->postPlaytube ?? '',
             'postPhoto' => $this->getPostPhotoUrl($post),
-            'time' => $post->time ?? time(),
             'publisher' => $publisher,
-            'page' => $page,
-            'group' => $group,
-            'blog' => $blog,
-            'event' => $event,
-            'shared_from' => $sharedFrom,
-            'page_id' => $post->page_id ?? 0,
-            'group_id' => $post->group_id ?? 0,
-            'event_id' => $post->event_id ?? 0,
-            'parent_id' => $post->parent_id ?? null,
             'comments_status' => $post->comments_status ?? 1,
-            'videoViews' => $post->videoViews ?? 0,
+            'videoViews' => $viewsCount,
         ];
     }
 

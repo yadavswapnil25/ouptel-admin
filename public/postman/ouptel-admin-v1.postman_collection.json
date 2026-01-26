@@ -2028,6 +2028,45 @@
       }
     },
     {
+      "name": "Posts - Get Posts (Filter by Activity Type)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts?type=playing&page=1&per_page=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"],
+          "query": [
+            {"key":"type","value":"playing","description":"Activity type: playing, travelling, watching, listening, feeling"},
+            {"key":"page","value":"1","description":"Page number"},
+            {"key":"per_page","value":"20","description":"Items per page (1-100)"}
+          ]
+        },
+        "description": "Get posts filtered by activity type.\n\nValid types:\n- playing: Posts where user is playing a game\n- travelling: Posts where user is travelling to a location\n- watching: Posts where user is watching something\n- listening: Posts where user is listening to music/audio\n- feeling: Posts where user is expressing a feeling/emotion\n\nResponse includes:\n- post_playing: Game name (if type=playing)\n- post_travelling: Location (if type=travelling)\n- post_watching: What they're watching (if type=watching)\n- post_listening: What they're listening to (if type=listening)\n- post_feeling: Feeling type (if type=feeling)\n- activity: Object with type, label, value, text, and icon (for feelings)"
+      }
+    },
+    {
+      "name": "Posts - Get Posts (All Types)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts?page=1&per_page=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts"],
+          "query": [
+            {"key":"page","value":"1","description":"Page number"},
+            {"key":"per_page","value":"20","description":"Items per page (1-100)"}
+          ]
+        },
+        "description": "Get all posts without filtering by activity type. Returns all active posts with pagination."
+      }
+    },
+    {
       "name": "Posts - Get Post by ID",
       "request": {
         "method": "GET",
@@ -4164,6 +4203,94 @@
           "path": ["api","v1","users","1","badge"]
         },
         "description": "Get badge information for any user (public endpoint).\n\nReplace '1' with the actual user_id.\n\nReturns:\n- user_id and username\n- is_verified: boolean\n- badge_type: blue or golden (null if not verified)\n- badge_info: Object with type, name, and description\n\nBadge Descriptions:\n- Blue Badge: 'This user has verified their identity.'\n- Golden Badge: 'This user is a verified VIP, Celebrity or Well Known Person.'"
+      }
+    },
+    {
+      "name": "Reports - Get Report Reasons",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/reports/reasons",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","reports","reasons"]
+        },
+        "description": "Get available report reasons for reporting posts, comments, or users.\n\nReturns list of report reasons:\n- r_spam: Spam\n- r_violence: Violence\n- r_harassment: Harassment\n- r_hate: Hate Speech\n- r_terrorism: Terrorism\n- r_nudity: Nudity\n- r_fake: Fake Account\n- r_other: Other"
+      }
+    },
+    {
+      "name": "Reports - Report Post",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"r_spam\",\n  \"text\": \"This post contains spam content.\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/report",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","report"]
+        },
+        "description": "Report a post (matching old WoWonder API: post-actions.php?action=report).\n\nThis is a toggle action - if the post is already reported, it will be unreported.\n\nParameters:\n- reason (optional): Report reason key (r_spam, r_violence, r_harassment, r_hate, r_terrorism, r_nudity, r_fake, r_other)\n- text (optional): Additional details about the report (max 1000 characters)\n\nResponse:\n- code: 1 if reported, 0 if unreported\n- action: 'report post' or 'unreport post'\n- is_reported: boolean"
+      }
+    },
+    {
+      "name": "Reports - Get Post Report Status",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/report-status",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","report-status"]
+        },
+        "description": "Check if a post is reported by the current user.\n\nReturns:\n- post_id: The post ID\n- is_reported: Whether the current user has reported this post\n- report_id: Report ID if reported\n- reported_at: Timestamp when reported"
+      }
+    },
+    {
+      "name": "Reports - Report Comment",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"r_harassment\",\n  \"text\": \"This comment contains harassment.\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/comments/{{comment_id}}/report",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","comments","{{comment_id}}","report"]
+        },
+        "description": "Report a comment (matching old WoWonder API: report_comment.php).\n\nThis is a toggle action - if the comment is already reported, it will be unreported.\n\nParameters:\n- reason (optional): Report reason key\n- text (optional): Additional details about the report\n\nResponse:\n- code: 1 if reported, 0 if unreported\n- action: 'report comment' or 'unreport comment'"
+      }
+    },
+    {
+      "name": "Reports - Report User",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reason\": \"r_fake\",\n  \"text\": \"This appears to be a fake account.\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/users/{{target_user_id}}/report",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","users","{{target_user_id}}","report"]
+        },
+        "description": "Report a user/profile (matching old WoWonder API: report_user.php).\n\nThis is a toggle action - if the user is already reported, it will be unreported.\n\nNote: You cannot report yourself.\n\nParameters:\n- reason (optional): Report reason key\n- text (optional): Additional details about the report\n\nResponse:\n- code: 1 if reported, 0 if unreported\n- action: 'report user' or 'unreport user'"
       }
     }
   ],

@@ -1083,29 +1083,77 @@ class ProfileController extends Controller
             ], 404);
         }
 
-        // Pagination parameters
-        $beforePostId = (int) ($request->input('before_post_id', $request->query('before_post_id', PHP_INT_MAX)));
-        $limit = (int) ($request->input('limit', $request->query('limit', 20)));
-        $limit = max(1, min($limit, 50));
+        // Pagination parameters - support both page-based and cursor-based
+        $page = (int) ($request->input('page', $request->query('page', 1)));
+        $page = max(1, $page);
+        
+        $perPage = (int) ($request->input('per_page', $request->input('limit', $request->query('limit', 20))));
+        $perPage = max(1, min($perPage, 50));
+        
+        // Backward compatibility: support cursor-based pagination if before_post_id is provided
+        $beforePostId = (int) ($request->input('before_post_id', $request->query('before_post_id', 0)));
+        $useCursorPagination = $beforePostId > 0;
 
-        // Get user posts
-        $posts = $this->getTimelinePosts($user->user_id, $tokenUserId, $beforePostId, $limit);
+        // Get total count for pagination metadata
+        $totalPosts = DB::table('Wo_Posts')
+            ->where('user_id', $user->user_id)
+            ->where('active', 1)
+            ->count();
+
+        // Get user posts with pagination
+        if ($useCursorPagination) {
+            // Cursor-based pagination (backward compatibility)
+            $posts = $this->getTimelinePosts($user->user_id, $tokenUserId, $beforePostId, $perPage);
+            $hasMore = count($posts) >= $perPage;
+            $lastPostId = !empty($posts) ? end($posts)['id'] : null;
+        } else {
+            // Page-based pagination
+            $offset = ($page - 1) * $perPage;
+            $posts = $this->getTimelinePostsPaginated($user->user_id, $tokenUserId, $offset, $perPage);
+            $lastPage = (int) ceil($totalPosts / $perPage);
+            $hasMore = $page < $lastPage;
+        }
 
         // Get user profile data
         $userData = $this->getTimelineUserData($user, $tokenUserId);
 
-        return response()->json([
+        // Build response
+        $response = [
             'api_status' => '200',
             'api_text' => 'success',
             'api_version' => '1.0',
             'user_data' => $userData,
             'posts' => $posts,
             'count' => count($posts),
-        ]);
+        ];
+
+        // Add pagination metadata
+        if ($useCursorPagination) {
+            $response['pagination'] = [
+                'type' => 'cursor',
+                'limit' => $perPage,
+                'has_more' => $hasMore,
+                'next_cursor' => $lastPostId,
+                'before_post_id' => $lastPostId, // For backward compatibility
+            ];
+        } else {
+            $response['pagination'] = [
+                'type' => 'page',
+                'current_page' => $page,
+                'per_page' => $perPage,
+                'total' => $totalPosts,
+                'last_page' => isset($lastPage) ? $lastPage : (int) ceil($totalPosts / $perPage),
+                'has_more' => isset($hasMore) ? $hasMore : ($page < (int) ceil($totalPosts / $perPage)),
+                'from' => $totalPosts > 0 ? (($page - 1) * $perPage) + 1 : 0,
+                'to' => $totalPosts > 0 ? min($page * $perPage, $totalPosts) : 0,
+            ];
+        }
+
+        return response()->json($response);
     }
 
     /**
-     * Get timeline posts for a user
+     * Get timeline posts for a user (cursor-based pagination)
      * 
      * @param int $userId
      * @param int $loggedUserId
@@ -1120,14 +1168,53 @@ class ProfileController extends Controller
             ->where('user_id', $userId)
             ->where('active', 1); // Use integer 1 to match post_count calculation
 
-        // Handle pagination
-        if ($beforePostId < PHP_INT_MAX) {
+        // Handle cursor-based pagination
+        if ($beforePostId > 0 && $beforePostId < PHP_INT_MAX) {
             $query->where('id', '<', $beforePostId);
         }
 
         // Order by time desc (matching getUserPosts method)
         $query->orderBy('time', 'desc')->limit($limit);
         $posts = $query->get();
+
+        return $this->formatTimelinePosts($posts, $loggedUserId);
+    }
+
+    /**
+     * Get timeline posts for a user (page-based pagination)
+     * 
+     * @param int $userId
+     * @param int $loggedUserId
+     * @param int $offset
+     * @param int $perPage
+     * @return array
+     */
+    private function getTimelinePostsPaginated(int $userId, int $loggedUserId, int $offset, int $perPage): array
+    {
+        // Build query - match the exact same logic as getUserPosts and post_count calculation
+        $query = DB::table('Wo_Posts')
+            ->where('user_id', $userId)
+            ->where('active', 1); // Use integer 1 to match post_count calculation
+
+        // Order by time desc (matching getUserPosts method)
+        $query->orderBy('time', 'desc')
+              ->offset($offset)
+              ->limit($perPage);
+        
+        $posts = $query->get();
+
+        return $this->formatTimelinePosts($posts, $loggedUserId);
+    }
+
+    /**
+     * Format timeline posts data
+     * 
+     * @param \Illuminate\Support\Collection $posts
+     * @param int $loggedUserId
+     * @return array
+     */
+    private function formatTimelinePosts($posts, int $loggedUserId): array
+    {
 
         $result = [];
         foreach ($posts as $post) {
@@ -1199,6 +1286,8 @@ class ProfileController extends Controller
                 'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
                 'postFile' => $post->postFile ?? '',
                 'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
+                'postVideo' => $post->postVideo ?? '',
+                'post_video_url' => $post->postVideo ? asset('storage/' . $post->postVideo) : null,
                 'postYoutube' => $post->postYoutube ?? '',
                 'postVimeo' => $post->postVimeo ?? '',
                 'postLink' => $post->postLink ?? '',
