@@ -243,6 +243,8 @@ Route::delete('/posts/{postId}/save', [PostController::class, 'unsavePost']);
 Route::get('/saved-posts', [PostController::class, 'getSavedPosts']);
 Route::post('/posts/disable-comment', [PostController::class, 'disableComment']); // Disable/enable comments (old API: requests.php?f=posts&s=disable_comment)
 Route::post('/posts/hide', [PostController::class, 'hidePost']); // Hide post (old API: requests.php?f=posts&s=hide_post)
+Route::post('/posts/delete', [PostController::class, 'deletePost']); // Delete post (old API: requests.php?f=posts&s=delete_post)
+Route::delete('/posts/{postId}', [PostController::class, 'deletePost']); // Delete post (RESTful alternative)
 
 // Report routes (matching old WoWonder API: post-actions.php?action=report)
 Route::post('/posts/{postId}/report', [ReportController::class, 'reportPost']); // Report/unreport post (old API: post-actions.php?action=report)

@@ -2603,6 +2603,47 @@
       }
     },
     {
+      "name": "Posts - Delete Post (Old API Style)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
+          {"key":"Content-Type","value":"application/json","type":"text"}
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"post_id\": {{post_id}}\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/delete",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","delete"]
+        },
+        "description": "Permanently delete a post (matching old API: requests.php?f=posts&s=delete_post and phone/post_manager.php?action=delete). Requires Authorization Bearer token and 'post_id'. Only post owner, page admin, or group admin can delete the post."
+      }
+    },
+    {
+      "name": "Posts - Delete Post (Legacy requests.php URL)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Accept","value":"application/json","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/requests.php?hash={{hash}}&f=posts&s=delete_post&post_id={{post_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["requests.php"],
+          "query": [
+            {"key":"hash","value":"{{hash}}"},
+            {"key":"f","value":"posts"},
+            {"key":"s","value":"delete_post"},
+            {"key":"post_id","value":"{{post_id}}"}
+          ]
+        },
+        "description": "Exact legacy WoWonder endpoint for deleting a post: requests.php?hash=...&f=posts&s=delete_post&post_id=.... Uses the same URL and parameters as the old code so existing clients behave identically."
+      }
+    },
+    {
       "name": "Posts - Save Post",
       "request": {
         "method": "POST",
