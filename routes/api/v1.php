@@ -241,6 +241,8 @@ Route::post('/posts/{postId}/save', [PostController::class, 'savePost']);
 Route::get('/posts/{postId}/saved', [PostController::class, 'checkSavedPost']);
 Route::delete('/posts/{postId}/save', [PostController::class, 'unsavePost']);
 Route::get('/saved-posts', [PostController::class, 'getSavedPosts']);
+Route::delete('/posts/{postId}', [PostController::class, 'deletePost']); // Delete post (old API: requests.php?f=posts&s=delete_post)
+Route::post('/posts/{postId}/delete', [PostController::class, 'deletePost']); // Delete post (POST alternative)
 Route::post('/posts/disable-comment', [PostController::class, 'disableComment']); // Disable/enable comments (old API: requests.php?f=posts&s=disable_comment)
 Route::post('/posts/hide', [PostController::class, 'hidePost']); // Hide post (old API: requests.php?f=posts&s=hide_post)
 

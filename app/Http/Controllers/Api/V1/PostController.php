@@ -2609,4 +2609,155 @@ class PostController extends Controller
         // Otherwise, it's a storage path - prepend storage URL
         return asset('storage/' . $postPhoto);
     }
+
+    /**
+     * Delete a post
+     * 
+     * @param Request $request
+     * @param int $postId
+     * @return JsonResponse
+     */
+    public function deletePost(Request $request, int $postId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$userId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
+        }
+
+        try {
+            // Find the post
+            $post = DB::table('Wo_Posts')->where('post_id', $postId)->first();
+
+            if (!$post) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 4,
+                        'error_text' => 'Post not found'
+                    ]
+                ], 404);
+            }
+
+            // Check if user is the post owner or admin
+            $isOwner = ($post->user_id == $userId);
+            $isPageOwner = false;
+            $isGroupOwner = false;
+
+            // Check if user owns the page (if post is on a page)
+            if ($post->page_id && $post->page_id > 0) {
+                $page = DB::table('Wo_Pages')->where('page_id', $post->page_id)->first();
+                if ($page && $page->user_id == $userId) {
+                    $isPageOwner = true;
+                }
+            }
+
+            // Check if user owns the group (if post is in a group)
+            if ($post->group_id && $post->group_id > 0) {
+                $group = DB::table('Wo_Groups')->where('group_id', $post->group_id)->first();
+                if ($group && $group->user_id == $userId) {
+                    $isGroupOwner = true;
+                }
+            }
+
+            if (!$isOwner && !$isPageOwner && !$isGroupOwner) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 7,
+                        'error_text' => 'You are not authorized to delete this post'
+                    ]
+                ], 403);
+            }
+
+            // Delete post images/files if they exist
+            if (!empty($post->postFile)) {
+                $filePath = 'public/' . $post->postFile;
+                if (Storage::exists($filePath)) {
+                    Storage::delete($filePath);
+                }
+            }
+
+            if (!empty($post->postPhoto)) {
+                $photoPath = 'public/' . $post->postPhoto;
+                if (Storage::exists($photoPath)) {
+                    Storage::delete($photoPath);
+                }
+            }
+
+            if (!empty($post->postRecord)) {
+                $recordPath = 'public/' . $post->postRecord;
+                if (Storage::exists($recordPath)) {
+                    Storage::delete($recordPath);
+                }
+            }
+
+            // Delete post reactions
+            if (DB::getSchemaBuilder()->hasTable('Wo_PostReactions')) {
+                DB::table('Wo_PostReactions')->where('post_id', $postId)->delete();
+            }
+
+            // Delete post comments
+            if (DB::getSchemaBuilder()->hasTable('Wo_Comments')) {
+                DB::table('Wo_Comments')->where('post_id', $postId)->delete();
+            }
+
+            // Delete saved posts
+            if (DB::getSchemaBuilder()->hasTable('Wo_SavedPosts')) {
+                DB::table('Wo_SavedPosts')->where('post_id', $postId)->delete();
+            }
+
+            // Delete the post
+            DB::table('Wo_Posts')->where('post_id', $postId)->delete();
+
+            // Update user post count
+            if ($post->user_id) {
+                $postCount = DB::table('Wo_Posts')
+                    ->where('user_id', $post->user_id)
+                    ->where('active', '1')
+                    ->count();
+                
+                // Update user details if there's a post_count field
+                // Note: This depends on your user table structure
+            }
+
+            return response()->json([
+                'api_status' => 200,
+                'api_text' => 'success',
+                'api_version' => '1.0',
+                'message' => 'Post deleted successfully',
+                'data' => [
+                    'post_id' => $postId,
+                    'deleted' => true
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => 500,
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Failed to delete post: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
+    }
 }
