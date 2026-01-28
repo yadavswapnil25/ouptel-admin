@@ -149,11 +149,42 @@ class PagesController extends BaseController
                 'name' => $s->name,
             ]);
 
+        // Call to action options (matching WoWonder call_action array)
+        // These are the text labels that map to integer IDs stored in call_action_type column
+        $callToActions = [
+            ['id' => 0, 'label' => ''],
+            ['id' => 1, 'label' => 'Read more'],
+            ['id' => 2, 'label' => 'Shop now'],
+            ['id' => 3, 'label' => 'View now'],
+            ['id' => 4, 'label' => 'Visit now'],
+            ['id' => 5, 'label' => 'Book now'],
+            ['id' => 6, 'label' => 'Learn more'],
+            ['id' => 7, 'label' => 'Play now'],
+            ['id' => 8, 'label' => 'Bet now'],
+            ['id' => 9, 'label' => 'Donate'],
+            ['id' => 10, 'label' => 'Apply here'],
+            ['id' => 11, 'label' => 'Quote here'],
+            ['id' => 12, 'label' => 'Order now'],
+            ['id' => 13, 'label' => 'Book tickets'],
+            ['id' => 14, 'label' => 'Enroll now'],
+            ['id' => 15, 'label' => 'Find a card'],
+            ['id' => 16, 'label' => 'Get a quote'],
+            ['id' => 17, 'label' => 'Get tickets'],
+            ['id' => 18, 'label' => 'Locate a dealer'],
+            ['id' => 19, 'label' => 'Order online'],
+            ['id' => 20, 'label' => 'Preorder now'],
+            ['id' => 21, 'label' => 'Schedule now'],
+            ['id' => 22, 'label' => 'Sign up now'],
+            ['id' => 23, 'label' => 'Subscribe'],
+            ['id' => 24, 'label' => 'Register now'],
+        ];
+
         return response()->json([
             'ok' => true,
             'data' => [
                 'categories' => $categories,
                 'sub_categories' => $subCategories,
+                'call_to_actions' => $callToActions,
             ],
         ]);
     }
@@ -177,6 +208,8 @@ class PagesController extends BaseController
         $pageTitle = $request->input('page_title');
         $pageCategory = $request->input('page_category', 1); // Default to 1 if empty
         $pageDescription = $request->input('page_description', '');
+        $subCategory = $request->input('sub_category', '');
+        $pageSubCategory = $request->input('page_sub_category', ''); // Alternative parameter name
 
         // Validate page_name and page_title are not empty
         if (empty($pageName) || empty($pageTitle)) {
@@ -217,6 +250,26 @@ class PagesController extends BaseController
             ], 400);
         }
 
+        // Validate and set sub_category if provided
+        $subCategoryValue = '';
+        if (!empty($subCategory) || !empty($pageSubCategory)) {
+            $subCategoryInput = !empty($subCategory) ? $subCategory : $pageSubCategory;
+            
+            // Validate sub_category belongs to the selected category
+            if (Schema::hasTable('Wo_Sub_Categories')) {
+                $subCategoryExists = DB::table('Wo_Sub_Categories')
+                    ->where('id', $subCategoryInput)
+                    ->where('category_id', $pageCategory)
+                    ->where('type', 'page')
+                    ->exists();
+                
+                if ($subCategoryExists) {
+                    $subCategoryValue = $subCategoryInput;
+                }
+                // If sub_category doesn't exist or doesn't belong to category, leave it empty
+            }
+        }
+
         // Create the page
         $page = new Page();
         $page->page_name = $pageName;
@@ -229,7 +282,22 @@ class PagesController extends BaseController
         $page->website = $request->input('website', '');
         $page->phone = $request->input('phone', '');
         $page->address = $request->input('address', '');
+        
+        // Set sub_category directly on attributes since it's not in fillable
+        if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
+            $page->setAttribute('sub_category', $subCategoryValue);
+        }
+        
         $page->save();
+
+        // Get sub category name if available
+        $subCategoryName = '';
+        if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
+            $subCategoryModel = PageSubCategory::find($subCategoryValue);
+            if ($subCategoryModel) {
+                $subCategoryName = $subCategoryModel->name;
+            }
+        }
 
         // Return response matching old API format
         return response()->json([
@@ -238,6 +306,8 @@ class PagesController extends BaseController
             'api_version' => '1.0',
             'page_name' => $page->page_name,
             'page_id' => $page->page_id,
+            'sub_category' => $subCategoryValue,
+            'sub_category_name' => $subCategoryName,
         ], 200);
     }
 
@@ -393,7 +463,18 @@ class PagesController extends BaseController
             }
 
             if ($request->has('call_action_type_url') || $request->has('call_to_target_url')) {
-                $updateData['call_action_type_url'] = $request->input('call_action_type_url', $request->input('call_to_target_url'));
+                $callActionUrl = $request->input('call_action_type_url', $request->input('call_to_target_url'));
+                // Validate URL if provided (not empty)
+                if (!empty($callActionUrl)) {
+                    if (!filter_var($callActionUrl, FILTER_VALIDATE_URL)) {
+                        $errors[] = 'Call to action URL is invalid';
+                    } else {
+                        $updateData['call_action_type_url'] = $callActionUrl;
+                    }
+                } else {
+                    // Allow empty string to clear the URL
+                    $updateData['call_action_type_url'] = '';
+                }
             }
 
             if ($request->has('users_post') || $request->has('can_post')) {
@@ -409,6 +490,52 @@ class PagesController extends BaseController
                     }
                 } elseif (is_numeric($canPost)) {
                     $updateData['users_post'] = (int) $canPost ? 1 : 0;
+                }
+            }
+
+            // Handle verification status/request
+            // Accepts: 'verified' (1), 'notVerified' (0), 'pending', 'request'
+            $verificationRequestSubmitted = false;
+            if ($request->has('verified') || $request->has('verification_request')) {
+                $verifiedValue = $request->input('verified', $request->input('verification_request'));
+                
+                if (is_string($verifiedValue)) {
+                    $normalized = strtolower($verifiedValue);
+                    // Handle verification request statuses
+                    if (in_array($normalized, ['verified', '1', 'true', 'yes'], true)) {
+                        $updateData['verified'] = '1';
+                    } elseif (in_array($normalized, ['notverified', 'notverified', '0', 'false', 'no'], true)) {
+                        $updateData['verified'] = '0';
+                    } elseif (in_array($normalized, ['pending', 'request', 'pending_request'])) {
+                        // For pending/request status, check if verification request table exists
+                        // and create a verification request record if it doesn't exist
+                        if (DB::getSchemaBuilder()->hasTable('Wo_Verification_Requests')) {
+                            $existingRequest = DB::table('Wo_Verification_Requests')
+                                ->where('page_id', $id)
+                                ->where('seen', 0) // Not yet reviewed
+                                ->first();
+                            
+                            if (!$existingRequest) {
+                                // Create a new verification request
+                                DB::table('Wo_Verification_Requests')->insert([
+                                    'page_id' => $id,
+                                    'user_id' => $userId,
+                                    'type' => 'Page',
+                                    'seen' => 0,
+                                    'message' => $request->input('verification_message', ''),
+                                    'user_name' => '',
+                                    'passport' => '',
+                                    'photo' => '',
+                                ]);
+                                $verificationRequestSubmitted = true;
+                            } else {
+                                $verificationRequestSubmitted = true; // Request already exists
+                            }
+                        }
+                        // Don't update verified field for pending/request - leave it as is
+                    }
+                } elseif (is_numeric($verifiedValue)) {
+                    $updateData['verified'] = (int) $verifiedValue ? '1' : '0';
                 }
             }
 
@@ -470,12 +597,41 @@ class PagesController extends BaseController
                 $page->save();
             }
 
+            // Check verification request status
+            $verificationRequestStatus = null;
+            $verificationStatus = 'not_verified'; // Default status
+            
+            if (DB::getSchemaBuilder()->hasTable('Wo_Verification_Requests')) {
+                $pendingRequest = DB::table('Wo_Verification_Requests')
+                    ->where('page_id', $id)
+                    ->where('seen', 0)
+                    ->first();
+                
+                if ($pendingRequest) {
+                    $verificationRequestStatus = 'pending';
+                    $verificationStatus = 'pending';
+                } elseif ($verificationRequestSubmitted) {
+                    $verificationRequestStatus = 'pending';
+                    $verificationStatus = 'pending';
+                }
+            }
+            
+            // If page is actually verified, set status to verified
+            if ($page->verified == '1') {
+                $verificationStatus = 'verified';
+            }
+
             // Return success response
+            $responseMessage = 'Page updated successfully';
+            if ($verificationRequestSubmitted) {
+                $responseMessage = 'Page updated successfully. Verification request submitted.';
+            }
+
             return response()->json([
                 'api_status' => 200,
                 'api_text' => 'success',
                 'api_version' => '1.0',
-                'message' => 'Page updated successfully',
+                'message' => $responseMessage,
                 'data' => [
                     'page_id' => $page->page_id,
                     'page_name' => $page->page_name,
@@ -486,6 +642,12 @@ class PagesController extends BaseController
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
+                    'call_to_action' => $page->call_action_type ?? 0,
+                    'call_to_target_url' => $page->call_action_type_url ?? '',
+                    'can_post' => isset($page->users_post) ? (int) $page->users_post : 0,
+                    'verified' => (bool) ($page->verified ?? false),
+                    'verification_status' => $verificationStatus, // 'not_verified', 'pending', or 'verified'
+                    'verification_request_status' => $verificationRequestStatus,
                     'avatar_url' => $page->avatar ? asset('storage/' . $page->avatar) : null,
                     'cover_url' => $page->cover ? asset('storage/' . $page->cover) : null,
                 ]
@@ -772,12 +934,25 @@ class PagesController extends BaseController
 
             // Get page category name if available
             $categoryName = '';
-            if ($page->page_category && DB::getSchemaBuilder()->hasTable('Wo_Page_Categories')) {
-                $category = DB::table('Wo_Page_Categories')
-                    ->where('id', $page->page_category)
-                    ->first();
+            if ($page->page_category && DB::getSchemaBuilder()->hasTable('Wo_Pages_Categories')) {
+                $category = PageCategory::find($page->page_category);
                 if ($category) {
-                    $categoryName = $category->name ?? '';
+                    $categoryName = $category->name;
+                }
+            }
+
+            // Get page sub category name if available
+            // Access sub_category directly from attributes since it's not in fillable
+            $subCategoryValue = '';
+            if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
+                $subCategoryValue = $page->getAttributes()['sub_category'] ?? '';
+            }
+            
+            $subCategoryName = '';
+            if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
+                $subCategory = PageSubCategory::find($subCategoryValue);
+                if ($subCategory) {
+                    $subCategoryName = $subCategory->name;
                 }
             }
 
@@ -810,6 +985,8 @@ class PagesController extends BaseController
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
+                    'sub_category' => $subCategoryValue,
+                    'sub_category_name' => $subCategoryName,
                     // Expose legacy WoWonder columns under clearer API field names
                     'call_to_action' => $page->call_action_type ?? 0,
                     'call_to_target_url' => $page->call_action_type_url ?? '',
@@ -934,12 +1111,25 @@ class PagesController extends BaseController
 
                 // Get category name if available
                 $categoryName = '';
-                if ($pageItem->page_category && DB::getSchemaBuilder()->hasTable('Wo_Page_Categories')) {
-                    $category = DB::table('Wo_Page_Categories')
-                        ->where('id', $pageItem->page_category)
-                        ->first();
+                if ($pageItem->page_category && DB::getSchemaBuilder()->hasTable('Wo_Pages_Categories')) {
+                    $category = PageCategory::find($pageItem->page_category);
                     if ($category) {
-                        $categoryName = $category->name ?? '';
+                        $categoryName = $category->name;
+                    }
+                }
+
+                // Get sub category name if available
+                // Access sub_category directly from attributes since it's not in fillable
+                $subCategoryValue = '';
+                if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
+                    $subCategoryValue = $pageItem->getAttributes()['sub_category'] ?? '';
+                }
+                
+                $subCategoryName = '';
+                if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
+                    $subCategory = PageSubCategory::find($subCategoryValue);
+                    if ($subCategory) {
+                        $subCategoryName = $subCategory->name;
                     }
                 }
 
@@ -950,6 +1140,8 @@ class PagesController extends BaseController
                     'page_description' => $pageItem->page_description ?? '',
                     'category' => $pageItem->page_category ?? 0,
                     'category_name' => $categoryName,
+                    'sub_category' => $subCategoryValue,
+                    'sub_category_name' => $subCategoryName,
                     'verified' => (bool) ($pageItem->verified ?? false),
                     'avatar' => $pageItem->avatar ?? '',
                     'avatar_url' => $pageItem->avatar ? asset('storage/' . $pageItem->avatar) : null,
