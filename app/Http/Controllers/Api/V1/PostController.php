@@ -947,7 +947,7 @@ class PostController extends Controller
                 'type' => 'feeling',
                 'label' => 'Feeling',
                 'value' => $post->postFeeling,
-                'text' => "is feeling {$feelingData['label']}",
+                'text' => "is feeling {$feelingData['name']}",
                 'icon' => $feelingData['icon'] ?? null,
             ];
         }
@@ -956,60 +956,35 @@ class PostController extends Controller
     }
 
     /**
-     * Get feeling data (matching new-feed format)
+     * Get feeling data (icon and name)
      * 
-     * @param string $feelingKey
-     * @return array|null
+     * @param string $feeling
+     * @return array
      */
-    private function getFeelingData(string $feelingKey): ?array
+    private function getFeelingData(string $feeling): array
     {
-        $feelingIcons = [
-            'happy' => 'smile',
-            'loved' => 'heart-eyes',
-            'sad' => 'disappointed',
-            'so_sad' => 'sob',
-            'angry' => 'angry',
-            'confused' => 'confused',
-            'smirk' => 'smirk',
-            'broke' => 'broken-heart',
-            'expressionless' => 'expressionless',
-            'cool' => 'sunglasses',
-            'funny' => 'joy',
-            'tired' => 'tired-face',
-            'lovely' => 'heart',
-            'blessed' => 'innocent',
-            'shocked' => 'scream',
-            'sleepy' => 'sleeping',
-            'pretty' => 'relaxed',
-            'bored' => 'unamused'
-        ];
-        
-        $feelingLabels = [
-            'happy' => 'Happy',
-            'loved' => 'Loved',
-            'sad' => 'Sad',
-            'so_sad' => 'So Sad',
-            'angry' => 'Angry',
-            'confused' => 'Confused',
-            'smirk' => 'Smirk',
-            'broke' => 'Broke',
-            'expressionless' => 'Expressionless',
-            'cool' => 'Cool',
-            'funny' => 'Funny',
-            'tired' => 'Tired',
-            'lovely' => 'Lovely',
-            'blessed' => 'Blessed',
-            'shocked' => 'Shocked',
-            'sleepy' => 'Sleepy',
-            'pretty' => 'Pretty',
-            'bored' => 'Bored'
+        $feelings = [
+            'happy' => ['name' => 'Happy', 'icon' => '😊'],
+            'loved' => ['name' => 'Loved', 'icon' => '❤️'],
+            'sad' => ['name' => 'Sad', 'icon' => '😢'],
+            'so_sad' => ['name' => 'Very Sad', 'icon' => '😭'],
+            'angry' => ['name' => 'Angry', 'icon' => '😠'],
+            'confused' => ['name' => 'Confused', 'icon' => '😕'],
+            'smirk' => ['name' => 'Smirk', 'icon' => '😏'],
+            'broke' => ['name' => 'Broke', 'icon' => '💔'],
+            'expressionless' => ['name' => 'Expressionless', 'icon' => '😑'],
+            'cool' => ['name' => 'Cool', 'icon' => '😎'],
+            'funny' => ['name' => 'Funny', 'icon' => '😄'],
+            'tired' => ['name' => 'Tired', 'icon' => '😴'],
+            'lovely' => ['name' => 'Lovely', 'icon' => '🥰'],
+            'blessed' => ['name' => 'Blessed', 'icon' => '🙏'],
+            'shocked' => ['name' => 'Shocked', 'icon' => '😱'],
+            'sleepy' => ['name' => 'Sleepy', 'icon' => '😪'],
+            'pretty' => ['name' => 'Pretty', 'icon' => '😍'],
+            'bored' => ['name' => 'Bored', 'icon' => '😐'],
         ];
 
-        return [
-            'key' => $feelingKey,
-            'label' => $feelingLabels[$feelingKey] ?? ucfirst($feelingKey),
-            'icon' => $feelingIcons[$feelingKey] ?? 'smile',
-        ];
+        return $feelings[$feeling] ?? ['name' => ucfirst(str_replace('_', ' ', $feeling)), 'icon' => null];
     }
 
     /**
@@ -2014,12 +1989,6 @@ class PostController extends Controller
         // Get views count (for videos)
         $viewsCount = (int) ($post->videoViews ?? 0);
 
-        // Get feeling data if it's a feeling post
-        $feelingData = null;
-        if (!empty($post->postFeeling)) {
-            $feelingData = $this->getFeelingData($post->postFeeling);
-        }
-
         return [
             'id' => $post->id,
             'post_id' => $post->post_id ?? $post->id,
@@ -2057,11 +2026,6 @@ class PostController extends Controller
             // Album data
             'album_name' => $post->album_name ?? '',
             'multi_image_post' => (bool) ($post->multi_image_post ?? false),
-            
-            // Feeling data (for feeling posts) - matching new-feed format
-            'post_feeling' => $post->postFeeling ?? null,
-            'feeling' => $feelingData,
-            'is_feeling_post' => !empty($post->postFeeling),
             
             // Engagement metrics (matching new-feed format)
             'reactions_count' => $totalReactions,
@@ -2392,222 +2356,6 @@ class PostController extends Controller
             'action' => $action,
             'code' => $newStatus
         ]);
-    }
-
-    /**
-     * Delete post (mimics old API: requests.php?f=posts&s=delete_post / post_manager.php?action=delete)
-     * 
-     * @param Request $request
-     * @param int|null $postId Route parameter (optional, for RESTful DELETE /posts/{postId})
-     * @return JsonResponse
-     */
-    public function deletePost(Request $request, ?int $postId = null): JsonResponse
-    {
-        // Auth via Wo_AppsSessions
-        $authHeader = $request->header('Authorization');
-        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json([
-                'api_status' => 400,
-                'api_text' => 'failed',
-                'errors' => [
-                    'error_id' => 1,
-                    'error_text' => 'Unauthorized - No Bearer token provided'
-                ]
-            ], 401);
-        }
-        
-        $token = substr($authHeader, 7);
-        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-        if (!$tokenUserId) {
-            return response()->json([
-                'api_status' => 400,
-                'api_text' => 'failed',
-                'errors' => [
-                    'error_id' => 2,
-                    'error_text' => 'Invalid token - Session not found'
-                ]
-            ], 401);
-        }
-
-        // Validate request - accept both 'post_id' parameter (matching old API) or route parameter
-        $postId = $postId ?? (int) ($request->input('post_id', 0));
-
-        if (empty($postId) || $postId <= 0) {
-            return response()->json([
-                'api_status' => 400,
-                'api_text' => 'failed',
-                'errors' => [
-                    'error_id' => 5,
-                    'error_text' => 'No post id sent.'
-                ]
-            ], 400);
-        }
-
-        // Get post - check both id and post_id columns
-        $post = DB::table('Wo_Posts')
-            ->where('id', $postId)
-            ->orWhere('post_id', $postId)
-            ->first();
-            
-        if (!$post) {
-            return response()->json([
-                'api_status' => 400,
-                'api_text' => 'failed',
-                'errors' => [
-                    'error_id' => 6,
-                    'error_text' => 'Post is not exists.'
-                ]
-            ], 404);
-        }
-
-        // Check if user is post owner
-        $isOwner = false;
-        
-        // Check if user is the post owner
-        if ($post->user_id == $tokenUserId) {
-            $isOwner = true;
-        }
-        
-        // Check if post belongs to a page and user is page owner/admin
-        if (!$isOwner && !empty($post->page_id)) {
-            $page = DB::table('Wo_Pages')->where('page_id', $post->page_id)->first();
-            if ($page) {
-                if ($page->user_id == $tokenUserId) {
-                    $isOwner = true;
-                } else {
-                    $isAdmin = DB::table('Wo_PageAdmins')
-                        ->where('page_id', $post->page_id)
-                        ->where('user_id', $tokenUserId)
-                        ->exists();
-                    if ($isAdmin) {
-                        $isOwner = true;
-                    }
-                }
-            }
-        }
-        
-        // Check if post belongs to a group and user is group creator/admin
-        if (!$isOwner && !empty($post->group_id)) {
-            $group = DB::table('Wo_Groups')->where('id', $post->group_id)->first();
-            if ($group) {
-                if ($group->user_id == $tokenUserId) {
-                    $isOwner = true;
-                } else {
-                    $isAdmin = DB::table('Wo_GroupAdmins')
-                        ->where('group_id', $post->group_id)
-                        ->where('user_id', $tokenUserId)
-                        ->exists();
-                    if ($isAdmin) {
-                        $isOwner = true;
-                    }
-                }
-            }
-        }
-
-        if (!$isOwner) {
-            return response()->json([
-                'api_status' => 400,
-                'api_text' => 'failed',
-                'errors' => [
-                    'error_id' => 7,
-                    'error_text' => 'You are not the post owner'
-                ]
-            ], 403);
-        }
-
-        try {
-            DB::beginTransaction();
-
-            $actualPostId = $post->id; // Use the actual database ID
-            
-            // Delete post reactions
-            if (Schema::hasTable('Wo_Reactions')) {
-                DB::table('Wo_Reactions')
-                    ->where('post_id', $post->post_id ?? $post->id)
-                    ->delete();
-            }
-
-            // Delete post comments
-            if (Schema::hasTable('Wo_Comments')) {
-                DB::table('Wo_Comments')
-                    ->where('post_id', $actualPostId)
-                    ->delete();
-            }
-
-            // Delete saved posts references
-            if (Schema::hasTable('Wo_SavedPosts')) {
-                DB::table('Wo_SavedPosts')
-                    ->where('post_id', $actualPostId)
-                    ->delete();
-            }
-
-            // Delete hidden posts references
-            if (Schema::hasTable('Wo_HiddenPosts')) {
-                DB::table('Wo_HiddenPosts')
-                    ->where('post_id', $actualPostId)
-                    ->delete();
-            }
-
-            // Delete album media if exists
-            if (Schema::hasTable('Wo_Albums_Media')) {
-                DB::table('Wo_Albums_Media')
-                    ->where('post_id', $actualPostId)
-                    ->delete();
-            }
-
-            // Delete post files from storage if they exist
-            if (!empty($post->postPhoto) && !filter_var($post->postPhoto, FILTER_VALIDATE_URL)) {
-                // Only delete if it's a storage path, not a URL (like GIF URLs)
-                Storage::disk('public')->delete($post->postPhoto);
-            }
-            if (!empty($post->postFile)) {
-                Storage::disk('public')->delete($post->postFile);
-            }
-            if (!empty($post->postRecord)) {
-                Storage::disk('public')->delete($post->postRecord);
-            }
-            if (!empty($post->postFileThumb)) {
-                Storage::disk('public')->delete($post->postFileThumb);
-            }
-
-            // Delete the post itself
-            DB::table('Wo_Posts')
-                ->where('id', $actualPostId)
-                ->delete();
-
-            // Update user post count if column exists
-            if (Schema::hasColumn('Wo_Users', 'posts')) {
-                $postCount = DB::table('Wo_Posts')
-                    ->where('user_id', $tokenUserId)
-                    ->where('active', 1)
-                    ->count();
-                DB::table('Wo_Users')
-                    ->where('user_id', $tokenUserId)
-                    ->update(['posts' => $postCount]);
-            }
-
-            DB::commit();
-
-            return response()->json([
-                'api_status' => 200,
-                'api_text' => 'success',
-                'deleted' => true
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            
-            Log::error('Failed to delete post: ' . $e->getMessage());
-            
-            return response()->json([
-                'api_status' => 400,
-                'api_text' => 'failed',
-                'errors' => [
-                    'error_id' => 5,
-                    'error_text' => 'Failed to delete post: ' . $e->getMessage()
-                ]
-            ], 500);
-        }
     }
 
     /**
