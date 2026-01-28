@@ -384,6 +384,20 @@ class PagesController extends BaseController
                 $updateData['address'] = $request->input('address');
             }
 
+            // Update page call-to-action settings if provided
+            // These fields must exist as columns on Wo_Pages (e.g. call_to_action, call_to_target_url, can_post)
+            if ($request->has('call_to_action')) {
+                $updateData['call_to_action'] = $request->input('call_to_action');
+            }
+
+            if ($request->has('call_to_target_url')) {
+                $updateData['call_to_target_url'] = $request->input('call_to_target_url');
+            }
+
+            if ($request->has('can_post')) {
+                $updateData['can_post'] = $request->input('can_post');
+            }
+
             // Handle avatar upload if provided
             if ($request->hasFile('avatar')) {
                 $avatar = $request->file('avatar');
@@ -782,6 +796,9 @@ class PagesController extends BaseController
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
+                    'call_to_action' => $page->call_to_action ?? null,
+                    'call_to_target_url' => $page->call_to_target_url ?? null,
+                    'can_post' => $page->can_post ?? null,
                     'url' => $page->url ?? url('/page/' . ($page->page_name ?? '')),
                     'likes_count' => $likesCount,
                     'posts_count' => $postsCount,
