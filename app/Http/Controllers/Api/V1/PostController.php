@@ -1772,11 +1772,11 @@ class PostController extends Controller
             $responseData['post_comments'] = $comments;
         }
 
-        // Get post liked users
-        if (!empty($fetchData['post_liked_users'])) {
-            $likedUsers = $this->getPostLikedUsers($postId);
-            $responseData['post_liked_users'] = $likedUsers;
-        }
+            // Get post liked users
+            if (!empty($fetchData['post_liked_users'])) {
+                $likedUsers = $this->getPostLikedUsersArray($postId);
+                $responseData['post_liked_users'] = $likedUsers;
+            }
 
         // Get post wondered users
         if (!empty($fetchData['post_wondered_users'])) {
@@ -2128,12 +2128,12 @@ class PostController extends Controller
     }
 
     /**
-     * Get post liked users
+     * Get post liked users (private helper method)
      * 
      * @param int $postId
      * @return array
      */
-    private function getPostLikedUsers(int $postId): array
+    private function getPostLikedUsersArray(int $postId): array
     {
         $likes = DB::table('Wo_Reactions')
             ->where('post_id', $postId)
@@ -2912,23 +2912,5 @@ class PostController extends Controller
                 ]
             ], 500);
         }
-    }
-
-    /**
-     * Get human readable time
-     * 
-     * @param int $timestamp
-     * @return string
-     */
-    private function getHumanTime(int $timestamp): string
-    {
-        $time = time() - $timestamp;
-        
-        if ($time < 60) return 'Just now';
-        if ($time < 3600) return floor($time / 60) . 'm';
-        if ($time < 86400) return floor($time / 3600) . 'h';
-        if ($time < 2592000) return floor($time / 86400) . 'd';
-        if ($time < 31536000) return floor($time / 2592000) . 'mo';
-        return floor($time / 31536000) . 'y';
     }
 }
