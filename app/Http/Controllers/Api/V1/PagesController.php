@@ -1706,6 +1706,301 @@ class PagesController extends BaseController
         // Fallback to username
         return $user->username ?? 'Unknown User';
     }
+
+    /**
+     * Get page analytics (mimics old API: ajax_loading.php?link1=page-setting&page={page_name}&link3=analytics)
+     * 
+     * @param Request $request
+     * @param int|string $id Page ID or page name
+     * @return JsonResponse
+     */
+    public function analytics(Request $request, $id): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
+        }
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$userId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
+        }
+
+        try {
+            // Find the page by ID or page_name
+            $page = null;
+            if (is_numeric($id)) {
+                $page = Page::where('page_id', $id)->first();
+            } else {
+                $page = Page::where('page_name', $id)->first();
+            }
+
+            if (!$page) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 4,
+                        'error_text' => 'Page not found'
+                    ]
+                ], 404);
+            }
+
+            // Check if user is the page owner
+            if ($page->user_id != $userId) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 7,
+                        'error_text' => 'You are not the page owner'
+                    ]
+                ], 403);
+            }
+
+            $pageId = $page->page_id;
+            $currentTime = time();
+            
+            // Calculate time ranges
+            $todayStart = strtotime('today');
+            $weekStart = strtotime('monday this week');
+            $monthStart = strtotime('first day of this month midnight');
+            $yearStart = strtotime('january 1 this year');
+
+            // Get likes statistics
+            $likesStats = [
+                'total' => 0,
+                'today' => 0,
+                'this_week' => 0,
+                'this_month' => 0,
+                'this_year' => 0,
+            ];
+
+            if (DB::getSchemaBuilder()->hasTable('Wo_Pages_Likes')) {
+                $likesQuery = DB::table('Wo_Pages_Likes')
+                    ->where('page_id', $pageId);
+
+                $likesStats['total'] = $likesQuery->count();
+
+                // Check if time column exists
+                if (Schema::hasColumn('Wo_Pages_Likes', 'time')) {
+                    $likesStats['today'] = (clone $likesQuery)
+                        ->where('time', '>=', $todayStart)
+                        ->count();
+
+                    $likesStats['this_week'] = (clone $likesQuery)
+                        ->where('time', '>=', $weekStart)
+                        ->count();
+
+                    $likesStats['this_month'] = (clone $likesQuery)
+                        ->where('time', '>=', $monthStart)
+                        ->count();
+
+                    $likesStats['this_year'] = (clone $likesQuery)
+                        ->where('time', '>=', $yearStart)
+                        ->count();
+                }
+            }
+
+            // Get posts statistics
+            $postsStats = [
+                'total' => 0,
+                'today' => 0,
+                'this_week' => 0,
+                'this_month' => 0,
+                'this_year' => 0,
+            ];
+
+            if (DB::getSchemaBuilder()->hasTable('Wo_Posts')) {
+                $postsQuery = DB::table('Wo_Posts')
+                    ->where('page_id', $pageId)
+                    ->where('active', '1');
+
+                $postsStats['total'] = $postsQuery->count();
+
+                // Posts use 'time' column (Unix timestamp)
+                if (Schema::hasColumn('Wo_Posts', 'time')) {
+                    $postsStats['today'] = (clone $postsQuery)
+                        ->where('time', '>=', $todayStart)
+                        ->count();
+
+                    $postsStats['this_week'] = (clone $postsQuery)
+                        ->where('time', '>=', $weekStart)
+                        ->count();
+
+                    $postsStats['this_month'] = (clone $postsQuery)
+                        ->where('time', '>=', $monthStart)
+                        ->count();
+
+                    $postsStats['this_year'] = (clone $postsQuery)
+                        ->where('time', '>=', $yearStart)
+                        ->count();
+                }
+            }
+
+            // Get recent likes (last 10)
+            $recentLikes = [];
+            if (DB::getSchemaBuilder()->hasTable('Wo_Pages_Likes')) {
+                $recentLikesQuery = DB::table('Wo_Pages_Likes')
+                    ->where('page_id', $pageId)
+                    ->orderByDesc('time')
+                    ->limit(10);
+
+                if (Schema::hasColumn('Wo_Pages_Likes', 'time')) {
+                    $recentLikesData = $recentLikesQuery->get();
+                    
+                    foreach ($recentLikesData as $like) {
+                        $user = DB::table('Wo_Users')
+                            ->where('user_id', $like->user_id)
+                            ->first();
+                        
+                        $recentLikes[] = [
+                            'user_id' => $like->user_id,
+                            'username' => $user->username ?? 'Unknown',
+                            'name' => $this->getUserName($user),
+                            'avatar_url' => $user && $user->avatar ? asset('storage/' . $user->avatar) : null,
+                            'liked_at' => $like->time ? date('c', $like->time) : null,
+                            'liked_at_human' => $like->time ? $this->getHumanTime($like->time) : null,
+                        ];
+                    }
+                }
+            }
+
+            // Get recent posts (last 5)
+            $recentPosts = [];
+            if (DB::getSchemaBuilder()->hasTable('Wo_Posts')) {
+                $recentPostsData = DB::table('Wo_Posts')
+                    ->where('page_id', $pageId)
+                    ->where('active', '1')
+                    ->orderByDesc('time')
+                    ->limit(5)
+                    ->get();
+
+                foreach ($recentPostsData as $post) {
+                    $recentPosts[] = [
+                        'post_id' => $post->id ?? $post->post_id ?? null,
+                        'post_text' => substr($post->postText ?? '', 0, 100) . (strlen($post->postText ?? '') > 100 ? '...' : ''),
+                        'created_at' => $post->time ? date('c', $post->time) : null,
+                        'created_at_human' => $post->time ? $this->getHumanTime($post->time) : null,
+                    ];
+                }
+            }
+
+            // Calculate growth percentages (comparing this period to previous period)
+            $likesGrowth = [
+                'week' => $this->calculateGrowth($likesStats['this_week'], $this->getPreviousPeriodCount('Wo_Pages_Likes', $pageId, $weekStart, 'week')),
+                'month' => $this->calculateGrowth($likesStats['this_month'], $this->getPreviousPeriodCount('Wo_Pages_Likes', $pageId, $monthStart, 'month')),
+                'year' => $this->calculateGrowth($likesStats['this_year'], $this->getPreviousPeriodCount('Wo_Pages_Likes', $pageId, $yearStart, 'year')),
+            ];
+
+            $postsGrowth = [
+                'week' => $this->calculateGrowth($postsStats['this_week'], $this->getPreviousPeriodCount('Wo_Posts', $pageId, $weekStart, 'week', true)),
+                'month' => $this->calculateGrowth($postsStats['this_month'], $this->getPreviousPeriodCount('Wo_Posts', $pageId, $monthStart, 'month', true)),
+                'year' => $this->calculateGrowth($postsStats['this_year'], $this->getPreviousPeriodCount('Wo_Posts', $pageId, $yearStart, 'year', true)),
+            ];
+
+            return response()->json([
+                'api_status' => 200,
+                'api_text' => 'success',
+                'api_version' => '1.0',
+                'data' => [
+                    'page_id' => $page->page_id,
+                    'page_name' => $page->page_name,
+                    'page_title' => $page->page_title,
+                    'likes' => $likesStats,
+                    'posts' => $postsStats,
+                    'likes_growth' => $likesGrowth,
+                    'posts_growth' => $postsGrowth,
+                    'recent_likes' => $recentLikes,
+                    'recent_posts' => $recentPosts,
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => 500,
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Failed to fetch page analytics: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Calculate growth percentage
+     * 
+     * @param int $current
+     * @param int $previous
+     * @return float|null
+     */
+    private function calculateGrowth($current, $previous): ?float
+    {
+        if ($previous == 0) {
+            return $current > 0 ? 100.0 : null;
+        }
+        return round((($current - $previous) / $previous) * 100, 2);
+    }
+
+    /**
+     * Get count for previous period
+     * 
+     * @param string $table
+     * @param int $pageId
+     * @param int $currentPeriodStart
+     * @param string $periodType
+     * @param bool $isPosts
+     * @return int
+     */
+    private function getPreviousPeriodCount($table, $pageId, $currentPeriodStart, $periodType, $isPosts = false): int
+    {
+        if (!DB::getSchemaBuilder()->hasTable($table)) {
+            return 0;
+        }
+
+        $query = DB::table($table);
+        
+        if ($isPosts) {
+            $query->where('page_id', $pageId)->where('active', '1');
+        } else {
+            $query->where('page_id', $pageId);
+        }
+
+        if (!Schema::hasColumn($table, 'time')) {
+            return 0;
+        }
+
+        // Calculate previous period start and end
+        $previousPeriodEnd = $currentPeriodStart - 1;
+        $previousPeriodStart = 0;
+
+        switch ($periodType) {
+            case 'week':
+                $previousPeriodStart = $currentPeriodStart - (7 * 24 * 60 * 60); // 7 days ago
+                break;
+            case 'month':
+                $previousPeriodStart = strtotime('-1 month', $currentPeriodStart);
+                break;
+            case 'year':
+                $previousPeriodStart = strtotime('-1 year', $currentPeriodStart);
+                break;
+        }
+
+        return $query->where('time', '>=', $previousPeriodStart)
+            ->where('time', '<', $currentPeriodStart)
+            ->count();
+    }
 }
 
 

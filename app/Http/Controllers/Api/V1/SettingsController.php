@@ -464,6 +464,88 @@ class SettingsController extends Controller
                     $updateData['birthday'] = null;
                 }
             }
+            
+            // Add profile fields that are commonly updated with general settings
+            if (isset($userData['about'])) {
+                // Truncate about if too long (typically VARCHAR(500))
+                $about = $userData['about'];
+                if (mb_strlen($about) > 500) {
+                    $updateData['about'] = mb_substr($about, 0, 497) . '...';
+                } else {
+                    $updateData['about'] = $about;
+                }
+            }
+            
+            if (isset($userData['address'])) {
+                // Truncate address if too long (typically VARCHAR(100))
+                // Using 100 to match common database schema
+                $address = trim($userData['address']);
+                if (mb_strlen($address) > 100) {
+                    $updateData['address'] = mb_substr($address, 0, 97) . '...';
+                } else {
+                    $updateData['address'] = $address;
+                }
+            }
+            
+            if (isset($userData['school'])) {
+                // Truncate school if too long (typically VARCHAR(100))
+                $school = $userData['school'];
+                if (mb_strlen($school) > 100) {
+                    $updateData['school'] = mb_substr($school, 0, 97) . '...';
+                } else {
+                    $updateData['school'] = $school;
+                }
+            }
+            
+            if (isset($userData['working'])) {
+                // Truncate working if too long (typically VARCHAR(100))
+                $working = $userData['working'];
+                if (mb_strlen($working) > 100) {
+                    $updateData['working'] = mb_substr($working, 0, 97) . '...';
+                } else {
+                    $updateData['working'] = $working;
+                }
+            }
+            
+            if (isset($userData['working_link'])) {
+                // Validate and truncate URL if too long (typically VARCHAR(255))
+                $workingLink = $userData['working_link'];
+                if (mb_strlen($workingLink) > 255) {
+                    $updateData['working_link'] = mb_substr($workingLink, 0, 252) . '...';
+                } else {
+                    $updateData['working_link'] = $workingLink;
+                }
+            }
+            
+            if (isset($userData['website'])) {
+                // Validate and truncate URL if too long (typically VARCHAR(255))
+                $website = $userData['website'];
+                if (mb_strlen($website) > 255) {
+                    $updateData['website'] = mb_substr($website, 0, 252) . '...';
+                } else {
+                    $updateData['website'] = $website;
+                }
+            }
+            
+            if (isset($userData['first_name'])) {
+                // Truncate first_name if too long (typically VARCHAR(50))
+                $firstName = $userData['first_name'];
+                if (mb_strlen($firstName) > 50) {
+                    $updateData['first_name'] = mb_substr($firstName, 0, 47) . '...';
+                } else {
+                    $updateData['first_name'] = $firstName;
+                }
+            }
+            
+            if (isset($userData['last_name'])) {
+                // Truncate last_name if too long (typically VARCHAR(50))
+                $lastName = $userData['last_name'];
+                if (mb_strlen($lastName) > 50) {
+                    $updateData['last_name'] = mb_substr($lastName, 0, 47) . '...';
+                } else {
+                    $updateData['last_name'] = $lastName;
+                }
+            }
 
             if (!empty($updateData)) {
                 DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
@@ -568,16 +650,142 @@ class SettingsController extends Controller
 
         $updateData = [];
         
-        if (isset($userData['first_name'])) $updateData['first_name'] = $userData['first_name'];
-        if (isset($userData['last_name'])) $updateData['last_name'] = $userData['last_name'];
-        if (isset($userData['about'])) $updateData['about'] = $userData['about'];
-        if (isset($userData['facebook'])) $updateData['facebook'] = $userData['facebook'];
-        if (isset($userData['google'])) $updateData['google'] = $userData['google'];
-        if (isset($userData['linkedin'])) $updateData['linkedin'] = $userData['linkedin'];
-        if (isset($userData['vk'])) $updateData['vk'] = $userData['vk'];
-        if (isset($userData['instagram'])) $updateData['instagram'] = $userData['instagram'];
-        if (isset($userData['twitter'])) $updateData['twitter'] = $userData['twitter'];
-        if (isset($userData['youtube'])) $updateData['youtube'] = $userData['youtube'];
+        if (isset($userData['first_name'])) {
+            $firstName = $userData['first_name'];
+            if (mb_strlen($firstName) > 50) {
+                $updateData['first_name'] = mb_substr($firstName, 0, 47) . '...';
+            } else {
+                $updateData['first_name'] = $firstName;
+            }
+        }
+        
+        if (isset($userData['last_name'])) {
+            $lastName = $userData['last_name'];
+            if (mb_strlen($lastName) > 50) {
+                $updateData['last_name'] = mb_substr($lastName, 0, 47) . '...';
+            } else {
+                $updateData['last_name'] = $lastName;
+            }
+        }
+        
+        if (isset($userData['about'])) {
+            $about = $userData['about'];
+            if (mb_strlen($about) > 500) {
+                $updateData['about'] = mb_substr($about, 0, 497) . '...';
+            } else {
+                $updateData['about'] = $about;
+            }
+        }
+        
+        if (isset($userData['address'])) {
+            // Truncate address if too long (typically VARCHAR(100))
+            // Using 100 to match common database schema
+            $address = trim($userData['address']);
+            if (mb_strlen($address) > 100) {
+                $updateData['address'] = mb_substr($address, 0, 97) . '...';
+            } else {
+                $updateData['address'] = $address;
+            }
+        }
+        
+        if (isset($userData['school'])) {
+            $school = $userData['school'];
+            if (mb_strlen($school) > 100) {
+                $updateData['school'] = mb_substr($school, 0, 97) . '...';
+            } else {
+                $updateData['school'] = $school;
+            }
+        }
+        
+        if (isset($userData['working'])) {
+            $working = $userData['working'];
+            if (mb_strlen($working) > 100) {
+                $updateData['working'] = mb_substr($working, 0, 97) . '...';
+            } else {
+                $updateData['working'] = $working;
+            }
+        }
+        
+        if (isset($userData['working_link'])) {
+            $workingLink = $userData['working_link'];
+            if (mb_strlen($workingLink) > 255) {
+                $updateData['working_link'] = mb_substr($workingLink, 0, 252) . '...';
+            } else {
+                $updateData['working_link'] = $workingLink;
+            }
+        }
+        
+        if (isset($userData['website'])) {
+            $website = $userData['website'];
+            if (mb_strlen($website) > 255) {
+                $updateData['website'] = mb_substr($website, 0, 252) . '...';
+            } else {
+                $updateData['website'] = $website;
+            }
+        }
+        
+        if (isset($userData['facebook'])) {
+            $facebook = $userData['facebook'];
+            if (mb_strlen($facebook) > 255) {
+                $updateData['facebook'] = mb_substr($facebook, 0, 252) . '...';
+            } else {
+                $updateData['facebook'] = $facebook;
+            }
+        }
+        
+        if (isset($userData['google'])) {
+            $google = $userData['google'];
+            if (mb_strlen($google) > 255) {
+                $updateData['google'] = mb_substr($google, 0, 252) . '...';
+            } else {
+                $updateData['google'] = $google;
+            }
+        }
+        
+        if (isset($userData['linkedin'])) {
+            $linkedin = $userData['linkedin'];
+            if (mb_strlen($linkedin) > 255) {
+                $updateData['linkedin'] = mb_substr($linkedin, 0, 252) . '...';
+            } else {
+                $updateData['linkedin'] = $linkedin;
+            }
+        }
+        
+        if (isset($userData['vk'])) {
+            $vk = $userData['vk'];
+            if (mb_strlen($vk) > 255) {
+                $updateData['vk'] = mb_substr($vk, 0, 252) . '...';
+            } else {
+                $updateData['vk'] = $vk;
+            }
+        }
+        
+        if (isset($userData['instagram'])) {
+            $instagram = $userData['instagram'];
+            if (mb_strlen($instagram) > 255) {
+                $updateData['instagram'] = mb_substr($instagram, 0, 252) . '...';
+            } else {
+                $updateData['instagram'] = $instagram;
+            }
+        }
+        
+        if (isset($userData['twitter'])) {
+            $twitter = $userData['twitter'];
+            if (mb_strlen($twitter) > 255) {
+                $updateData['twitter'] = mb_substr($twitter, 0, 252) . '...';
+            } else {
+                $updateData['twitter'] = $twitter;
+            }
+        }
+        
+        if (isset($userData['youtube'])) {
+            $youtube = $userData['youtube'];
+            if (mb_strlen($youtube) > 255) {
+                $updateData['youtube'] = mb_substr($youtube, 0, 252) . '...';
+            } else {
+                $updateData['youtube'] = $youtube;
+            }
+        }
 
         if (!empty($updateData)) {
             DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
@@ -602,7 +810,44 @@ class SettingsController extends Controller
         $updateData = [];
         foreach ($userData as $key => $value) {
             if (in_array($key, $allowedFields)) {
-                $updateData[$key] = $value;
+                // Apply truncation based on field type
+                if ($key === 'first_name' || $key === 'last_name') {
+                    if (mb_strlen($value) > 50) {
+                        $updateData[$key] = mb_substr($value, 0, 47) . '...';
+                    } else {
+                        $updateData[$key] = $value;
+                    }
+                } elseif ($key === 'about') {
+                    if (mb_strlen($value) > 500) {
+                        $updateData[$key] = mb_substr($value, 0, 497) . '...';
+                    } else {
+                        $updateData[$key] = $value;
+                    }
+                } elseif ($key === 'address') {
+                    // Truncate address if too long (typically VARCHAR(100))
+                    // Using 100 to match common database schema
+                    $address = trim($value);
+                    if (mb_strlen($address) > 100) {
+                        $updateData[$key] = mb_substr($address, 0, 97) . '...';
+                    } else {
+                        $updateData[$key] = $address;
+                    }
+                } elseif ($key === 'website' || $key === 'working_link') {
+                    if (mb_strlen($value) > 255) {
+                        $updateData[$key] = mb_substr($value, 0, 252) . '...';
+                    } else {
+                        $updateData[$key] = $value;
+                    }
+                } elseif ($key === 'school' || $key === 'working') {
+                    if (mb_strlen($value) > 100) {
+                        $updateData[$key] = mb_substr($value, 0, 97) . '...';
+                    } else {
+                        $updateData[$key] = $value;
+                    }
+                } else {
+                    // For other fields (country_id, city, zip, language), use as-is
+                    $updateData[$key] = $value;
+                }
             }
         }
 

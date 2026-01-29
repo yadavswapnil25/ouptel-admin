@@ -464,6 +464,9 @@ class NewFeedController extends Controller
                 'shares_count' => $post->postShare ?? 0,
                 'views_count' => $post->videoViews ?? 0,
                 
+                // Liked users (people who liked this post)
+                'liked_users' => $this->getPostLikedUsers($postIdForReactions, $userId, 10), // Get first 10 users who liked
+                
                 // User interaction
                 'is_liked' => $this->isPostLiked($post->id, $userId),
                 'is_owner' => $post->user_id == $userId,
@@ -518,9 +521,19 @@ class NewFeedController extends Controller
      */
     private function isPostLiked(int $postId, string $userId): bool
     {
-        // Note: Wo_PostLikes table doesn't exist, so return false
-        // In a real implementation, you would query this table for user likes
-        return false;
+        if (!Schema::hasTable('Wo_Reactions')) {
+            return false;
+        }
+
+        try {
+            return DB::table('Wo_Reactions')
+                ->where('post_id', $postId)
+                ->where('user_id', $userId)
+                ->where('comment_id', 0)
+                ->exists();
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     /**
@@ -1016,5 +1029,76 @@ class NewFeedController extends Controller
             'label' => $feelingLabels[$feelingKey] ?? ucfirst($feelingKey),
             'icon' => $feelingIcons[$feelingKey] ?? 'smile',
         ];
+    }
+
+    /**
+     * Get users who liked a post
+     * 
+     * @param int $postId
+     * @param string $currentUserId
+     * @param int $limit
+     * @return array
+     */
+    private function getPostLikedUsers(int $postId, string $currentUserId, int $limit = 10): array
+    {
+        $likedUsers = [];
+        
+        if (!Schema::hasTable('Wo_Reactions')) {
+            return $likedUsers;
+        }
+
+        try {
+            $likes = DB::table('Wo_Reactions')
+                ->where('post_id', $postId)
+                ->where('reaction', 1) // 1 = Like
+                ->where('comment_id', 0)
+                ->orderBy('id', 'desc')
+                ->limit($limit)
+                ->get();
+
+            foreach ($likes as $like) {
+                $user = DB::table('Wo_Users')->where('user_id', $like->user_id)->first();
+                if ($user) {
+                    // Get user name
+                    $userName = $user->name ?? '';
+                    if (empty($userName)) {
+                        $firstName = $user->first_name ?? '';
+                        $lastName = $user->last_name ?? '';
+                        $userName = trim($firstName . ' ' . $lastName);
+                    }
+                    if (empty($userName)) {
+                        $userName = $user->username ?? 'Unknown User';
+                    }
+
+                    // Check if current user follows this user
+                    $isFollowing = false;
+                    if ($currentUserId) {
+                        $isFollowing = DB::table('Wo_Followers')
+                            ->where('following_id', $like->user_id)
+                            ->where('follower_id', $currentUserId)
+                            ->exists();
+                    }
+
+                    $likedUsers[] = [
+                        'user_id' => $user->user_id,
+                        'username' => $user->username ?? 'Unknown',
+                        'name' => $userName,
+                        'first_name' => $user->first_name ?? '',
+                        'last_name' => $user->last_name ?? '',
+                        'avatar' => $user->avatar ?? '',
+                        'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                        'verified' => (bool) ($user->verified ?? false),
+                        'is_following' => $isFollowing,
+                        'liked_at' => $like->time ?? null ? date('c', $like->time) : null,
+                        'liked_at_human' => $like->time ?? null ? $this->getHumanTime($like->time) : null,
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            // If there's an error, return empty array
+            return [];
+        }
+
+        return $likedUsers;
     }
 }

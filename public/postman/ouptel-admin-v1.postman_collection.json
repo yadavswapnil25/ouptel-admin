@@ -345,6 +345,21 @@
       }
     },
     {
+      "name": "Pages - Analytics",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/pages/1/analytics",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","pages","1","analytics"]
+        },
+        "description": "Get page analytics/statistics (mimics old API: ajax_loading.php?link1=page-setting&page={page_name}&link3=analytics). Only the page owner can view analytics.\n\n**Returns:**\n- Likes statistics: total, today, this week, this month, this year\n- Posts statistics: total, today, this week, this month, this year\n- Growth metrics: week-over-week, month-over-month, year-over-year growth percentages\n- Recent activity: last 10 users who liked the page, last 5 posts\n\n**Parameters:**\n- {id} can be page ID (integer) or page name (string)\n- Example: /api/v1/pages/1/analytics or /api/v1/pages/mypage/analytics\n\n**Authentication:**\n- Required: Bearer token\n- Must be the page owner"
+      }
+    },
+    {
       "name": "Groups - Suggested",
       "request": {"method":"GET","header":[{"key":"Authorization","value":"Bearer {{token}}","type":"text"}],"url":{"raw":"{{base_url}}/api/v1/groups?type=suggested","host":["{{base_url}}"],"path":["api","v1","groups"],"query":[{"key":"type","value":"suggested"}]}}
     },
@@ -2301,6 +2316,25 @@
           "path": ["api","v1","posts","{{post_id}}","reactions"]
         },
         "description": "Remove user's reaction from a post"
+      }
+    },
+    {
+      "name": "Posts - Get Liked Users",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text","disabled":true}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/liked-users?per_page=20&page=1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","liked-users"],
+          "query": [
+            {"key":"per_page","value":"20","description":"Number of users per page (1-100, default: 20)"},
+            {"key":"page","value":"1","description":"Page number (default: 1)"}
+          ]
+        },
+        "description": "Get list of users who liked a post. Returns paginated list with user details including username, name, avatar, verified status, and follow status.\n\n**Parameters:**\n- {post_id}: Post ID (required)\n- per_page: Number of users per page (1-100, default: 20)\n- page: Page number (default: 1)\n\n**Authentication:**\n- Optional: If provided, shows is_following status for each user\n\n**Response includes:**\n- Total likes count\n- List of users with: user_id, username, name, avatar_url, verified status, is_following, liked_at timestamp\n- Pagination metadata"
       }
     },
     {

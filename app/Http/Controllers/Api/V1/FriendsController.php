@@ -28,28 +28,162 @@ class FriendsController extends Controller
         $type = $request->query('type', 'all');
         $perPage = (int) ($request->query('per_page', 12));
         $perPage = max(1, min($perPage, 50));
+        $page = (int) ($request->query('page', 1));
+        $page = max(1, $page);
 
-        // Note: Wo_Friends table doesn't exist, so return empty results
-        $paginator = new \Illuminate\Pagination\LengthAwarePaginator(
-            collect([]), // Empty collection
-            0, // Total count
-            $perPage, // Per page
-            1, // Current page
-            ['path' => $request->url()]
-        );
+        try {
+            // Get friends from Wo_Followers table (mutual following = friends)
+            // Friends are users where both follow each other (active = 1)
+            $friends = [];
+            
+            if (Schema::hasTable('Wo_Followers')) {
+                // Get users I'm following (active = 1 means accepted)
+                $followingIds = DB::table('Wo_Followers')
+                    ->where('follower_id', $tokenUserId)
+                    ->where(function($q) {
+                        $q->where('active', '=', '1')
+                          ->orWhere('active', '=', 1);
+                    })
+                    ->pluck('following_id')
+                    ->toArray();
 
-        $data = [];
+                // Get users following me (active = 1 means accepted)
+                $followersIds = DB::table('Wo_Followers')
+                    ->where('following_id', $tokenUserId)
+                    ->where(function($q) {
+                        $q->where('active', '=', '1')
+                          ->orWhere('active', '=', 1);
+                    })
+                    ->pluck('follower_id')
+                    ->toArray();
 
-        return response()->json([
-            'ok' => true,
-            'data' => $data,
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
-            ],
-        ]);
+                // Friends are users who follow each other (mutual following)
+                $friendIds = array_intersect($followingIds, $followersIds);
+                
+                if (!empty($friendIds)) {
+                    // Get blocked users to exclude
+                    $blockedIds = [];
+                    if (Schema::hasTable('Wo_Blocks')) {
+                        $blockedIds = DB::table('Wo_Blocks')
+                            ->where(function($q) use ($tokenUserId) {
+                                $q->where('blocker', $tokenUserId)
+                                  ->orWhere('blocked', $tokenUserId);
+                            })
+                            ->pluck(DB::raw('CASE WHEN blocker = ' . $tokenUserId . ' THEN blocked ELSE blocker END'))
+                            ->toArray();
+                    }
+
+                    // Exclude blocked users
+                    $friendIds = array_diff($friendIds, $blockedIds);
+
+                    // Get total count
+                    $total = count($friendIds);
+
+                    // Apply pagination
+                    $offset = ($page - 1) * $perPage;
+                    $paginatedFriendIds = array_slice($friendIds, $offset, $perPage);
+
+                    // Get friend user data
+                    if (!empty($paginatedFriendIds)) {
+                        $friendsData = DB::table('Wo_Users')
+                            ->whereIn('user_id', $paginatedFriendIds)
+                            ->where('active', '1')
+                            ->get();
+
+                        foreach ($friendsData as $friend) {
+                            // Get mutual friends count
+                            $mutualFriendsCount = 0;
+                            if (Schema::hasTable('Wo_Followers')) {
+                                $currentUserFollowing = DB::table('Wo_Followers')
+                                    ->where('follower_id', $tokenUserId)
+                                    ->where(function($q) {
+                                        $q->where('active', '=', '1')
+                                          ->orWhere('active', '=', 1);
+                                    })
+                                    ->pluck('following_id')
+                                    ->toArray();
+                                
+                                $friendFollowing = DB::table('Wo_Followers')
+                                    ->where('follower_id', $friend->user_id)
+                                    ->where(function($q) {
+                                        $q->where('active', '=', '1')
+                                          ->orWhere('active', '=', 1);
+                                    })
+                                    ->pluck('following_id')
+                                    ->toArray();
+                                
+                                $mutualFriendsCount = count(array_intersect($currentUserFollowing, $friendFollowing));
+                            }
+
+                            $friends[] = [
+                                'user_id' => $friend->user_id,
+                                'username' => $friend->username ?? 'Unknown',
+                                'name' => $this->getUserName($friend),
+                                'first_name' => $friend->first_name ?? '',
+                                'last_name' => $friend->last_name ?? '',
+                                'email' => $friend->email ?? '',
+                                'avatar' => $friend->avatar ?? '',
+                                'avatar_url' => $friend->avatar ? asset('storage/' . $friend->avatar) : null,
+                                'cover' => $friend->cover ?? '',
+                                'cover_url' => $friend->cover ? asset('storage/' . $friend->cover) : null,
+                                'verified' => (bool) ($friend->verified ?? false),
+                                'is_following' => true,
+                                'is_following_me' => true,
+                                'is_friend' => true,
+                                'mutual_friends_count' => $mutualFriendsCount,
+                                'lastseen' => $friend->lastseen ?? time(),
+                                'lastseen_time_text' => $this->getTimeElapsedString($friend->lastseen ?? time()),
+                            ];
+                        }
+                    }
+
+                    // Calculate pagination metadata
+                    $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
+
+                    return response()->json([
+                        'ok' => true,
+                        'data' => $friends,
+                        'meta' => [
+                            'current_page' => $page,
+                            'per_page' => $perPage,
+                            'total' => $total,
+                            'last_page' => $lastPage,
+                            'from' => $total > 0 ? $offset + 1 : 0,
+                            'to' => min($offset + $perPage, $total),
+                            'has_more' => $page < $lastPage,
+                        ],
+                    ]);
+                }
+            }
+
+            // No friends found
+            return response()->json([
+                'ok' => true,
+                'data' => [],
+                'meta' => [
+                    'current_page' => $page,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                    'from' => 0,
+                    'to' => 0,
+                    'has_more' => false,
+                ],
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to fetch friends: ' . $e->getMessage(),
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                ],
+            ], 500);
+        }
     }
 
     public function search(Request $request): JsonResponse

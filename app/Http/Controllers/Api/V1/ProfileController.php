@@ -210,7 +210,13 @@ class ProfileController extends Controller
      */
     private function formatUserData(User $user, int $loggedUserId): array
     {
-        $userData = $user->toArray();
+        // Get user data directly from database to ensure all fields are included
+        // This ensures fields not in fillable array are still retrieved
+        $userRaw = DB::table('Wo_Users')
+            ->where('user_id', $user->user_id)
+            ->first();
+        
+        $userData = (array) $userRaw;
 
         // Remove sensitive fields
         foreach ($this->nonAllowed as $field) {
@@ -321,6 +327,14 @@ class ProfileController extends Controller
         // Add profile and cover URLs
         $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/default-avatar.png');
         $userData['cover_url'] = $user->cover ? asset('storage/' . $user->cover) : asset('images/default-cover.jpg');
+
+        // Explicitly ensure address, working, working_link, and school fields are included
+        // These fields might not be in fillable but should be retrieved from database
+        $userData['address'] = $user->address ?? '';
+        $userData['working'] = $user->working ?? '';
+        $userData['working_link'] = $user->working_link ?? '';
+        $userData['school'] = $user->school ?? '';
+        $userData['website'] = $user->website ?? '';
 
         return $userData;
     }

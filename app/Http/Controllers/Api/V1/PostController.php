@@ -2760,4 +2760,175 @@ class PostController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Get users who liked a post
+     * 
+     * @param Request $request
+     * @param int $postId
+     * @return JsonResponse
+     */
+    public function getPostLikedUsers(Request $request, int $postId): JsonResponse
+    {
+        // Optional auth - public posts can be viewed without auth
+        $authHeader = $request->header('Authorization');
+        $tokenUserId = null;
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        try {
+            // Check if post exists
+            $post = Post::where('id', $postId)
+                ->orWhere('post_id', $postId)
+                ->first();
+
+            if (!$post) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 4,
+                        'error_text' => 'Post not found'
+                    ]
+                ], 404);
+            }
+
+            // Check if post is active (unless user is the owner)
+            if ($post->active != '1') {
+                if (!$tokenUserId || $post->user_id != $tokenUserId) {
+                    return response()->json([
+                        'api_status' => 400,
+                        'errors' => [
+                            'error_id' => 4,
+                            'error_text' => 'Post not found'
+                        ]
+                    ], 404);
+                }
+            }
+
+            // Get pagination parameters
+            $perPage = (int) ($request->query('per_page', 20));
+            $perPage = max(1, min($perPage, 100)); // Limit between 1-100
+            $page = (int) ($request->query('page', 1));
+            $page = max(1, $page);
+
+            // Get post ID for reactions (use post_id field if available, fallback to id)
+            $postIdForReactions = $post->post_id ?? $post->id;
+
+            // Get total likes count
+            $totalLikes = 0;
+            if (Schema::hasTable('Wo_Reactions')) {
+                $totalLikes = DB::table('Wo_Reactions')
+                    ->where('post_id', $postIdForReactions)
+                    ->where('reaction', 1) // 1 = Like
+                    ->where('comment_id', 0)
+                    ->count();
+            }
+
+            // Get paginated liked users
+            $likedUsers = [];
+            if ($totalLikes > 0 && Schema::hasTable('Wo_Reactions')) {
+                $offset = ($page - 1) * $perPage;
+                
+                $likes = DB::table('Wo_Reactions')
+                    ->where('post_id', $postIdForReactions)
+                    ->where('reaction', 1) // 1 = Like
+                    ->where('comment_id', 0)
+                    ->orderBy('id', 'desc')
+                    ->offset($offset)
+                    ->limit($perPage)
+                    ->get();
+
+                foreach ($likes as $like) {
+                    $user = DB::table('Wo_Users')->where('user_id', $like->user_id)->first();
+                    if ($user) {
+                        // Get user name
+                        $userName = $user->name ?? '';
+                        if (empty($userName)) {
+                            $firstName = $user->first_name ?? '';
+                            $lastName = $user->last_name ?? '';
+                            $userName = trim($firstName . ' ' . $lastName);
+                        }
+                        if (empty($userName)) {
+                            $userName = $user->username ?? 'Unknown User';
+                        }
+
+                        // Check if current user follows this user
+                        $isFollowing = false;
+                        if ($tokenUserId) {
+                            $isFollowing = DB::table('Wo_Followers')
+                                ->where('following_id', $like->user_id)
+                                ->where('follower_id', $tokenUserId)
+                                ->exists();
+                        }
+
+                        $likedUsers[] = [
+                            'user_id' => $user->user_id,
+                            'username' => $user->username ?? 'Unknown',
+                            'name' => $userName,
+                            'first_name' => $user->first_name ?? '',
+                            'last_name' => $user->last_name ?? '',
+                            'avatar' => $user->avatar ?? '',
+                            'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                            'verified' => (bool) ($user->verified ?? false),
+                            'is_following' => $isFollowing,
+                            'liked_at' => $like->time ?? null ? date('c', $like->time) : null,
+                            'liked_at_human' => $like->time ?? null ? $this->getHumanTime($like->time) : null,
+                        ];
+                    }
+                }
+            }
+
+            // Calculate pagination metadata
+            $lastPage = $totalLikes > 0 ? (int) ceil($totalLikes / $perPage) : 1;
+
+            return response()->json([
+                'api_status' => 200,
+                'api_text' => 'success',
+                'api_version' => '1.0',
+                'data' => [
+                    'post_id' => $post->id,
+                    'total_likes' => $totalLikes,
+                    'users' => $likedUsers,
+                    'pagination' => [
+                        'current_page' => $page,
+                        'per_page' => $perPage,
+                        'total' => $totalLikes,
+                        'last_page' => $lastPage,
+                        'from' => $totalLikes > 0 ? (($page - 1) * $perPage) + 1 : 0,
+                        'to' => min($page * $perPage, $totalLikes),
+                        'has_more' => $page < $lastPage,
+                    ]
+                ]
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => 500,
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Failed to fetch liked users: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
+    }
+
+    /**
+     * Get human readable time
+     * 
+     * @param int $timestamp
+     * @return string
+     */
+    private function getHumanTime(int $timestamp): string
+    {
+        $time = time() - $timestamp;
+        
+        if ($time < 60) return 'Just now';
+        if ($time < 3600) return floor($time / 60) . 'm';
+        if ($time < 86400) return floor($time / 3600) . 'h';
+        if ($time < 2592000) return floor($time / 86400) . 'd';
+        if ($time < 31536000) return floor($time / 2592000) . 'mo';
+        return floor($time / 31536000) . 'y';
+    }
 }
