@@ -269,19 +269,79 @@
       "request": {
         "method": "PUT",
         "header": [
-          {"key":"Authorization","value":"Bearer {{token}}","type":"text"},
-          {"key":"Content-Type","value":"application/json","type":"text"}
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
         ],
         "body": {
-          "mode": "raw",
-          "raw": "{\n  \"page_title\": \"Updated Page Title\",\n  \"page_description\": \"Updated description\",\n  \"about\": \"Updated about text\",\n  \"page_category\": 1,\n  \"page_name\": \"updatedpagename\",\n  \"website\": \"https://example.com\",\n  \"phone\": \"+1234567890\",\n  \"address\": \"123 Main St, City, Country\"\n}"
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "avatar",
+              "type": "file",
+              "src": [],
+              "description": "Profile/avatar image (max 5MB). Accepted formats: JPEG, PNG, GIF, WebP"
+            },
+            {
+              "key": "cover",
+              "type": "file",
+              "src": [],
+              "description": "Cover/header image (max 10MB). Accepted formats: JPEG, PNG, GIF, WebP"
+            },
+            {
+              "key": "page_title",
+              "value": "Updated Page Title",
+              "type": "text",
+              "description": "Page title"
+            },
+            {
+              "key": "page_description",
+              "value": "Updated description",
+              "type": "text",
+              "description": "Page description"
+            },
+            {
+              "key": "about",
+              "value": "Updated about text",
+              "type": "text",
+              "description": "About text (maps to page_description)"
+            },
+            {
+              "key": "page_category",
+              "value": "1",
+              "type": "text",
+              "description": "Category ID"
+            },
+            {
+              "key": "page_name",
+              "value": "updatedpagename",
+              "type": "text",
+              "description": "Page name (unique, 5-32 characters, alphanumeric and underscore only)"
+            },
+            {
+              "key": "website",
+              "value": "https://example.com",
+              "type": "text",
+              "description": "Website URL"
+            },
+            {
+              "key": "phone",
+              "value": "+1234567890",
+              "type": "text",
+              "description": "Phone number"
+            },
+            {
+              "key": "address",
+              "value": "123 Main St, City, Country",
+              "type": "text",
+              "description": "Address"
+            }
+          ]
         },
         "url": {
           "raw": "{{base_url}}/api/v1/pages/1",
           "host": ["{{base_url}}"],
           "path": ["api","v1","pages","1"]
         },
-        "description": "Edit/update page details. Only the page owner can edit. Supports updating: page_title, page_description, about, page_category, page_name, website, phone, address. For avatar and cover images, use multipart/form-data with 'avatar' and 'cover' file fields. All fields are optional - only provided fields will be updated."
+        "description": "Edit/update page details. Only the page owner can edit.\n\n**Image Upload:**\n- Use multipart/form-data (this request is already configured)\n- Avatar field: max 5MB, formats: JPEG, PNG, GIF, WebP\n- Cover field: max 10MB, formats: JPEG, PNG, GIF, WebP\n- Select files by clicking on the 'avatar' or 'cover' fields and choosing 'Select Files'\n\n**All Fields Optional:**\n- Only include fields you want to update\n- You can update just images, just text fields, or both together\n- Remove any fields you don't want to update"
       }
     },
     {
@@ -2666,6 +2726,36 @@
           "query": [{"key":"per_page","value":"20"}]
         },
         "description": "Get all saved posts for the current user with pagination"
+      }
+    },
+    {
+      "name": "Posts - Delete Post",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}"]
+        },
+        "description": "Delete a post. Only post owner, page owner (if post is on a page), or group owner (if post is in a group) can delete. Deletes the post, its reactions, comments, saved entries, and associated files/images."
+      }
+    },
+    {
+      "name": "Posts - Delete Post (POST Alternative)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/posts/{{post_id}}/delete",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","posts","{{post_id}}","delete"]
+        },
+        "description": "Delete a post using POST method (alternative to DELETE). Only post owner, page owner (if post is on a page), or group owner (if post is in a group) can delete. Deletes the post, its reactions, comments, saved entries, and associated files/images. Matches old WoWonder API: requests.php?f=posts&s=delete_post"
       }
     },
     {

@@ -63,7 +63,8 @@ class Page extends Model
      */
     public function setAvatarAttribute($value)
     {
-        $this->attributes['avatar'] = $value ?: $this->attributes['avatar'] ?? '';
+        // Allow explicit updates - only use fallback if value is null
+        $this->attributes['avatar'] = $value !== null ? $value : ($this->attributes['avatar'] ?? '');
     }
 
     /**
@@ -71,7 +72,8 @@ class Page extends Model
      */
     public function setCoverAttribute($value)
     {
-        $this->attributes['cover'] = $value ?: $this->attributes['cover'] ?? '';
+        // Allow explicit updates - only use fallback if value is null
+        $this->attributes['cover'] = $value !== null ? $value : ($this->attributes['cover'] ?? '');
     }
 
     /**
