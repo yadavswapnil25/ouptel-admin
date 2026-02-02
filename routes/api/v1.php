@@ -352,6 +352,7 @@ Route::post('/notifications/settings/disable-all', [NotificationSettingsControll
 Route::post('/notifications/get', [NotificationsController::class, 'getNotifications']); // Get notifications (old API: get_notifications)
 Route::post('/notifications/delete', [NotificationsController::class, 'delete']); // Delete notification (old API: notifications.php?type=delete)
 Route::post('/notifications/stop-notify', [NotificationsController::class, 'stopNotify']); // Stop notify from user (old API: stop_notify.php)
+Route::post('/notifications/mark-all-seen', [NotificationsController::class, 'markAllSeen']); // Mark all notifications as seen
 
 // Address management routes (mimics old WoWonder API)
 Route::get('/addresses', [AddressController::class, 'getAddresses']);
