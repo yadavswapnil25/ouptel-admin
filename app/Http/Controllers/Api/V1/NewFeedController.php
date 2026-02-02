@@ -474,7 +474,8 @@ class NewFeedController extends Controller
                 'is_pinned' => false, // Would need additional field
                 
                 // Comments status
-                'comments_disabled' => (bool) ($post->comments_status ?? false),
+                // comments_status: '0' = disabled, '1' = enabled, null/empty = enabled by default
+                'comments_disabled' => ($post->comments_status ?? '1') == '0',
                 
                 // Author information
                 'author' => [
