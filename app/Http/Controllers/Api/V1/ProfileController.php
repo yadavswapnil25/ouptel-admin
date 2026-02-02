@@ -1008,6 +1008,13 @@ class ProfileController extends Controller
             ->where('user_id', $loggedUserId)
             ->exists();
 
+        // Determine postType - override to 'colored' if color_id exists
+        $postType = $post->postType ?? 'text';
+        $colorId = $post->color_id ?? 0;
+        if ($colorId > 0) {
+            $postType = 'colored';
+        }
+
         return [
             'id' => $post->id,
             'post_id' => $post->post_id ?? $post->id,
@@ -1019,7 +1026,7 @@ class ProfileController extends Controller
                 'avatar' => $user->avatar ?? '',
             ],
             'postText' => $post->postText ?? '',
-            'postType' => $post->postType ?? 'text',
+            'postType' => $postType,
             'postPrivacy' => $post->postPrivacy ?? '0',
             'postPhoto' => $post->postPhoto ?? '',
             'postFile' => $post->postFile ?? '',
@@ -1266,6 +1273,12 @@ class ProfileController extends Controller
                 $colorData = $this->getColorData($colorId);
             }
 
+            // Determine postType - override to 'colored' if color_id exists
+            $postType = $post->postType ?? 'text';
+            if ($colorId > 0) {
+                $postType = 'colored';
+            }
+
             $result[] = [
                 'id' => $post->id,
                 'post_id' => $post->post_id ?? $post->id,
@@ -1279,7 +1292,7 @@ class ProfileController extends Controller
                     'verified' => (bool) ($user->verified ?? false),
                 ],
                 'postText' => $post->postText ?? '',
-                'postType' => $post->postType ?? 'text',
+                'postType' => $postType,
                 'postPrivacy' => $post->postPrivacy ?? '0',
                 'postPhoto' => $post->postPhoto ?? '',
                 'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
