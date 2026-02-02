@@ -199,6 +199,61 @@ class NotificationsController extends Controller
     }
 
     /**
+     * Mark all notifications as seen
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function markAllSeen(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
+        }
+
+        try {
+            // Mark all unread notifications as seen
+            $updated = DB::table('Wo_Notifications')
+                ->where('recipient_id', $tokenUserId)
+                ->where('seen', 0)
+                ->update(['seen' => time()]);
+
+            return response()->json([
+                'api_status' => 200,
+                'message' => 'All notifications marked as seen',
+                'updated_count' => $updated
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 5,
+                    'error_text' => 'Failed to mark notifications as seen: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
+    }
+
+    /**
      * Stop notify from user (mimics old API: stop_notify.php)
      * 
      * @param Request $request
