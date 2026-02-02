@@ -194,32 +194,69 @@ class SubscriptionsController extends Controller
 
         $offset = ($page - 1) * $perPage;
 
-        $query = DB::table($pageLikesTable . ' as pl')
-            ->join('Wo_Pages as p', 'pl.page_id', '=', 'p.page_id')
-            ->where('pl.user_id', $userId)
-            ->whereIn('p.active', ['1', 1]) // Only active pages
-            ->select(
-                'p.page_id',
-                'p.page_name',
-                'p.page_title',
-                'p.page_description',
-                'p.avatar',
-                'p.cover',
-                'p.category',
-                'p.user_id as owner_id',
-                'pl.time as subscribed_at'
-            )
-            ->orderByDesc('pl.time');
+        // Build select fields - try with category first, fallback without if column doesn't exist
+        $selectFieldsWithCategory = [
+            'p.page_id',
+            'p.page_name',
+            'p.page_title',
+            'p.page_description',
+            'p.avatar',
+            'p.cover',
+            'p.category',
+            'p.user_id as owner_id',
+            'pl.time as subscribed_at'
+        ];
+        
+        $selectFieldsWithoutCategory = [
+            'p.page_id',
+            'p.page_name',
+            'p.page_title',
+            'p.page_description',
+            'p.avatar',
+            'p.cover',
+            'p.user_id as owner_id',
+            'pl.time as subscribed_at'
+        ];
 
-        $total = $query->count();
-        $pages = $query->offset($offset)->limit($perPage)->get();
+        // Try query with category first
+        $hasCategoryColumn = true;
+        try {
+            $query = DB::table($pageLikesTable . ' as pl')
+                ->join('Wo_Pages as p', 'pl.page_id', '=', 'p.page_id')
+                ->where('pl.user_id', $userId)
+                ->whereIn('p.active', ['1', 1]) // Only active pages
+                ->select($selectFieldsWithCategory)
+                ->orderByDesc('pl.time');
+            
+            // Test if query works by getting count
+            $total = $query->count();
+            $pages = $query->offset($offset)->limit($perPage)->get();
+        } catch (\Exception $e) {
+            // If query fails (likely due to missing category column), retry without it
+            if (str_contains($e->getMessage(), 'category') || str_contains($e->getMessage(), 'Column not found')) {
+                $hasCategoryColumn = false;
+                $query = DB::table($pageLikesTable . ' as pl')
+                    ->join('Wo_Pages as p', 'pl.page_id', '=', 'p.page_id')
+                    ->where('pl.user_id', $userId)
+                    ->whereIn('p.active', ['1', 1]) // Only active pages
+                    ->select($selectFieldsWithoutCategory)
+                    ->orderByDesc('pl.time');
+                
+                $total = $query->count();
+                $pages = $query->offset($offset)->limit($perPage)->get();
+            } else {
+                // Re-throw if it's a different error
+                throw $e;
+            }
+        }
 
-        $formattedPages = $pages->map(function ($page) use ($pageLikesTable) {
+        $formattedPages = $pages->map(function ($page) use ($pageLikesTable, $hasCategoryColumn) {
             // Get page category name
             $categoryName = '';
-            if (Schema::hasTable('Wo_PageCategories') && $page->category) {
+            $categoryId = ($hasCategoryColumn && isset($page->category)) ? $page->category : 0;
+            if (Schema::hasTable('Wo_PageCategories') && $categoryId) {
                 $category = DB::table('Wo_PageCategories')
-                    ->where('id', $page->category)
+                    ->where('id', $categoryId)
                     ->first();
                 $categoryName = $category->category_name ?? '';
             }
@@ -251,7 +288,7 @@ class SubscriptionsController extends Controller
                 'avatar_url' => $page->avatar ? asset('storage/' . $page->avatar) : null,
                 'cover' => $page->cover ?? '',
                 'cover_url' => $page->cover ? asset('storage/' . $page->cover) : null,
-                'category' => $page->category ?? 0,
+                'category' => $categoryId,
                 'category_name' => $categoryName,
                 'likes_count' => $likesCount,
                 'owner' => $owner ? [
@@ -294,22 +331,29 @@ class SubscriptionsController extends Controller
 
         $offset = ($page - 1) * $perPage;
 
+        // Build select fields based on available columns
+        $selectFields = [
+            'g.id',
+            'g.group_name',
+            'g.group_title',
+            'g.about',
+            'g.avatar',
+            'g.cover',
+            'g.user_id as owner_id',
+            'g.privacy',
+            'gm.time as subscribed_at'
+        ];
+        
+        // Only add category if column exists
+        if (Schema::hasColumn('Wo_Groups', 'category')) {
+            $selectFields[] = 'g.category';
+        }
+
         $query = DB::table($groupMembersTable . ' as gm')
             ->join('Wo_Groups as g', 'gm.group_id', '=', 'g.id')
             ->where('gm.user_id', $userId)
             ->whereIn('g.active', ['1', 1]) // Only active groups
-            ->select(
-                'g.id',
-                'g.group_name',
-                'g.group_title',
-                'g.about',
-                'g.avatar',
-                'g.cover',
-                'g.category',
-                'g.user_id as owner_id',
-                'g.privacy',
-                'gm.time as subscribed_at'
-            )
+            ->select($selectFields)
             ->orderByDesc('gm.time');
 
         $total = $query->count();
@@ -318,9 +362,10 @@ class SubscriptionsController extends Controller
         $formattedGroups = $groups->map(function ($group) use ($groupMembersTable) {
             // Get group category name
             $categoryName = '';
-            if (Schema::hasTable('Wo_GroupCategories') && $group->category) {
+            $categoryId = $group->category ?? 0;
+            if (Schema::hasTable('Wo_GroupCategories') && $categoryId) {
                 $category = DB::table('Wo_GroupCategories')
-                    ->where('id', $group->category)
+                    ->where('id', $categoryId)
                     ->first();
                 $categoryName = $category->category_name ?? '';
             }
@@ -352,7 +397,7 @@ class SubscriptionsController extends Controller
                 'avatar_url' => $group->avatar ? asset('storage/' . $group->avatar) : null,
                 'cover' => $group->cover ?? '',
                 'cover_url' => $group->cover ? asset('storage/' . $group->cover) : null,
-                'category' => $group->category ?? 0,
+                'category' => $categoryId,
                 'category_name' => $categoryName,
                 'privacy' => $group->privacy ?? '0',
                 'privacy_text' => $this->getGroupPrivacyText($group->privacy ?? '0'),
