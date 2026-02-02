@@ -1023,7 +1023,7 @@ class StoriesController extends Controller
                 $query = DB::table('Wo_StorySeen')
                     ->join('Wo_Users', 'Wo_StorySeen.user_id', '=', 'Wo_Users.user_id')
                     ->where('Wo_StorySeen.story_id', $storyId)
-                    ->where('Wo_StorySeen.user_id', '!=', $tokenUserId); // Exclude story owner from views
+                    ->where('Wo_StorySeen.user_id', '!=', $story->user_id); // Exclude story owner from views
 
                 // Only filter by active if column exists
                 if (Schema::hasColumn('Wo_Users', 'active')) {
@@ -1100,7 +1100,7 @@ class StoriesController extends Controller
                 try {
                     $query = DB::table('Wo_StorySeen')
                         ->where('story_id', $storyId)
-                        ->where('user_id', '!=', $tokenUserId);
+                        ->where('user_id', '!=', $story->user_id); // Exclude story owner from views
 
                     if ($offset > 0) {
                         if ($offset > 1000) {
