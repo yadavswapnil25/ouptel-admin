@@ -1237,21 +1237,13 @@ class ProfileController extends Controller
             
             $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
             
-            // Get reaction counts (using post_id)
-            $reactionsCount = 0;
-            if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Reactions')) {
-                try {
-                    $reactionsCount = DB::table('Wo_Reactions')
-                        ->where('post_id', $postIdForReactions)
-                        ->where('comment_id', 0)
-                        ->count();
-                } catch (\Exception $e) {
-                    // Fallback to post_likes column
-                    $reactionsCount = (int) ($post->post_likes ?? 0);
-                }
-            } else {
-                $reactionsCount = (int) ($post->post_likes ?? 0);
-            }
+            // Get reaction counts by type (using post_id)
+            $reactionCounts = $this->getPostReactionCounts($postIdForReactions);
+            $totalReactions = array_sum($reactionCounts);
+            
+            // Get user's reaction
+            $userReaction = $this->getUserReaction($postIdForReactions, $loggedUserId);
+            $isLiked = $userReaction !== null;
 
             // Get comments count
             $commentsCount = 0;
@@ -1267,18 +1259,11 @@ class ProfileController extends Controller
                 $commentsCount = (int) ($post->post_comments ?? 0);
             }
 
-            // Check if logged user liked this post
-            $isLiked = false;
-            if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Reactions')) {
-                try {
-                    $isLiked = DB::table('Wo_Reactions')
-                        ->where('post_id', $postIdForReactions)
-                        ->where('user_id', $loggedUserId)
-                        ->where('comment_id', 0)
-                        ->exists();
-                } catch (\Exception $e) {
-                    $isLiked = false;
-                }
+            // Get color data if it's a colored post
+            $colorData = null;
+            $colorId = $post->color_id ?? 0;
+            if ($colorId > 0) {
+                $colorData = $this->getColorData($colorId);
             }
 
             $result[] = [
@@ -1310,11 +1295,24 @@ class ProfileController extends Controller
                 'postLinkContent' => $post->postLinkContent ?? '',
                 'time' => $post->time ?? time(),
                 'created_at' => $post->time ? date('c', $post->time) : null,
-                'reactions_count' => $reactionsCount,
+                'reactions_count' => $totalReactions,
+                'reactions' => [
+                    'total' => $totalReactions,
+                    'like' => $reactionCounts[1] ?? 0,
+                    'love' => $reactionCounts[2] ?? 0,
+                    'haha' => $reactionCounts[3] ?? 0,
+                    'wow' => $reactionCounts[4] ?? 0,
+                    'sad' => $reactionCounts[5] ?? 0,
+                    'angry' => $reactionCounts[6] ?? 0,
+                    'user_reaction' => $userReaction, // null or 1-6
+                ],
                 'comments_count' => $commentsCount,
                 'shares_count' => (int) ($post->postShare ?? 0),
                 'is_liked' => $isLiked ? 1 : 0,
                 'is_owner' => ($post->user_id == $loggedUserId) ? 1 : 0,
+                // Color data (for colored posts)
+                'color_id' => $post->color_id ?? null,
+                'color' => $colorData,
             ];
         }
 
@@ -1418,6 +1416,107 @@ class ProfileController extends Controller
             <button onclick="acceptCall(' . $call->id . ')">Accept</button>
             <button onclick="declineCall(' . $call->id . ')">Decline</button>
         </div>';
+    }
+
+    /**
+     * Get reaction counts for a post by reaction type
+     * 
+     * @param int $postId
+     * @return array
+     */
+    private function getPostReactionCounts(int $postId): array
+    {
+        $counts = [
+            1 => 0, // Like
+            2 => 0, // Love
+            3 => 0, // Haha
+            4 => 0, // Wow
+            5 => 0, // Sad
+            6 => 0, // Angry
+        ];
+
+        if (!Schema::hasTable('Wo_Reactions')) {
+            return $counts;
+        }
+
+        try {
+            $reactions = DB::table('Wo_Reactions')
+                ->where('post_id', $postId)
+                ->where('comment_id', 0)
+                ->selectRaw('reaction, COUNT(*) as count')
+                ->groupBy('reaction')
+                ->get();
+
+            foreach ($reactions as $reaction) {
+                if (isset($counts[$reaction->reaction])) {
+                    $counts[$reaction->reaction] = (int) $reaction->count;
+                }
+            }
+        } catch (\Exception $e) {
+            // If query fails, return default counts
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Get user's reaction for a post
+     * 
+     * @param int $postId
+     * @param int $userId
+     * @return int|null
+     */
+    private function getUserReaction(int $postId, int $userId): ?int
+    {
+        if (!Schema::hasTable('Wo_Reactions')) {
+            return null;
+        }
+
+        try {
+            $reaction = DB::table('Wo_Reactions')
+                ->where('post_id', $postId)
+                ->where('user_id', $userId)
+                ->where('comment_id', 0)
+                ->first();
+
+            return $reaction ? (int) $reaction->reaction : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Get color data for a colored post
+     * 
+     * @param int $colorId
+     * @return array|null
+     */
+    private function getColorData(int $colorId): ?array
+    {
+        if (!Schema::hasTable('Wo_Colored_Posts')) {
+            return null;
+        }
+
+        try {
+            $coloredPost = DB::table('Wo_Colored_Posts')
+                ->where('id', $colorId)
+                ->first();
+
+            if (!$coloredPost) {
+                return null;
+            }
+
+            return [
+                'color_id' => $coloredPost->id,
+                'color_1' => $coloredPost->color_1 ?? '',
+                'color_2' => $coloredPost->color_2 ?? '',
+                'text_color' => $coloredPost->text_color ?? '',
+                'image' => $coloredPost->image ?? '',
+                'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+            ];
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }
 
