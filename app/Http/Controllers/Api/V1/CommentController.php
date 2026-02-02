@@ -1080,8 +1080,79 @@ class CommentController extends Controller
      */
     private function areFriends(string $userId1, string $userId2): bool
     {
-        // Note: Wo_Friends table might not exist
-        // In a real implementation, you would query this table
+        // Check Wo_Friends table first (if it exists)
+        if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Friends')) {
+            try {
+                // Check if friendship exists in either direction
+                $isFriend = DB::table('Wo_Friends')
+                    ->where(function($q) use ($userId1, $userId2) {
+                        $q->where('user_id', $userId1)
+                          ->where('friend_id', $userId2);
+                    })
+                    ->orWhere(function($q) use ($userId1, $userId2) {
+                        $q->where('user_id', $userId2)
+                          ->where('friend_id', $userId1);
+                    })
+                    ->where('status', '2') // Status 2 = Accepted friends
+                    ->exists();
+                
+                if ($isFriend) {
+                    return true;
+                }
+                
+                // Also check with from_id/to_id structure (alternative table structure)
+                $isFriendAlt = DB::table('Wo_Friends')
+                    ->where(function($q) use ($userId1, $userId2) {
+                        $q->where('from_id', $userId1)
+                          ->where('to_id', $userId2);
+                    })
+                    ->orWhere(function($q) use ($userId1, $userId2) {
+                        $q->where('from_id', $userId2)
+                          ->where('to_id', $userId1);
+                    })
+                    ->exists();
+                
+                if ($isFriendAlt) {
+                    return true;
+                }
+            } catch (\Exception $e) {
+                // Table exists but query failed, fall through to followers check
+            }
+        }
+        
+        // Fallback: Check if users are following each other (mutual following = friends)
+        // For "Friends" privacy, we consider mutual follows OR one-way follow as friends
+        if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Followers')) {
+            try {
+                // Check if user1 is following user2 (active = 1 means accepted/following)
+                $user1FollowingUser2 = DB::table('Wo_Followers')
+                    ->where('follower_id', $userId1)
+                    ->where('following_id', $userId2)
+                    ->where(function($q) {
+                        $q->where('active', '1')
+                          ->orWhere('active', 1);
+                    })
+                    ->exists();
+                
+                // Check if user2 is following user1
+                $user2FollowingUser1 = DB::table('Wo_Followers')
+                    ->where('follower_id', $userId2)
+                    ->where('following_id', $userId1)
+                    ->where(function($q) {
+                        $q->where('active', '1')
+                          ->orWhere('active', 1);
+                    })
+                    ->exists();
+                
+                // For "Friends" privacy in comments, consider:
+                // - Mutual following (both following each other) = friends
+                // - OR one-way follow (if you're following them, you can comment on their friend-only posts)
+                return $user1FollowingUser2 || $user2FollowingUser1;
+            } catch (\Exception $e) {
+                // Table exists but query failed
+            }
+        }
+        
         return false;
     }
 
@@ -1110,8 +1181,25 @@ class CommentController extends Controller
     {
         if (!$groupId) return false;
         
-        // Note: Wo_Group_Members table might not exist
-        // In a real implementation, you would query this table
+        // Check if user is a member of the group
+        $groupMembersTable = null;
+        if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Group_Members')) {
+            $groupMembersTable = 'Wo_Group_Members';
+        } elseif (\Illuminate\Support\Facades\Schema::hasTable('Wo_GroupMembers')) {
+            $groupMembersTable = 'Wo_GroupMembers';
+        }
+        
+        if ($groupMembersTable) {
+            try {
+                return DB::table($groupMembersTable)
+                    ->where('group_id', $groupId)
+                    ->where('user_id', $userId)
+                    ->exists();
+            } catch (\Exception $e) {
+                // Query failed
+            }
+        }
+        
         return false;
     }
 
