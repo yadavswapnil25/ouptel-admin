@@ -507,6 +507,12 @@ class PostController extends Controller
      */
     private function determinePostType(Request $request, ?string $postPhotoPath, ?string $postFilePath, ?string $postRecordPath, bool $isVideoFile = false): string
     {
+        // Check for colored post first (if color_id is provided, it's a colored post)
+        $colorId = $request->input('color_id', 0);
+        if ($colorId > 0) {
+            return 'colored';
+        }
+        
         // Check for GIF first (GIF URLs are stored in postPhotoPath)
         if ($request->input('postGif')) return 'gif';
         if ($postPhotoPath && filter_var($postPhotoPath, FILTER_VALIDATE_URL) && (strpos($postPhotoPath, '.gif') !== false || strpos($postPhotoPath, 'giphy.com') !== false || strpos($postPhotoPath, 'tenor.com') !== false)) {
