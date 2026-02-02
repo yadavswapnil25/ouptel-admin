@@ -998,15 +998,15 @@ class CommentController extends Controller
      */
     private function canCommentOnPost(Post $post, string $userId): bool
     {
+        // Owner can always comment on their own posts (even if comments are disabled for others)
+        if ($post->user_id == $userId) return true;
+
         // Check if comments are enabled for this post
         // comments_status: '0' = disabled, '1' = enabled, null/empty = enabled by default
         $commentsStatus = $post->comments_status ?? '1';
         if ($commentsStatus == '0' || $commentsStatus === 0) {
             return false;
         }
-
-        // Owner can always comment
-        if ($post->user_id == $userId) return true;
 
         // Check privacy settings
         switch ($post->postPrivacy) {
