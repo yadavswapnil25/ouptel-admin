@@ -1263,10 +1263,22 @@ class StoriesController extends Controller
             }
 
             $media = null;
+            $storyType = null;
+            $mediaUrl = null;
+            
             if (Schema::hasTable($mediaTable)) {
                 $media = DB::table($mediaTable)
                     ->where('story_id', $story->id)
                     ->first();
+                
+                if ($media) {
+                    // Get story type (image or video)
+                    $storyType = $media->type ?? null;
+                    // Get media URL
+                    if ($media->filename) {
+                        $mediaUrl = asset('storage/' . $media->filename);
+                    }
+                }
             }
 
             $thumbnail = $story->thumbnail;
@@ -1284,7 +1296,9 @@ class StoriesController extends Controller
                 'description' => $story->description ?? '',
                 'posted' => $story->posted,
                 'expire' => $story->expire,
+                'type' => $storyType ?? 'unknown', // 'image' or 'video'
                 'thumbnail' => $thumbnail ? asset('storage/' . $thumbnail) : null,
+                'media_url' => $mediaUrl, // Full URL to the image or video file
                 'user_data' => $user ? [
                     'user_id' => $user->user_id,
                     'username' => $user->username ?? 'Unknown',
@@ -1417,10 +1431,22 @@ class StoriesController extends Controller
             foreach ($userStories as $story) {
                 // Get story media
                 $media = null;
+                $storyType = null;
+                $mediaUrl = null;
+                
                 if (Schema::hasTable($mediaTable)) {
                     $media = DB::table($mediaTable)
                         ->where('story_id', $story->id)
                         ->first();
+                    
+                    if ($media) {
+                        // Get story type (image or video)
+                        $storyType = $media->type ?? null;
+                        // Get media URL
+                        if ($media->filename) {
+                            $mediaUrl = asset('storage/' . $media->filename);
+                        }
+                    }
                 }
 
                 $thumbnail = $story->thumbnail;
@@ -1447,7 +1473,9 @@ class StoriesController extends Controller
                     'description' => $story->description ?? '',
                     'posted' => $story->posted,
                     'expire' => $story->expire,
+                    'type' => $storyType ?? 'unknown', // 'image' or 'video'
                     'thumbnail' => $thumbnail ? asset('storage/' . $thumbnail) : null,
+                    'media_url' => $mediaUrl, // Full URL to the image or video file
                     'time_text' => $this->getTimeElapsedString($story->posted),
                     'view_count' => $viewCount,
                 ];

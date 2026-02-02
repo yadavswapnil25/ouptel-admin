@@ -3898,6 +3898,21 @@
       }
     },
     {
+      "name": "Notifications - Mark All as Seen",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/notifications/mark-all-seen",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","notifications","mark-all-seen"]
+        },
+        "description": "Mark all unread notifications as seen for the authenticated user. Returns the count of updated notifications."
+      }
+    },
+    {
       "name": "Addresses - Get All Addresses",
       "request": {
         "method": "GET",
