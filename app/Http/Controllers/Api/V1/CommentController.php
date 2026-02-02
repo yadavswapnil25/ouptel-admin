@@ -999,7 +999,9 @@ class CommentController extends Controller
     private function canCommentOnPost(Post $post, string $userId): bool
     {
         // Check if comments are enabled for this post
-        if ($post->comments_status == 0) {
+        // comments_status: '0' = disabled, '1' = enabled, null/empty = enabled by default
+        $commentsStatus = $post->comments_status ?? '1';
+        if ($commentsStatus == '0' || $commentsStatus === 0) {
             return false;
         }
 

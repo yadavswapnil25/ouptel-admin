@@ -289,7 +289,7 @@ class PostController extends Controller
                 'post_url' => $this->generatePostUrl($postId),
                 'parent_id' => $request->input('parent_id', 0),
                 'cache' => '0',
-                'comments_status' => $request->input('comments_status', '0'),
+                'comments_status' => $request->input('comments_status', '1'), // Default to '1' (enabled)
                 'blur' => $request->input('blur', '0'),
                 'color_id' => $request->input('color_id', 0),
                 'job_id' => $request->input('job_id', 0),

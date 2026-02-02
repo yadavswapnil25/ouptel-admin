@@ -564,7 +564,13 @@ class NewFeedController extends Controller
      */
     private function getPostType($post): string
     {
-        // Check postType field first if it exists
+        // Check for colored post first (if color_id exists, it's a colored post)
+        $colorId = $post->color_id ?? 0;
+        if ($colorId > 0) {
+            return 'colored';
+        }
+        
+        // Check postType field if it exists
         if (!empty($post->postType)) {
             return $post->postType;
         }
