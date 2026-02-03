@@ -600,6 +600,7 @@ class PeopleFollowController extends Controller
                 
                 // User interaction
                 'is_liked' => $this->isPostLiked($post->id, $userId),
+                'is_saved' => $this->isPostSaved($post->id, $userId),
                 'is_owner' => $post->user_id == $userId,
                 'is_boosted' => (bool) ($post->boosted ?? false),
                 'comments_disabled' => (bool) ($post->comments_status ?? false),
@@ -796,6 +797,29 @@ class PeopleFollowController extends Controller
                 ->where('post_id', $postId)
                 ->where('user_id', $userId)
                 ->where('comment_id', 0) // Only post reactions, not comment reactions
+                ->exists();
+        } catch (\Exception $e) {
+            return false;
+        }
+    }
+
+    /**
+     * Check if user saved a post
+     * 
+     * @param int $postId
+     * @param string $userId
+     * @return bool
+     */
+    private function isPostSaved(int $postId, string $userId): bool
+    {
+        if (!Schema::hasTable('Wo_SavedPosts')) {
+            return false;
+        }
+
+        try {
+            return DB::table('Wo_SavedPosts')
+                ->where('post_id', $postId)
+                ->where('user_id', $userId)
                 ->exists();
         } catch (\Exception $e) {
             return false;

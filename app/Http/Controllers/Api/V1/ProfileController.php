@@ -1388,6 +1388,7 @@ class ProfileController extends Controller
                 'comments_count' => $commentsCount,
                 'shares_count' => (int) ($post->postShare ?? 0),
                 'is_liked' => $isLiked ? 1 : 0,
+                'is_saved' => $this->isPostSaved($post->id, $loggedUserId) ? 1 : 0,
                 'is_owner' => ($post->user_id == $loggedUserId) ? 1 : 0,
                 // Color data (for colored posts)
                 'color_id' => $post->color_id ?? null,
@@ -1595,6 +1596,29 @@ class ProfileController extends Controller
             ];
         } catch (\Exception $e) {
             return null;
+        }
+    }
+
+    /**
+     * Check if user saved a post
+     * 
+     * @param int $postId
+     * @param string $userId
+     * @return bool
+     */
+    private function isPostSaved(int $postId, string $userId): bool
+    {
+        if (!Schema::hasTable('Wo_SavedPosts')) {
+            return false;
+        }
+
+        try {
+            return DB::table('Wo_SavedPosts')
+                ->where('post_id', $postId)
+                ->where('user_id', $userId)
+                ->exists();
+        } catch (\Exception $e) {
+            return false;
         }
     }
 }
