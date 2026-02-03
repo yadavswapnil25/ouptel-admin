@@ -546,6 +546,46 @@ class SettingsController extends Controller
                     $updateData['last_name'] = $lastName;
                 }
             }
+            
+            // Handle country_id
+            if (isset($userData['country_id'])) {
+                $updateData['country_id'] = (int) $userData['country_id'];
+            }
+            
+            // Handle city
+            if (isset($userData['city'])) {
+                $city = trim($userData['city']);
+                if (mb_strlen($city) > 100) {
+                    $updateData['city'] = mb_substr($city, 0, 97) . '...';
+                } else {
+                    $updateData['city'] = $city;
+                }
+            }
+            
+            // Handle zip
+            if (isset($userData['zip'])) {
+                $zip = trim($userData['zip']);
+                if (mb_strlen($zip) > 20) {
+                    $updateData['zip'] = mb_substr($zip, 0, 17) . '...';
+                } else {
+                    $updateData['zip'] = $zip;
+                }
+            }
+            
+            // Handle state
+            if (isset($userData['state'])) {
+                $state = trim($userData['state']);
+                if (mb_strlen($state) > 100) {
+                    $updateData['state'] = mb_substr($state, 0, 97) . '...';
+                } else {
+                    $updateData['state'] = $state;
+                }
+            }
+            
+            // Handle language
+            if (isset($userData['language'])) {
+                $updateData['language'] = $userData['language'];
+            }
 
             if (!empty($updateData)) {
                 DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
