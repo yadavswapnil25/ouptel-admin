@@ -543,7 +543,7 @@ class PagesController extends BaseController
             // Handle avatar upload if provided
             if ($request->hasFile('avatar')) {
                 $avatar = $request->file('avatar');
-                if ($avatar->isValid()) {
+                if ($avatar && $avatar->isValid()) {
                     // Validate image
                     $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
                     if (!in_array($avatar->getMimeType(), $allowedMimes)) {
@@ -551,19 +551,34 @@ class PagesController extends BaseController
                     } elseif ($avatar->getSize() > 5 * 1024 * 1024) { // 5MB max
                         $errors[] = 'Avatar file size must be less than 5MB';
                     } else {
+                        // Delete old avatar if it exists and is not a default image
+                        $oldAvatar = $page->avatar ?? '';
+                        if (!empty($oldAvatar) && 
+                            !str_contains($oldAvatar, 'd-page.jpg') && 
+                            !str_contains($oldAvatar, 'd-avatar.jpg') &&
+                            Storage::disk('public')->exists($oldAvatar)) {
+                            Storage::disk('public')->delete($oldAvatar);
+                        }
+                        
                         // Store avatar using WoWonder path format (upload/photos/)
                         $extension = $avatar->getClientOriginalExtension();
                         $filename = 'page_avatar_' . $id . '_' . time() . '.' . $extension;
                         $avatarPath = $avatar->storeAs('upload/photos/' . date('Y/m'), $filename, 'public');
-                        $updateData['avatar'] = $avatarPath;
+                        if ($avatarPath) {
+                            $updateData['avatar'] = $avatarPath;
+                        } else {
+                            $errors[] = 'Failed to upload avatar';
+                        }
                     }
+                } else {
+                    $errors[] = 'Invalid avatar file';
                 }
             }
 
             // Handle cover upload if provided
             if ($request->hasFile('cover')) {
                 $cover = $request->file('cover');
-                if ($cover->isValid()) {
+                if ($cover && $cover->isValid()) {
                     // Validate image
                     $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
                     if (!in_array($cover->getMimeType(), $allowedMimes)) {
@@ -571,12 +586,27 @@ class PagesController extends BaseController
                     } elseif ($cover->getSize() > 10 * 1024 * 1024) { // 10MB max
                         $errors[] = 'Cover file size must be less than 10MB';
                     } else {
+                        // Delete old cover if it exists and is not a default image
+                        $oldCover = $page->cover ?? '';
+                        if (!empty($oldCover) && 
+                            !str_contains($oldCover, 'd-cover.jpg') && 
+                            !str_contains($oldCover, 'cover.jpg') &&
+                            Storage::disk('public')->exists($oldCover)) {
+                            Storage::disk('public')->delete($oldCover);
+                        }
+                        
                         // Store cover using WoWonder path format (upload/photos/)
                         $extension = $cover->getClientOriginalExtension();
                         $filename = 'page_cover_' . $id . '_' . time() . '.' . $extension;
                         $coverPath = $cover->storeAs('upload/photos/' . date('Y/m'), $filename, 'public');
-                        $updateData['cover'] = $coverPath;
+                        if ($coverPath) {
+                            $updateData['cover'] = $coverPath;
+                        } else {
+                            $errors[] = 'Failed to upload cover';
+                        }
                     }
+                } else {
+                    $errors[] = 'Invalid cover file';
                 }
             }
 
