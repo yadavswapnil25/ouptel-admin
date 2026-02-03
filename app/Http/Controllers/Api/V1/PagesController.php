@@ -656,10 +656,10 @@ class PagesController extends BaseController
                     'verified' => (bool) ($page->verified ?? false),
                     'verification_status' => $verificationStatus, // 'not_verified', 'pending', or 'verified'
                     'verification_request_status' => $verificationRequestStatus,
-                    'avatar' => $page->getAttributes()['avatar'] ?? '',
-                    'avatar_url' => $this->getFileUrl($page->getAttributes()['avatar'] ?? ''),
-                    'cover' => $page->getAttributes()['cover'] ?? '',
-                    'cover_url' => $this->getFileUrl($page->getAttributes()['cover'] ?? ''),
+                    'avatar' => $page->avatar ?? '',
+                    'avatar_url' => $this->getFileUrl($page->avatar ?? ''),
+                    'cover' => $page->cover ?? '',
+                    'cover_url' => $this->getFileUrl($page->cover ?? ''),
                 ]
             ], 200);
 
@@ -2013,47 +2013,55 @@ class PagesController extends BaseController
     }
 
     /**
-     * Get file URL if file exists, otherwise return null or fallback
+     * Get file URL for avatar/cover images
+     * Returns URL even if file doesn't exist (for newly uploaded files)
      * 
      * @param string|null $filePath
      * @return string|null
      */
     private function getFileUrl(?string $filePath): ?string
     {
-        if (empty($filePath)) {
+        if (empty($filePath) || trim($filePath) === '') {
             return null;
         }
 
         // Normalize path: remove leading slashes to prevent double slashes in URL
-        $normalizedPath = ltrim($filePath, '/');
+        $normalizedPath = ltrim(trim($filePath), '/');
+
+        // If path is empty after normalization, return null
+        if (empty($normalizedPath)) {
+            return null;
+        }
+
+        // For uploaded files (page_avatar_*, page_cover_*), always return URL
+        // These are newly uploaded files that should exist
+        if (str_contains($normalizedPath, 'page_avatar_') || str_contains($normalizedPath, 'page_cover_')) {
+            return asset('storage/' . $normalizedPath);
+        }
 
         // Check if file exists in storage
         if (Storage::disk('public')->exists($normalizedPath)) {
             return asset('storage/' . $normalizedPath);
         }
 
-        // For default images, check if they exist in public/images as fallback
+        // For default images (d-page.jpg, d-cover.jpg, etc.), return null if they don't exist
+        // These are expected to exist, but if they don't, return null to avoid 404
         $defaultImages = ['d-page.jpg', 'd-cover.jpg', 'cover.jpg', 'd-avatar.jpg', 'f-avatar.jpg'];
         $filename = basename($normalizedPath);
         
         if (in_array($filename, $defaultImages)) {
-            // First, try the storage path (even if file doesn't exist, return URL)
-            // This allows the system to work if default images are added later
-            $url = asset('storage/' . $normalizedPath);
-            
-            // Check if file actually exists before returning
-            // If it's a default page image and doesn't exist, return null to avoid 404
-            if (str_contains($filename, 'page') || str_contains($filename, 'cover')) {
-                // For page defaults, return null if file doesn't exist
-                // The frontend should handle missing images gracefully
-                return null;
-            }
-            
-            return $url;
+            // For default images, only return URL if file exists
+            return null;
         }
 
-        // If file doesn't exist and it's not a default image, return null
-        return null;
+        // For any other path that starts with 'upload/', return URL anyway
+        // This handles any uploaded files that might not match the exact pattern
+        if (str_starts_with($normalizedPath, 'upload/')) {
+            return asset('storage/' . $normalizedPath);
+        }
+
+        // For any other path, return URL anyway (might be a valid file)
+        return asset('storage/' . $normalizedPath);
     }
 }
 
