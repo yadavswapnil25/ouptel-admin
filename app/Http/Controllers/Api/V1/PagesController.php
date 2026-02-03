@@ -510,7 +510,7 @@ class PagesController extends BaseController
 
             // Update social media links
             // Check if columns exist before updating to avoid errors
-            $socialFields = ['facebook', 'instagram', 'linkedin', 'twitter', 'youtube', 'vk', 'vkontakte'];
+            $socialFields = ['facebook', 'instgram', 'linkedin', 'twitter', 'youtube', 'vk', 'vkontakte'];
             foreach ($socialFields as $field) {
                 if ($request->has($field)) {
                     // Handle vkontakte -> vk mapping
@@ -761,8 +761,8 @@ class PagesController extends BaseController
             if (Schema::hasColumn('Wo_Pages', 'facebook')) {
                 $socialLinks['facebook'] = $pageData->facebook ?? '';
             }
-            if (Schema::hasColumn('Wo_Pages', 'instagram')) {
-                $socialLinks['instagram'] = $pageData->instagram ?? '';
+            if (Schema::hasColumn('Wo_Pages', 'instgram')) {
+                $socialLinks['instgram'] = $pageData->instgram ?? '';
             }
             if (Schema::hasColumn('Wo_Pages', 'linkedin')) {
                 $socialLinks['linkedin'] = $pageData->linkedin ?? '';
@@ -794,7 +794,7 @@ class PagesController extends BaseController
                     'address' => $page->address ?? '',
                     // Social media links
                     'facebook' => $socialLinks['facebook'] ?? '',
-                    'instagram' => $socialLinks['instagram'] ?? '',
+                    'instgram' => $socialLinks['instgram'] ?? '',
                     'linkedin' => $socialLinks['linkedin'] ?? '',
                     'twitter' => $socialLinks['twitter'] ?? '',
                     'youtube' => $socialLinks['youtube'] ?? '',
@@ -1134,8 +1134,8 @@ class PagesController extends BaseController
                 if (Schema::hasColumn('Wo_Pages', 'facebook')) {
                     $socialLinks['facebook'] = $pageData->facebook ?? '';
                 }
-                if (Schema::hasColumn('Wo_Pages', 'instagram')) {
-                    $socialLinks['instagram'] = $pageData->instagram ?? '';
+                if (Schema::hasColumn('Wo_Pages', 'instgram')) {
+                    $socialLinks['instgram'] = $pageData->instgram ?? '';
                 }
                 if (Schema::hasColumn('Wo_Pages', 'linkedin')) {
                     $socialLinks['linkedin'] = $pageData->linkedin ?? '';
@@ -1173,7 +1173,7 @@ class PagesController extends BaseController
                     'address' => $page->address ?? '',
                     // Social media links (retrieved directly from database)
                     'facebook' => $socialLinks['facebook'] ?? '',
-                    'instagram' => $socialLinks['instagram'] ?? '',
+                    'instgram' => $socialLinks['instgram'] ?? '',
                     'linkedin' => $socialLinks['linkedin'] ?? '',
                     'twitter' => $socialLinks['twitter'] ?? '',
                     'youtube' => $socialLinks['youtube'] ?? '',
