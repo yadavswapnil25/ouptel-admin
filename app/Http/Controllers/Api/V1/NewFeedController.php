@@ -1055,16 +1055,16 @@ class NewFeedController extends Controller
         }
 
         try {
-            $likes = DB::table('Wo_Reactions')
+            // Get all reactions (all types: like, love, haha, wow, sad, angry)
+            $reactions = DB::table('Wo_Reactions')
                 ->where('post_id', $postId)
-                ->where('reaction', 1) // 1 = Like
                 ->where('comment_id', 0)
                 ->orderBy('id', 'desc')
                 ->limit($limit)
                 ->get();
 
-            foreach ($likes as $like) {
-                $user = DB::table('Wo_Users')->where('user_id', $like->user_id)->first();
+            foreach ($reactions as $reaction) {
+                $user = DB::table('Wo_Users')->where('user_id', $reaction->user_id)->first();
                 if ($user) {
                     // Get user name
                     $userName = $user->name ?? '';
@@ -1081,10 +1081,33 @@ class NewFeedController extends Controller
                     $isFollowing = false;
                     if ($currentUserId) {
                         $isFollowing = DB::table('Wo_Followers')
-                            ->where('following_id', $like->user_id)
+                            ->where('following_id', $reaction->user_id)
                             ->where('follower_id', $currentUserId)
+                            ->where(function($q) {
+                                $q->where('active', '1')
+                                  ->orWhere('active', 1);
+                            })
                             ->exists();
                     }
+
+                    // Get reaction type name and icon
+                    $reactionType = (int) ($reaction->reaction ?? 1);
+                    $reactionNames = [
+                        1 => 'Like',
+                        2 => 'Love',
+                        3 => 'Haha',
+                        4 => 'Wow',
+                        5 => 'Sad',
+                        6 => 'Angry',
+                    ];
+                    $reactionIcons = [
+                        1 => '👍',
+                        2 => '❤️',
+                        3 => '😂',
+                        4 => '😮',
+                        5 => '😢',
+                        6 => '😠',
+                    ];
 
                     $likedUsers[] = [
                         'user_id' => $user->user_id,
@@ -1095,9 +1118,12 @@ class NewFeedController extends Controller
                         'avatar' => $user->avatar ?? '',
                         'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                         'verified' => (bool) ($user->verified ?? false),
-                        'is_following' => $isFollowing,
-                        'liked_at' => $like->time ?? null ? date('c', $like->time) : null,
-                        'liked_at_human' => $like->time ?? null ? $this->getHumanTime($like->time) : null,
+                        'is_following' => $isFollowing ? 1 : 0,
+                        'reaction_type' => $reactionType,
+                        'reaction_name' => $reactionNames[$reactionType] ?? 'Like',
+                        'reaction_icon' => $reactionIcons[$reactionType] ?? '👍',
+                        'reacted_at' => $reaction->time ?? null ? date('c', $reaction->time) : null,
+                        'reacted_at_human' => $reaction->time ?? null ? $this->getHumanTime($reaction->time) : null,
                     ];
                 }
             }

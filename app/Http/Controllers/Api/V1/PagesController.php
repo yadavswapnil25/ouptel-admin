@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class PagesController extends BaseController
 {
@@ -76,8 +77,8 @@ class PagesController extends BaseController
                 'category' => $page->page_category,
                 'category_name' => $page->category_name,
                 'verified' => $page->verified,
-                'avatar_url' => !empty($page->getAttributes()['avatar'] ?? '') ? asset('storage/' . $page->getAttributes()['avatar']) : null,
-                'cover_url' => !empty($page->getAttributes()['cover'] ?? '') ? asset('storage/' . $page->getAttributes()['cover']) : null,
+                'avatar_url' => $this->getFileUrl($page->getAttributes()['avatar'] ?? ''),
+                'cover_url' => $this->getFileUrl($page->getAttributes()['cover'] ?? ''),
                 'website' => $page->website,
                 'phone' => $page->phone,
                 'address' => $page->address,
@@ -550,8 +551,10 @@ class PagesController extends BaseController
                     } elseif ($avatar->getSize() > 5 * 1024 * 1024) { // 5MB max
                         $errors[] = 'Avatar file size must be less than 5MB';
                     } else {
-                        // Store avatar (you may want to use a storage service)
-                        $avatarPath = $avatar->store('pages/avatars', 'public');
+                        // Store avatar using WoWonder path format (upload/photos/)
+                        $extension = $avatar->getClientOriginalExtension();
+                        $filename = 'page_avatar_' . $id . '_' . time() . '.' . $extension;
+                        $avatarPath = $avatar->storeAs('upload/photos/' . date('Y/m'), $filename, 'public');
                         $updateData['avatar'] = $avatarPath;
                     }
                 }
@@ -568,8 +571,10 @@ class PagesController extends BaseController
                     } elseif ($cover->getSize() > 10 * 1024 * 1024) { // 10MB max
                         $errors[] = 'Cover file size must be less than 10MB';
                     } else {
-                        // Store cover (you may want to use a storage service)
-                        $coverPath = $cover->store('pages/covers', 'public');
+                        // Store cover using WoWonder path format (upload/photos/)
+                        $extension = $cover->getClientOriginalExtension();
+                        $filename = 'page_cover_' . $id . '_' . time() . '.' . $extension;
+                        $coverPath = $cover->storeAs('upload/photos/' . date('Y/m'), $filename, 'public');
                         $updateData['cover'] = $coverPath;
                     }
                 }
@@ -979,9 +984,9 @@ class PagesController extends BaseController
                     'verified' => (bool) ($page->verified ?? false),
                     'active' => $page->active ?? '1',
                     'avatar' => $page->getAttributes()['avatar'] ?? '',
-                    'avatar_url' => !empty($page->getAttributes()['avatar'] ?? '') ? asset('storage/' . $page->getAttributes()['avatar']) : null,
+                    'avatar_url' => $this->getFileUrl($page->getAttributes()['avatar'] ?? ''),
                     'cover' => $page->getAttributes()['cover'] ?? '',
-                    'cover_url' => !empty($page->getAttributes()['cover'] ?? '') ? asset('storage/' . $page->getAttributes()['cover']) : null,
+                    'cover_url' => $this->getFileUrl($page->getAttributes()['cover'] ?? ''),
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
@@ -1144,9 +1149,9 @@ class PagesController extends BaseController
                     'sub_category_name' => $subCategoryName,
                     'verified' => (bool) ($pageItem->verified ?? false),
                     'avatar' => $pageItem->getAttributes()['avatar'] ?? '',
-                    'avatar_url' => !empty($pageItem->getAttributes()['avatar'] ?? '') ? asset('storage/' . $pageItem->getAttributes()['avatar']) : null,
+                    'avatar_url' => $this->getFileUrl($pageItem->getAttributes()['avatar'] ?? ''),
                     'cover' => $pageItem->getAttributes()['cover'] ?? '',
-                    'cover_url' => !empty($pageItem->getAttributes()['cover'] ?? '') ? asset('storage/' . $pageItem->getAttributes()['cover']) : null,
+                    'cover_url' => $this->getFileUrl($pageItem->getAttributes()['cover'] ?? ''),
                     'website' => $pageItem->website ?? '',
                     'phone' => $pageItem->phone ?? '',
                     'address' => $pageItem->address ?? '',
@@ -2000,6 +2005,27 @@ class PagesController extends BaseController
         return $query->where('time', '>=', $previousPeriodStart)
             ->where('time', '<', $currentPeriodStart)
             ->count();
+    }
+
+    /**
+     * Get file URL if file exists, otherwise return null
+     * 
+     * @param string|null $filePath
+     * @return string|null
+     */
+    private function getFileUrl(?string $filePath): ?string
+    {
+        if (empty($filePath)) {
+            return null;
+        }
+
+        // Check if file exists in storage
+        if (Storage::disk('public')->exists($filePath)) {
+            return asset('storage/' . $filePath);
+        }
+
+        // If file doesn't exist, return null instead of broken URL
+        return null;
     }
 }
 
