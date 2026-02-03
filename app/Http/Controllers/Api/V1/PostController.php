@@ -79,6 +79,8 @@ class PostController extends Controller
             'postWatching' => 'nullable|string|max:100',
             'postPlaying' => 'nullable|string|max:100',
             'album_name' => 'nullable|string|max:255',
+            'album_images' => 'nullable|array',
+            'album_images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240', // 10MB max per image
             'poll_id' => 'nullable|integer',
             'blog_id' => 'nullable|integer',
             'forum_id' => 'nullable|integer',
@@ -594,24 +596,33 @@ class PostController extends Controller
 
     /**
      * Get album images for a post (shared with new-feed format)
-     *
-     * @param int $postId
+     * 
+     * @param int $postId The post ID (from Wo_Posts.id)
      * @return array
      */
     private function getAlbumImages(int $postId): array
     {
-        $albumImages = DB::table('Wo_Albums_Media')
-            ->where('post_id', $postId)
-            ->orderBy('id')
-            ->get();
+        try {
+            $albumImages = DB::table('Wo_Albums_Media')
+                ->where('post_id', $postId)
+                ->orderBy('id', 'asc')
+                ->get();
 
-        return $albumImages->map(function ($image) {
-            return [
-                'id' => $image->id,
-                'image_path' => $image->image,
-                'image_url' => asset('storage/' . $image->image),
-            ];
-        })->toArray();
+            if ($albumImages->isEmpty()) {
+                return [];
+            }
+
+            return $albumImages->map(function ($image) {
+                return [
+                    'id' => $image->id,
+                    'image_path' => $image->image ?? '',
+                    'image_url' => !empty($image->image) ? asset('storage/' . $image->image) : null,
+                ];
+            })->toArray();
+        } catch (\Exception $e) {
+            // If table doesn't exist or query fails, return empty array
+            return [];
+        }
     }
 
     /**
@@ -2019,8 +2030,14 @@ class PostController extends Controller
 
         // Get album images if it's an album post (match new-feed format)
         $albumImages = [];
-        if (!empty($post->album_name) && !empty($post->multi_image_post)) {
+        // Check if it's an album post: has album_name OR multi_image_post is set to 1
+        $isAlbumPost = (!empty($post->album_name)) || 
+                       ($post->multi_image_post == 1 || $post->multi_image_post == '1');
+        
+        if ($isAlbumPost) {
             $albumImages = $this->getAlbumImages((int) $post->id);
+            // If no images found but it's marked as album, still return empty array
+            // This handles edge cases where post is marked as album but images weren't saved
         }
 
         return [
