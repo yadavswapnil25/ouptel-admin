@@ -251,65 +251,88 @@ class PagesController extends BaseController
             ], 400);
         }
 
-        // Validate and set sub_category if provided
-        $subCategoryValue = '';
-        if (!empty($subCategory) || !empty($pageSubCategory)) {
-            $subCategoryInput = !empty($subCategory) ? $subCategory : $pageSubCategory;
-            
-            // Validate sub_category belongs to the selected category
-            if (Schema::hasTable('Wo_Sub_Categories')) {
-                $subCategoryExists = DB::table('Wo_Sub_Categories')
-                    ->where('id', $subCategoryInput)
-                    ->where('category_id', $pageCategory)
-                    ->where('type', 'page')
-                    ->exists();
+        // Start database transaction
+        DB::beginTransaction();
+
+        try {
+            // Validate and set sub_category if provided
+            $subCategoryValue = '';
+            if (!empty($subCategory) || !empty($pageSubCategory)) {
+                $subCategoryInput = !empty($subCategory) ? $subCategory : $pageSubCategory;
                 
-                if ($subCategoryExists) {
-                    $subCategoryValue = $subCategoryInput;
+                // Validate sub_category belongs to the selected category
+                if (Schema::hasTable('Wo_Sub_Categories')) {
+                    $subCategoryExists = DB::table('Wo_Sub_Categories')
+                        ->where('id', $subCategoryInput)
+                        ->where('category_id', $pageCategory)
+                        ->where('type', 'page')
+                        ->exists();
+                    
+                    if ($subCategoryExists) {
+                        $subCategoryValue = $subCategoryInput;
+                    }
+                    // If sub_category doesn't exist or doesn't belong to category, leave it empty
                 }
-                // If sub_category doesn't exist or doesn't belong to category, leave it empty
             }
-        }
 
-        // Create the page
-        $page = new Page();
-        $page->page_name = $pageName;
-        $page->page_title = $pageTitle;
-        $page->page_description = $pageDescription;
-        $page->page_category = $pageCategory;
-        $page->user_id = (string) $userId;
-        $page->verified = false;
-        $page->active = '1';
-        $page->website = $request->input('website', '');
-        $page->phone = $request->input('phone', '');
-        $page->address = $request->input('address', '');
-        
-        // Set sub_category directly on attributes since it's not in fillable
-        if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
-            $page->setAttribute('sub_category', $subCategoryValue);
-        }
-        
-        $page->save();
-
-        // Get sub category name if available
-        $subCategoryName = '';
-        if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
-            $subCategoryModel = PageSubCategory::find($subCategoryValue);
-            if ($subCategoryModel) {
-                $subCategoryName = $subCategoryModel->name;
+            // Create the page
+            $page = new Page();
+            $page->page_name = $pageName;
+            $page->page_title = $pageTitle;
+            $page->page_description = $pageDescription;
+            $page->page_category = $pageCategory;
+            $page->user_id = (string) $userId;
+            $page->verified = false;
+            $page->active = '1';
+            $page->website = $request->input('website', '');
+            $page->phone = $request->input('phone', '');
+            $page->address = $request->input('address', '');
+            
+            // Set sub_category directly on attributes since it's not in fillable
+            if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
+                $page->setAttribute('sub_category', $subCategoryValue);
             }
-        }
+            
+            $page->save();
 
-        // Return response matching old API format
-        return response()->json([
-            'api_status' => 200,
-            'api_text' => 'success',
-            'api_version' => '1.0',
-            'page_name' => $page->page_name,
-            'page_id' => $page->page_id,
-            'sub_category' => $subCategoryValue,
-            'sub_category_name' => $subCategoryName,
-        ], 200);
+            // Get sub category name if available
+            $subCategoryName = '';
+            if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
+                $subCategoryModel = PageSubCategory::find($subCategoryValue);
+                if ($subCategoryModel) {
+                    $subCategoryName = $subCategoryModel->name;
+                }
+            }
+
+            // Commit transaction if everything is successful
+            DB::commit();
+
+            // Return response matching old API format
+            return response()->json([
+                'api_status' => 200,
+                'api_text' => 'success',
+                'api_version' => '1.0',
+                'page_name' => $page->page_name,
+                'page_id' => $page->page_id,
+                'sub_category' => $subCategoryValue,
+                'sub_category_name' => $subCategoryName,
+            ], 200);
+
+        } catch (\Exception $e) {
+            // Rollback transaction on error
+            DB::rollBack();
+
+            // Return error response
+            return response()->json([
+                'api_status' => 500,
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Failed to create page: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
     }
 
     /**
