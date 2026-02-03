@@ -1019,85 +1019,95 @@ class StoriesController extends Controller
         
         if (Schema::hasTable('Wo_StorySeen')) {
             try {
-                // First, try with join to get user data
-                $query = DB::table('Wo_StorySeen')
-                    ->join('Wo_Users', 'Wo_StorySeen.user_id', '=', 'Wo_Users.user_id')
-                    ->where('Wo_StorySeen.story_id', $storyId)
-                    ->where('Wo_StorySeen.user_id', '!=', $story->user_id); // Exclude story owner from views
-
-                // Only filter by active if column exists
-                if (Schema::hasColumn('Wo_Users', 'active')) {
-                    $query->whereIn('Wo_Users.active', ['1', 1]); // Only active users
-                }
-
-                // Handle offset - if offset is provided and is numeric, use it as record offset
-                // If offset looks like an ID (larger number), use it as ID-based pagination
-                if ($offset > 0) {
-                    // Check if offset is likely an ID (if it's > 1000, treat as ID, otherwise as record offset)
-                    if ($offset > 1000) {
-                        // ID-based pagination (for infinite scroll)
-                        $query->where('Wo_StorySeen.id', '>', $offset);
-                    } else {
-                        // Record-based offset (skip N records)
-                        $query->offset($offset);
-                    }
-                }
-
-                // Order by time if column exists, otherwise by id
-                $hasTimeColumn = Schema::hasColumn('Wo_StorySeen', 'time');
-                if ($hasTimeColumn) {
-                    $query->orderBy('Wo_StorySeen.time', 'desc');
-                } else {
-                    $query->orderBy('Wo_StorySeen.id', 'desc');
-                }
-
-                // Build select statement based on available columns
-                $selectFields = [
-                    'Wo_StorySeen.id as view_id',
-                    'Wo_StorySeen.user_id',
-                    'Wo_StorySeen.story_id',
-                    'Wo_Users.username',
-                    'Wo_Users.name',
-                    'Wo_Users.first_name',
-                    'Wo_Users.last_name',
-                    'Wo_Users.avatar',
-                    'Wo_Users.verified'
-                ];
+                // Get all views for this story (excluding story owner)
+                $viewUserIds = DB::table('Wo_StorySeen')
+                    ->where('story_id', $storyId)
+                    ->where('user_id', '!=', $story->user_id)
+                    ->pluck('user_id')
+                    ->unique()
+                    ->values()
+                    ->toArray();
                 
-                if ($hasTimeColumn) {
-                    $selectFields[] = 'Wo_StorySeen.time as viewed_at';
-                }
-
-                $views = $query->select($selectFields)
-                    ->limit($limit)
-                    ->get();
-
-                // Format users data
-                foreach ($views as $view) {
-                    $userName = $view->name ?? '';
-                    if (empty($userName)) {
-                        $firstName = $view->first_name ?? '';
-                        $lastName = $view->last_name ?? '';
-                        $userName = trim($firstName . ' ' . $lastName);
+                if (!empty($viewUserIds)) {
+                    // Get user data for all viewers
+                    $userQuery = DB::table('Wo_Users')
+                        ->whereIn('user_id', $viewUserIds);
+                    
+                    // Only filter by active if column exists
+                    if (Schema::hasColumn('Wo_Users', 'active')) {
+                        $userQuery->whereIn('active', ['1', 1]); // Only active users
                     }
-                    if (empty($userName)) {
-                        $userName = $view->username ?? 'Unknown User';
+                    
+                    $users = $userQuery->get();
+                    
+                    // Get view timestamps for ordering (get most recent view per user)
+                    $hasTimeColumn = Schema::hasColumn('Wo_StorySeen', 'time');
+                    $viewTimesQuery = DB::table('Wo_StorySeen')
+                        ->where('story_id', $storyId)
+                        ->whereIn('user_id', $viewUserIds);
+                    
+                    if ($hasTimeColumn) {
+                        $viewTimesQuery->select('user_id', 'id', 'time')
+                            ->orderBy('time', 'desc');
+                    } else {
+                        $viewTimesQuery->select('user_id', 'id')
+                            ->orderBy('id', 'desc');
                     }
+                    
+                    // Get most recent view per user
+                    $viewTimesRaw = $viewTimesQuery->get();
+                    $viewTimes = [];
+                    foreach ($viewTimesRaw as $view) {
+                        // Only keep the first (most recent) view for each user
+                        if (!isset($viewTimes[$view->user_id])) {
+                            $viewTimes[$view->user_id] = $view;
+                        }
+                    }
+                    
+                    // Sort users by view time (most recent first)
+                    $users = $users->sortByDesc(function($user) use ($viewTimes, $hasTimeColumn) {
+                        $view = $viewTimes[$user->user_id] ?? null;
+                        if ($hasTimeColumn && $view && isset($view->time)) {
+                            return $view->time;
+                        }
+                        return $view->id ?? 0;
+                    })->values();
+                    
+                    // Apply limit and offset
+                    if ($offset > 0) {
+                        $users = $users->slice($offset);
+                    }
+                    $users = $users->take($limit);
+                    
+                    // Format users data
+                    foreach ($users as $user) {
+                        $view = $viewTimes[$user->user_id] ?? null;
+                        $userName = $user->name ?? '';
+                        if (empty($userName)) {
+                            $firstName = $user->first_name ?? '';
+                            $lastName = $user->last_name ?? '';
+                            $userName = trim($firstName . ' ' . $lastName);
+                        }
+                        if (empty($userName)) {
+                            $userName = $user->username ?? 'Unknown User';
+                        }
 
-                    $usersData[] = [
-                        'user_id' => $view->user_id,
-                        'username' => $view->username ?? 'Unknown',
-                        'name' => $userName,
-                        'avatar' => $view->avatar ?? '',
-                        'avatar_url' => $view->avatar ? asset('storage/' . $view->avatar) : null,
-                        'verified' => (bool) ($view->verified ?? false),
-                        'offset_id' => $view->view_id,
-                        'viewed_at' => isset($view->viewed_at) && $view->viewed_at ? date('c', $view->viewed_at) : null,
-                    ];
+                        $usersData[] = [
+                            'user_id' => $user->user_id,
+                            'username' => $user->username ?? 'Unknown',
+                            'name' => $userName,
+                            'avatar' => $user->avatar ?? '',
+                            'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                            'verified' => (bool) ($user->verified ?? false),
+                            'offset_id' => $view->id ?? 0,
+                            'viewed_at' => ($hasTimeColumn && $view && isset($view->time)) ? date('c', $view->time) : null,
+                        ];
+                    }
                 }
             } catch (\Exception $e) {
-                // If join fails, try without join (fallback)
+                // If query fails, try simpler approach without join
                 try {
+                    // Get views without join
                     $query = DB::table('Wo_StorySeen')
                         ->where('story_id', $storyId)
                         ->where('user_id', '!=', $story->user_id); // Exclude story owner from views
@@ -1123,6 +1133,14 @@ class StoriesController extends Controller
                     foreach ($views as $view) {
                         $user = DB::table('Wo_Users')->where('user_id', $view->user_id)->first();
                         if ($user) {
+                            // Check if user is active (if column exists)
+                            if (Schema::hasColumn('Wo_Users', 'active')) {
+                                $isActive = in_array($user->active, ['1', 1]);
+                                if (!$isActive) {
+                                    continue; // Skip inactive users
+                                }
+                            }
+                            
                             $userName = $user->name ?? '';
                             if (empty($userName)) {
                                 $firstName = $user->first_name ?? '';
