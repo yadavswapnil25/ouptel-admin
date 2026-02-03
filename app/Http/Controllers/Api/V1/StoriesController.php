@@ -408,8 +408,8 @@ class StoriesController extends Controller
         $isViewed = false;
         $viewCount = 0;
         
-        if (Schema::hasTable('Wo_StorySeen')) {
-            $isViewed = DB::table('Wo_StorySeen')
+        if (Schema::hasTable('Wo_Story_Seen')) {
+            $isViewed = DB::table('Wo_Story_Seen')
                 ->where('story_id', $id)
                 ->where('user_id', $tokenUserId)
                 ->exists();
@@ -422,18 +422,18 @@ class StoriesController extends Controller
                 ];
                 
                 // Only add time if column exists
-                if (Schema::hasColumn('Wo_StorySeen', 'time')) {
+                if (Schema::hasColumn('Wo_Story_Seen', 'time')) {
                     $seenInsertData['time'] = time();
                 }
                 
-                DB::table('Wo_StorySeen')->insert($seenInsertData);
+                DB::table('Wo_Story_Seen')->insert($seenInsertData);
 
                 // Create notification (if user is not viewing their own story)
                 // Note: Notification system would be implemented separately
             }
 
             // Get view count
-            $viewCount = DB::table('Wo_StorySeen')
+            $viewCount = DB::table('Wo_Story_Seen')
                 ->where('story_id', $id)
                 ->where('user_id', '!=', $story->user_id)
                 ->count();
@@ -542,8 +542,8 @@ class StoriesController extends Controller
 
             // Delete story views
             // Delete story seen records
-            if (Schema::hasTable('Wo_StorySeen')) {
-                DB::table('Wo_StorySeen')->where('story_id', $storyId)->delete();
+            if (Schema::hasTable('Wo_Story_Seen')) {
+                DB::table('Wo_Story_Seen')->where('story_id', $storyId)->delete();
             }
 
             // Delete story reactions
@@ -878,7 +878,7 @@ class StoriesController extends Controller
         $errorCount = 0;
         $errors = [];
 
-        if (Schema::hasTable('Wo_StorySeen')) {
+        if (Schema::hasTable('Wo_Story_Seen')) {
             foreach ($storyIds as $id) {
                 try {
                     // Check if story exists (handle both string and integer IDs)
@@ -903,7 +903,7 @@ class StoriesController extends Controller
                     }
 
                     // Check if already viewed (handle both string and integer types)
-                    $alreadyViewed = DB::table('Wo_StorySeen')
+                    $alreadyViewed = DB::table('Wo_Story_Seen')
                         ->where('story_id', $id)
                         ->where(function($q) use ($tokenUserId) {
                             $q->where('user_id', $tokenUserId)
@@ -923,16 +923,16 @@ class StoriesController extends Controller
                     ];
                     
                     // Only add time if column exists
-                    if (Schema::hasColumn('Wo_StorySeen', 'time')) {
+                    if (Schema::hasColumn('Wo_Story_Seen', 'time')) {
                         $seenInsertData['time'] = time();
                     }
                     
                     try {
                         // Try insert - handle potential unique constraint or duplicate key errors
-                        $inserted = DB::table('Wo_StorySeen')->insert($seenInsertData);
+                        $inserted = DB::table('Wo_Story_Seen')->insert($seenInsertData);
                         
                         // Verify the insert actually happened by checking if record exists
-                        $verifyInsert = DB::table('Wo_StorySeen')
+                        $verifyInsert = DB::table('Wo_Story_Seen')
                             ->where('story_id', $id)
                             ->where(function($q) use ($tokenUserId) {
                                 $q->where('user_id', $tokenUserId)
@@ -991,7 +991,7 @@ class StoriesController extends Controller
                 'api_status' => 500,
                 'errors' => [
                     'error_id' => 500,
-                    'error_text' => 'Wo_StorySeen table does not exist'
+                    'error_text' => 'Wo_Story_Seen table does not exist'
                 ]
             ], 500);
         }
@@ -1082,10 +1082,10 @@ class StoriesController extends Controller
         // Get story views (excluding story owner)
         $usersData = [];
         
-        if (Schema::hasTable('Wo_StorySeen')) {
+        if (Schema::hasTable('Wo_Story_Seen')) {
             try {
                 // Get all views for this story (excluding story owner)
-                $viewUserIds = DB::table('Wo_StorySeen')
+                $viewUserIds = DB::table('Wo_Story_Seen')
                     ->where('story_id', $storyId)
                     ->where('user_id', '!=', $story->user_id)
                     ->pluck('user_id')
@@ -1106,8 +1106,8 @@ class StoriesController extends Controller
                     $users = $userQuery->get();
                     
                     // Get view timestamps for ordering (get most recent view per user)
-                    $hasTimeColumn = Schema::hasColumn('Wo_StorySeen', 'time');
-                    $viewTimesQuery = DB::table('Wo_StorySeen')
+                    $hasTimeColumn = Schema::hasColumn('Wo_Story_Seen', 'time');
+                    $viewTimesQuery = DB::table('Wo_Story_Seen')
                         ->where('story_id', $storyId)
                         ->whereIn('user_id', $viewUserIds);
                     
@@ -1173,7 +1173,7 @@ class StoriesController extends Controller
                 // If query fails, try simpler approach without join
                 try {
                     // Get views without join
-                    $query = DB::table('Wo_StorySeen')
+                    $query = DB::table('Wo_Story_Seen')
                         ->where('story_id', $storyId)
                         ->where('user_id', '!=', $story->user_id); // Exclude story owner from views
 
@@ -1185,7 +1185,7 @@ class StoriesController extends Controller
                         }
                     }
 
-                    $hasTimeColumn = Schema::hasColumn('Wo_StorySeen', 'time');
+                    $hasTimeColumn = Schema::hasColumn('Wo_Story_Seen', 'time');
                     if ($hasTimeColumn) {
                         $query->orderBy('time', 'desc');
                     } else {
@@ -1542,8 +1542,8 @@ class StoriesController extends Controller
 
                 // Get view count
                 $viewCount = 0;
-                if (Schema::hasTable('Wo_StorySeen')) {
-                    $viewCount = DB::table('Wo_StorySeen')
+                if (Schema::hasTable('Wo_Story_Seen')) {
+                    $viewCount = DB::table('Wo_Story_Seen')
                         ->where('story_id', $story->id)
                         ->where('user_id', '!=', $story->user_id)
                         ->count();
