@@ -53,7 +53,7 @@ class PostController extends Controller
         $validationRules = [
             'postText' => 'nullable|string|max:5000',
             'postPrivacy' => 'required|in:0,1,2,3,4', // 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group
-            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif,traveling,listening,watching,playing,reaction',
+            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif,colored,traveling,listening,watching,playing,reaction',
             'type' => 'nullable|in:regular,gif,feeling,colored', // Post creation type
             'feeling' => 'nullable|string|max:100', // Feeling parameter for type=feeling
             'page_id' => 'nullable|integer',
@@ -236,8 +236,47 @@ class PostController extends Controller
                 $postRecordPath = $this->handleFileUpload($postRecord, 'posts/audio', 'audio');
             }
 
+            // Handle legacy field names (traveling -> postTraveling, etc.)
+            if ($request->has('traveling') && !$request->has('postTraveling')) {
+                $request->merge(['postTraveling' => $request->input('traveling')]);
+            }
+            if ($request->has('listening') && !$request->has('postListening')) {
+                $request->merge(['postListening' => $request->input('listening')]);
+            }
+            if ($request->has('watching') && !$request->has('postWatching')) {
+                $request->merge(['postWatching' => $request->input('watching')]);
+            }
+            if ($request->has('playing') && !$request->has('postPlaying')) {
+                $request->merge(['postPlaying' => $request->input('playing')]);
+            }
+            if ($request->has('reaction') && !$request->has('postReaction')) {
+                $request->merge(['postReaction' => $request->input('reaction')]);
+            }
+            
             // Determine post type
             $postType = $this->determinePostType($request, $postPhotoPath, $postFilePath, $postRecordPath, $isVideoFile);
+            
+            // If postType was explicitly provided and it's a valid activity type, use it
+            $explicitPostType = $request->input('postType');
+            if ($explicitPostType && in_array($explicitPostType, ['traveling', 'listening', 'watching', 'playing', 'reaction'])) {
+                // Ensure the corresponding activity field is set
+                $activityFieldMap = [
+                    'traveling' => 'postTraveling',
+                    'listening' => 'postListening',
+                    'watching' => 'postWatching',
+                    'playing' => 'postPlaying',
+                    'reaction' => 'postReaction',
+                ];
+                
+                $requiredField = $activityFieldMap[$explicitPostType];
+                if (!$request->has($requiredField) || empty($request->input($requiredField))) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => "{$requiredField} field is required when postType is {$explicitPostType}"
+                    ], 422);
+                }
+                $postType = $explicitPostType;
+            }
 
             // Prepare post data with proper null handling
             $postData = [
