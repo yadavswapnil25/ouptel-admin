@@ -627,12 +627,16 @@ class PagesController extends BaseController
                 }
                 
                 // Update using DB directly to ensure changes are saved
-                DB::table('Wo_Pages')
+                $updated = DB::table('Wo_Pages')
                     ->where('page_id', $id)
                     ->update($updateData);
                 
                 // Reload the page from database to get updated values
+                // Clear the model cache and reload
                 $page = Page::where('page_id', $id)->first();
+                if ($page) {
+                    $page->refresh();
+                }
             }
 
             // Check verification request status
@@ -665,6 +669,15 @@ class PagesController extends BaseController
                 $responseMessage = 'Page updated successfully. Verification request submitted.';
             }
 
+            // Get fresh avatar and cover from database to ensure we have the latest values
+            $pageData = DB::table('Wo_Pages')
+                ->where('page_id', $id)
+                ->select('avatar', 'cover')
+                ->first();
+            
+            $avatarPath = $pageData->avatar ?? $page->avatar ?? '';
+            $coverPath = $pageData->cover ?? $page->cover ?? '';
+
             return response()->json([
                 'api_status' => 200,
                 'api_text' => 'success',
@@ -686,10 +699,10 @@ class PagesController extends BaseController
                     'verified' => (bool) ($page->verified ?? false),
                     'verification_status' => $verificationStatus, // 'not_verified', 'pending', or 'verified'
                     'verification_request_status' => $verificationRequestStatus,
-                    'avatar' => $page->avatar ?? '',
-                    'avatar_url' => $this->getFileUrl($page->avatar ?? ''),
-                    'cover' => $page->cover ?? '',
-                    'cover_url' => $this->getFileUrl($page->cover ?? ''),
+                    'avatar' => $avatarPath,
+                    'avatar_url' => $this->getFileUrl($avatarPath),
+                    'cover' => $coverPath,
+                    'cover_url' => $this->getFileUrl($coverPath),
                 ]
             ], 200);
 
@@ -1018,10 +1031,10 @@ class PagesController extends BaseController
                     'category_name' => $categoryName,
                     'verified' => (bool) ($page->verified ?? false),
                     'active' => $page->active ?? '1',
-                    'avatar' => $page->getAttributes()['avatar'] ?? '',
-                    'avatar_url' => $this->getFileUrl($page->getAttributes()['avatar'] ?? ''),
-                    'cover' => $page->getAttributes()['cover'] ?? '',
-                    'cover_url' => $this->getFileUrl($page->getAttributes()['cover'] ?? ''),
+                    'avatar' => $page->avatar ?? '',
+                    'avatar_url' => $this->getFileUrl($page->avatar ?? ''),
+                    'cover' => $page->cover ?? '',
+                    'cover_url' => $this->getFileUrl($page->cover ?? ''),
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
