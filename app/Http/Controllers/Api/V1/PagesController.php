@@ -1100,10 +1100,27 @@ class PagesController extends BaseController
                 }
             }
 
-            // Get page sub category name if available
-            // Access sub_category directly from attributes since it's not in fillable
+            // Get page posts count
+            $postsCount = 0;
+            if (DB::getSchemaBuilder()->hasTable('Wo_Posts')) {
+                $postsCount = DB::table('Wo_Posts')
+                    ->where('page_id', $id)
+                    ->where('active', '1')
+                    ->count();
+            }
+
+            // Get page data directly from database to ensure we get all columns including sub_category
+            $pageData = DB::table('Wo_Pages')
+                ->where('page_id', $id)
+                ->first();
+            
+            // Get page sub category value and name if available
+            // Get sub_category directly from database query to ensure it's retrieved
             $subCategoryValue = '';
-            if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
+            if ($pageData && Schema::hasColumn('Wo_Pages', 'sub_category')) {
+                $subCategoryValue = $pageData->sub_category ?? '';
+            } elseif (Schema::hasColumn('Wo_Pages', 'sub_category')) {
+                // Fallback to model attributes if database query didn't work
                 $subCategoryValue = $page->getAttributes()['sub_category'] ?? '';
             }
             
@@ -1114,20 +1131,6 @@ class PagesController extends BaseController
                     $subCategoryName = $subCategory->name;
                 }
             }
-
-            // Get page posts count
-            $postsCount = 0;
-            if (DB::getSchemaBuilder()->hasTable('Wo_Posts')) {
-                $postsCount = DB::table('Wo_Posts')
-                    ->where('page_id', $id)
-                    ->where('active', '1')
-                    ->count();
-            }
-
-            // Get social media links directly from database to ensure we get all columns
-            $pageData = DB::table('Wo_Pages')
-                ->where('page_id', $id)
-                ->first();
             
             $socialLinks = [];
             if ($pageData) {
