@@ -1300,6 +1300,7 @@ class FriendsController extends Controller
                 'is_following' => $this->isFollowing($tokenUserId, $user->user_id),
                 'is_following_me' => $this->isFollowing($user->user_id, $tokenUserId),
                 'is_friend' => $this->isFriend($tokenUserId, $user->user_id),
+                'friend_request_sent' => $this->hasFriendRequestSent($tokenUserId, $user->user_id),
             ];
         }
 
@@ -1334,6 +1335,7 @@ class FriendsController extends Controller
                         'is_following' => $this->isFollowing($tokenUserId, $user->user_id),
                         'is_following_me' => $this->isFollowing($user->user_id, $tokenUserId),
                         'is_friend' => $this->isFriend($tokenUserId, $user->user_id),
+                        'friend_request_sent' => $this->hasFriendRequestSent($tokenUserId, $user->user_id),
                     ];
                 }
                 $responseData['contacts_suggestions'] = $contactsFormatted;
@@ -1400,6 +1402,7 @@ class FriendsController extends Controller
                 'is_following' => $this->isFollowing($tokenUserId, $user->user_id),
                 'is_following_me' => $this->isFollowing($user->user_id, $tokenUserId),
                 'is_friend' => $this->isFriend($tokenUserId, $user->user_id),
+                'friend_request_sent' => $this->hasFriendRequestSent($tokenUserId, $user->user_id),
             ];
         }
 
@@ -1434,6 +1437,7 @@ class FriendsController extends Controller
                         'is_following' => $this->isFollowing($tokenUserId, $user->user_id),
                         'is_following_me' => $this->isFollowing($user->user_id, $tokenUserId),
                         'is_friend' => $this->isFriend($tokenUserId, $user->user_id),
+                        'friend_request_sent' => $this->hasFriendRequestSent($tokenUserId, $user->user_id),
                     ];
                 }
                 $responseData['contacts_suggestions'] = $contactsFormatted;
@@ -1662,6 +1666,37 @@ class FriendsController extends Controller
         }
         
         return false;
+    }
+
+    /**
+     * Check if a friend request has been sent by the current user to another user
+     * Friend requests are stored in Wo_Followers with active = 0 (pending)
+     * 
+     * @param string $senderId User who sent the request (current logged-in user)
+     * @param string $receiverId User who receives the request (suggested user)
+     * @return bool
+     */
+    private function hasFriendRequestSent(string $senderId, string $receiverId): bool
+    {
+        if (!Schema::hasTable('Wo_Followers')) {
+            return false;
+        }
+
+        try {
+            // Check if there's a pending friend request (active = 0 or '0')
+            // follower_id = sender (who sent the request)
+            // following_id = receiver (who receives the request)
+            return DB::table('Wo_Followers')
+                ->where('follower_id', $senderId)
+                ->where('following_id', $receiverId)
+                ->where(function($q) {
+                    $q->where('active', '=', '0')
+                      ->orWhere('active', '=', 0);
+                })
+                ->exists();
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 
     /**
