@@ -69,13 +69,39 @@ class PagesController extends BaseController
         $postsLimit = max(0, min($postsLimit, 10)); // Limit between 0-10
 
         $data = $paginator->getCollection()->map(function (Page $page) use ($tokenUserId, $includePosts, $postsLimit) {
+            // Get page category name if available
+            $categoryName = '';
+            if ($page->page_category && DB::getSchemaBuilder()->hasTable('Wo_Pages_Categories')) {
+                $category = PageCategory::find($page->page_category);
+                if ($category) {
+                    $categoryName = $category->name;
+                }
+            }
+
+            // Get page sub category value and name if available
+            // Access sub_category directly from attributes since it's not in fillable
+            $subCategoryValue = '';
+            if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
+                $subCategoryValue = $page->getAttributes()['sub_category'] ?? '';
+            }
+            
+            $subCategoryName = '';
+            if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
+                $subCategory = PageSubCategory::find($subCategoryValue);
+                if ($subCategory) {
+                    $subCategoryName = $subCategory->name;
+                }
+            }
+
             $pageData = [
                 'page_id' => $page->page_id,
                 'page_name' => $page->page_name,
                 'page_title' => $page->page_title,
                 'description' => $page->page_description,
-                'category' => $page->page_category,
-                'category_name' => $page->category_name,
+                'category' => $page->page_category ?? 0,
+                'category_name' => $categoryName,
+                'sub_category' => $subCategoryValue,
+                'sub_category_name' => $subCategoryName,
                 'verified' => $page->verified,
                 'avatar_url' => $this->getFileUrl($page->getAttributes()['avatar'] ?? ''),
                 'cover_url' => $this->getFileUrl($page->getAttributes()['cover'] ?? ''),
