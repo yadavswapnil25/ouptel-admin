@@ -1124,6 +1124,33 @@ class PagesController extends BaseController
                     ->count();
             }
 
+            // Get social media links directly from database to ensure we get all columns
+            $pageData = DB::table('Wo_Pages')
+                ->where('page_id', $id)
+                ->first();
+            
+            $socialLinks = [];
+            if ($pageData) {
+                if (Schema::hasColumn('Wo_Pages', 'facebook')) {
+                    $socialLinks['facebook'] = $pageData->facebook ?? '';
+                }
+                if (Schema::hasColumn('Wo_Pages', 'instagram')) {
+                    $socialLinks['instagram'] = $pageData->instagram ?? '';
+                }
+                if (Schema::hasColumn('Wo_Pages', 'linkedin')) {
+                    $socialLinks['linkedin'] = $pageData->linkedin ?? '';
+                }
+                if (Schema::hasColumn('Wo_Pages', 'twitter')) {
+                    $socialLinks['twitter'] = $pageData->twitter ?? '';
+                }
+                if (Schema::hasColumn('Wo_Pages', 'youtube')) {
+                    $socialLinks['youtube'] = $pageData->youtube ?? '';
+                }
+                if (Schema::hasColumn('Wo_Pages', 'vk')) {
+                    $socialLinks['vkontakte'] = $pageData->vk ?? '';
+                }
+            }
+
             // Format response
             $responseData = [
                 'api_status' => 200,
@@ -1144,13 +1171,13 @@ class PagesController extends BaseController
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
-                    // Social media links (check if columns exist)
-                    'facebook' => Schema::hasColumn('Wo_Pages', 'facebook') ? ($page->getAttributes()['facebook'] ?? '') : '',
-                    'instagram' => Schema::hasColumn('Wo_Pages', 'instagram') ? ($page->getAttributes()['instagram'] ?? '') : '',
-                    'linkedin' => Schema::hasColumn('Wo_Pages', 'linkedin') ? ($page->getAttributes()['linkedin'] ?? '') : '',
-                    'twitter' => Schema::hasColumn('Wo_Pages', 'twitter') ? ($page->getAttributes()['twitter'] ?? '') : '',
-                    'youtube' => Schema::hasColumn('Wo_Pages', 'youtube') ? ($page->getAttributes()['youtube'] ?? '') : '',
-                    'vkontakte' => Schema::hasColumn('Wo_Pages', 'vk') ? ($page->getAttributes()['vk'] ?? '') : '',
+                    // Social media links (retrieved directly from database)
+                    'facebook' => $socialLinks['facebook'] ?? '',
+                    'instagram' => $socialLinks['instagram'] ?? '',
+                    'linkedin' => $socialLinks['linkedin'] ?? '',
+                    'twitter' => $socialLinks['twitter'] ?? '',
+                    'youtube' => $socialLinks['youtube'] ?? '',
+                    'vkontakte' => $socialLinks['vkontakte'] ?? '',
                     'sub_category' => $subCategoryValue,
                     'sub_category_name' => $subCategoryName,
                     // Expose legacy WoWonder columns under clearer API field names
