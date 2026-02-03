@@ -2009,6 +2009,7 @@ class PagesController extends BaseController
 
     /**
      * Get file URL if file exists, otherwise return null
+     * For default images (d-page.jpg, d-cover.jpg, etc.), return URL even if file doesn't exist
      * 
      * @param string|null $filePath
      * @return string|null
@@ -2024,7 +2025,15 @@ class PagesController extends BaseController
             return asset('storage/' . $filePath);
         }
 
-        // If file doesn't exist, return null instead of broken URL
+        // For default images (d-page.jpg, d-cover.jpg, cover.jpg, etc.), return URL anyway
+        // These are expected default images that should exist
+        $defaultImages = ['d-page.jpg', 'd-cover.jpg', 'cover.jpg', 'd-avatar.jpg', 'f-avatar.jpg'];
+        $filename = basename($filePath);
+        if (in_array($filename, $defaultImages)) {
+            return asset('storage/' . $filePath);
+        }
+
+        // If file doesn't exist and it's not a default image, return null
         return null;
     }
 }
