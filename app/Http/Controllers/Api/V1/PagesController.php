@@ -2055,8 +2055,15 @@ class PagesController extends BaseController
             return null;
         }
 
+        $trimmedPath = trim($filePath);
+
+        // If path is already a full URL (starts with http:// or https://), return it as-is
+        if (str_starts_with($trimmedPath, 'http://') || str_starts_with($trimmedPath, 'https://')) {
+            return $trimmedPath;
+        }
+
         // Normalize path: remove leading slashes to prevent double slashes in URL
-        $normalizedPath = ltrim(trim($filePath), '/');
+        $normalizedPath = ltrim($trimmedPath, '/');
 
         // If path is empty after normalization, return null
         if (empty($normalizedPath)) {
@@ -2082,6 +2089,11 @@ class PagesController extends BaseController
         if (in_array($filename, $defaultImages)) {
             // For default images, only return URL if file exists
             return null;
+        }
+
+        // For paths starting with 'images/', return as public asset (not in storage)
+        if (str_starts_with($normalizedPath, 'images/')) {
+            return asset($normalizedPath);
         }
 
         // For any other path that starts with 'upload/', return URL anyway
