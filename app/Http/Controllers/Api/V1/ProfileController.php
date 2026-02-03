@@ -1339,10 +1339,23 @@ class ProfileController extends Controller
                 $colorData = $this->getColorData($colorId);
             }
 
-            // Determine postType - override to 'colored' if color_id exists
+            // Determine postType - override to 'colored' if color_id exists, or 'album' if it's an album post
             $postType = $post->postType ?? 'text';
             if ($colorId > 0) {
                 $postType = 'colored';
+            }
+            
+            // Check if it's an album post (has album_name OR multi_image_post is set)
+            $isAlbumPost = (!empty($post->album_name)) || 
+                          (!empty($post->multi_image_post) && ($post->multi_image_post == 1 || $post->multi_image_post == '1'));
+            if ($isAlbumPost && $postType !== 'colored') {
+                $postType = 'album';
+            }
+            
+            // Get album images if it's an album post (match new-feed format)
+            $albumImages = [];
+            if ($isAlbumPost) {
+                $albumImages = $this->getAlbumImages($post->id);
             }
 
             $result[] = [
@@ -1372,6 +1385,11 @@ class ProfileController extends Controller
                 'postLinkTitle' => $post->postLinkTitle ?? '',
                 'postLinkImage' => $post->postLinkImage ?? '',
                 'postLinkContent' => $post->postLinkContent ?? '',
+                // Album data (match new-feed format)
+                'album_name' => $post->album_name ?? '',
+                'multi_image_post' => (bool) ($post->multi_image_post ?? false),
+                'album_images' => $albumImages,
+                'album_images_count' => count($albumImages),
                 'time' => $post->time ?? time(),
                 'created_at' => $post->time ? date('c', $post->time) : null,
                 'reactions_count' => $totalReactions,
@@ -1397,6 +1415,44 @@ class ProfileController extends Controller
         }
 
         return $result;
+    }
+
+    /**
+     * Get album images for a post (matching new-feed format)
+     * 
+     * @param int $postId The post ID (from Wo_Posts.id)
+     * @return array
+     */
+    private function getAlbumImages(int $postId): array
+    {
+        if (!Schema::hasTable('Wo_Albums_Media')) {
+            return [];
+        }
+
+        try {
+            $albumImages = DB::table('Wo_Albums_Media')
+                ->where('post_id', $postId)
+                ->orderBy('id', 'asc')
+                ->get();
+
+            if ($albumImages->isEmpty()) {
+                return [];
+            }
+
+            return $albumImages->map(function ($image) {
+                if (empty($image->image)) {
+                    return null;
+                }
+                return [
+                    'id' => $image->id,
+                    'image_path' => $image->image,
+                    'image_url' => asset('storage/' . $image->image),
+                ];
+            })->filter()->toArray(); // Filter out nulls if image is empty
+        } catch (\Exception $e) {
+            Log::error("Error fetching album images for post {$postId}: " . $e->getMessage());
+            return [];
+        }
     }
 
     /**
