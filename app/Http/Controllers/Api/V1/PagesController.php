@@ -596,10 +596,13 @@ class PagesController extends BaseController
                     unset($updateData['about']);
                 }
                 
-                foreach ($updateData as $key => $value) {
-                    $page->$key = $value;
-                }
-                $page->save();
+                // Update using DB directly to ensure changes are saved
+                DB::table('Wo_Pages')
+                    ->where('page_id', $id)
+                    ->update($updateData);
+                
+                // Reload the page from database to get updated values
+                $page = Page::where('page_id', $id)->first();
             }
 
             // Check verification request status
@@ -653,8 +656,10 @@ class PagesController extends BaseController
                     'verified' => (bool) ($page->verified ?? false),
                     'verification_status' => $verificationStatus, // 'not_verified', 'pending', or 'verified'
                     'verification_request_status' => $verificationRequestStatus,
-                    'avatar_url' => !empty($page->getAttributes()['avatar'] ?? '') ? asset('storage/' . $page->getAttributes()['avatar']) : null,
-                    'cover_url' => !empty($page->getAttributes()['cover'] ?? '') ? asset('storage/' . $page->getAttributes()['cover']) : null,
+                    'avatar' => $page->getAttributes()['avatar'] ?? '',
+                    'avatar_url' => $this->getFileUrl($page->getAttributes()['avatar'] ?? ''),
+                    'cover' => $page->getAttributes()['cover'] ?? '',
+                    'cover_url' => $this->getFileUrl($page->getAttributes()['cover'] ?? ''),
                 ]
             ], 200);
 
@@ -2008,8 +2013,7 @@ class PagesController extends BaseController
     }
 
     /**
-     * Get file URL if file exists, otherwise return null
-     * For default images (d-page.jpg, d-cover.jpg, etc.), return URL even if file doesn't exist
+     * Get file URL if file exists, otherwise return null or fallback
      * 
      * @param string|null $filePath
      * @return string|null
@@ -2020,17 +2024,32 @@ class PagesController extends BaseController
             return null;
         }
 
+        // Normalize path: remove leading slashes to prevent double slashes in URL
+        $normalizedPath = ltrim($filePath, '/');
+
         // Check if file exists in storage
-        if (Storage::disk('public')->exists($filePath)) {
-            return asset('storage/' . $filePath);
+        if (Storage::disk('public')->exists($normalizedPath)) {
+            return asset('storage/' . $normalizedPath);
         }
 
-        // For default images (d-page.jpg, d-cover.jpg, cover.jpg, etc.), return URL anyway
-        // These are expected default images that should exist
+        // For default images, check if they exist in public/images as fallback
         $defaultImages = ['d-page.jpg', 'd-cover.jpg', 'cover.jpg', 'd-avatar.jpg', 'f-avatar.jpg'];
-        $filename = basename($filePath);
+        $filename = basename($normalizedPath);
+        
         if (in_array($filename, $defaultImages)) {
-            return asset('storage/' . $filePath);
+            // First, try the storage path (even if file doesn't exist, return URL)
+            // This allows the system to work if default images are added later
+            $url = asset('storage/' . $normalizedPath);
+            
+            // Check if file actually exists before returning
+            // If it's a default page image and doesn't exist, return null to avoid 404
+            if (str_contains($filename, 'page') || str_contains($filename, 'cover')) {
+                // For page defaults, return null if file doesn't exist
+                // The frontend should handle missing images gracefully
+                return null;
+            }
+            
+            return $url;
         }
 
         // If file doesn't exist and it's not a default image, return null
