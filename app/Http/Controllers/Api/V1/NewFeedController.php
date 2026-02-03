@@ -381,9 +381,11 @@ class NewFeedController extends Controller
             $postIdForComments = $post->post_id ?? $post->id;
             $commentsCount = $this->getPostCommentsCount($postIdForComments, $post);
             
-            // Get album images if it's an album post
+            // Get album images if it's an album post (has album_name OR multi_image_post is set)
             $albumImages = [];
-            if ($post->album_name && $post->multi_image_post) {
+            $isAlbumPost = (!empty($post->album_name)) || 
+                          (!empty($post->multi_image_post) && ($post->multi_image_post == 1 || $post->multi_image_post == '1'));
+            if ($isAlbumPost) {
                 $albumImages = $this->getAlbumImages($post->id);
             }
             
@@ -618,7 +620,10 @@ class NewFeedController extends Controller
         if (!empty($post->postMap)) return 'location';
         if (!empty($post->postRecord)) return 'audio';
         if (!empty($post->postSticker)) return 'sticker';
-        if (!empty($post->album_name)) return 'album';
+        // Check for album post - either has album_name or multi_image_post is set
+        if (!empty($post->album_name) || (!empty($post->multi_image_post) && ($post->multi_image_post == 1 || $post->multi_image_post == '1'))) {
+            return 'album';
+        }
         return 'text';
     }
 

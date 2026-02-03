@@ -253,11 +253,24 @@ class PostController extends Controller
                 $request->merge(['postReaction' => $request->input('reaction')]);
             }
             
+            // Handle album post type - if postType is "album" or album_images are provided
+            $explicitPostType = $request->input('postType');
+            $hasAlbumImages = $request->hasFile('album_images');
+            $albumName = $request->input('album_name', '');
+            
+            // If postType is "album" or album_images are provided, ensure album_name is set
+            if ($explicitPostType === 'album' || $hasAlbumImages) {
+                if (empty($albumName)) {
+                    // Generate a default album name if not provided
+                    $albumName = 'Album ' . date('Y-m-d H:i:s');
+                    $request->merge(['album_name' => $albumName]);
+                }
+            }
+            
             // Determine post type
             $postType = $this->determinePostType($request, $postPhotoPath, $postFilePath, $postRecordPath, $isVideoFile);
             
             // If postType was explicitly provided and it's a valid activity type, use it
-            $explicitPostType = $request->input('postType');
             if ($explicitPostType && in_array($explicitPostType, ['traveling', 'listening', 'watching', 'playing', 'reaction'])) {
                 // Ensure the corresponding activity field is set
                 $activityFieldMap = [
@@ -276,6 +289,9 @@ class PostController extends Controller
                     ], 422);
                 }
                 $postType = $explicitPostType;
+            } elseif ($explicitPostType === 'album' || ($hasAlbumImages && !empty($albumName))) {
+                // Force album type if explicitly set or if album images are provided
+                $postType = 'album';
             }
 
             // Prepare post data with proper null handling
@@ -317,8 +333,8 @@ class PostController extends Controller
                 'time' => time(),
                 'registered' => time(),
                 'album_name' => $request->input('album_name', ''),
-                'multi_image' => '0',
-                'multi_image_post' => '0',
+                'multi_image' => ($postType === 'album' || $request->hasFile('album_images')) ? '1' : '0',
+                'multi_image_post' => ($postType === 'album' || $request->hasFile('album_images')) ? '1' : '0',
                 'boosted' => '0',
                 'product_id' => $request->input('product_id', 0),
                 'poll_id' => $request->input('poll_id', 0),
@@ -376,9 +392,16 @@ class PostController extends Controller
                 }
             }
 
-            // Handle album creation if multiple images
-            if ($request->hasFile('album_images') && $request->input('album_name')) {
-                $this->handleAlbumCreation($post->id, $request->file('album_images'), $request->input('album_name'));
+            // Handle album creation if multiple images or postType is album
+            if (($postType === 'album' || $request->hasFile('album_images')) && !empty($request->input('album_name'))) {
+                if ($request->hasFile('album_images')) {
+                    $albumImages = $request->file('album_images');
+                    // Ensure it's an array
+                    if (!is_array($albumImages)) {
+                        $albumImages = [$albumImages];
+                    }
+                    $this->handleAlbumCreation($post->id, $albumImages, $request->input('album_name'));
+                }
             }
 
             // Note: User post count update skipped - posts column may not exist in Wo_Users table
