@@ -650,11 +650,22 @@ class PostController extends Controller
         foreach ($images as $image) {
             $imagePath = $this->handleFileUpload($image, 'posts/albums', 'album');
             if ($imagePath) {
-                DB::table('Wo_Albums_Media')->insert([
+                $insertData = [
                     'post_id' => $postId,
                     'image' => $imagePath,
-                    'time' => time(),
-                ]);
+                ];
+                
+                // Only add time if column exists
+                if (Schema::hasColumn('Wo_Albums_Media', 'time')) {
+                    $insertData['time'] = time();
+                }
+                
+                // Check for other common column names
+                if (Schema::hasColumn('Wo_Albums_Media', 'created_at')) {
+                    $insertData['created_at'] = now();
+                }
+                
+                DB::table('Wo_Albums_Media')->insert($insertData);
             }
         }
 
