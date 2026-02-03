@@ -53,7 +53,7 @@ class PostController extends Controller
         $validationRules = [
             'postText' => 'nullable|string|max:5000',
             'postPrivacy' => 'required|in:0,1,2,3,4', // 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group
-            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif,colored,traveling,listening,watching,playing,reaction',
+            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif,colored,traveling,listening,watching,playing,reaction,feeling',
             'type' => 'nullable|in:regular,gif,feeling,colored', // Post creation type
             'feeling' => 'nullable|string|max:100', // Feeling parameter for type=feeling
             'page_id' => 'nullable|integer',
@@ -267,11 +267,36 @@ class PostController extends Controller
                 }
             }
             
+            // Handle feeling post type - if postType is "feeling" or type is "feeling"
+            if ($explicitPostType === 'feeling' || $postCreationType === 'feeling') {
+                // Ensure feeling parameter is set (check both 'feeling' and 'postFeeling')
+                $feeling = $request->input('feeling', $request->input('postFeeling', ''));
+                if (empty($feeling)) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => 'feeling parameter is required when postType is feeling. Use GET /api/v1/feelings to see available feelings.'
+                    ], 422);
+                }
+                // Validate feeling value
+                $validFeelings = [
+                    'happy', 'loved', 'sad', 'so_sad', 'angry', 'confused', 'smirk',
+                    'broke', 'expressionless', 'cool', 'funny', 'tired', 'lovely',
+                    'blessed', 'shocked', 'sleepy', 'pretty', 'bored'
+                ];
+                if (!in_array($feeling, $validFeelings)) {
+                    return response()->json([
+                        'ok' => false,
+                        'message' => 'Invalid feeling. Use GET /api/v1/feelings to see available feelings.'
+                    ], 422);
+                }
+                $request->merge(['postFeeling' => $feeling]);
+            }
+            
             // Determine post type
             $postType = $this->determinePostType($request, $postPhotoPath, $postFilePath, $postRecordPath, $isVideoFile);
             
             // If postType was explicitly provided and it's a valid activity type, use it
-            if ($explicitPostType && in_array($explicitPostType, ['traveling', 'listening', 'watching', 'playing', 'reaction'])) {
+            if ($explicitPostType && in_array($explicitPostType, ['traveling', 'listening', 'watching', 'playing', 'reaction', 'feeling'])) {
                 // Ensure the corresponding activity field is set
                 $activityFieldMap = [
                     'traveling' => 'postTraveling',
@@ -279,10 +304,20 @@ class PostController extends Controller
                     'watching' => 'postWatching',
                     'playing' => 'postPlaying',
                     'reaction' => 'postReaction',
+                    'feeling' => 'postFeeling',
                 ];
                 
                 $requiredField = $activityFieldMap[$explicitPostType];
-                if (!$request->has($requiredField) || empty($request->input($requiredField))) {
+                // For feeling, check both 'feeling' and 'postFeeling' parameters
+                if ($explicitPostType === 'feeling') {
+                    $feelingValue = $request->input('feeling', $request->input('postFeeling', ''));
+                    if (empty($feelingValue)) {
+                        return response()->json([
+                            'ok' => false,
+                            'message' => 'feeling field is required when postType is feeling'
+                        ], 422);
+                    }
+                } elseif (!$request->has($requiredField) || empty($request->input($requiredField))) {
                     return response()->json([
                         'ok' => false,
                         'message' => "{$requiredField} field is required when postType is {$explicitPostType}"
@@ -600,6 +635,7 @@ class PostController extends Controller
         if ($request->input('postLink')) return 'link';
         if ($request->input('postMap')) return 'location';
         if ($request->input('postSticker')) return 'sticker';
+        if (!empty($request->input('postFeeling'))) return 'feeling';
         if ($request->input('album_name')) return 'album';
         if ($request->input('poll_id')) return 'poll';
         if ($request->input('blog_id')) return 'blog';
