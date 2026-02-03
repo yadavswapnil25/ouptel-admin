@@ -109,12 +109,12 @@ class ProfileController extends Controller
             ], 401);
         }
 
-        // Validate parameters
-        $validator = Validator::make($request->all(), [
-            'user_profile_id' => 'nullable|integer',
-            'fetch' => 'nullable|string', // Comma-separated: user_data,followers,following,liked_pages,joined_groups,family
-            'send_notify' => 'nullable|boolean',
-        ]);
+            // Validate parameters
+            $validator = Validator::make($request->all(), [
+                'user_profile_id' => 'nullable|integer',
+                'fetch' => 'nullable|string', // Comma-separated: user_data,followers,following,liked_pages,joined_groups,family,albums
+                'send_notify' => 'nullable|boolean',
+            ]);
 
         if ($validator->fails()) {
             return response()->json([
@@ -188,6 +188,11 @@ class ProfileController extends Controller
             // Fetch family members
             if (isset($fetchData['family'])) {
                 $responseData['family'] = $this->getFamilyMembers($profileUserId);
+            }
+
+            // Fetch albums
+            if (isset($fetchData['albums'])) {
+                $responseData['albums'] = $this->getUserAlbums($profileUserId);
             }
 
             return response()->json($responseData);
@@ -518,6 +523,67 @@ class ProfileController extends Controller
             return $result;
         } catch (\Exception $e) {
             // Table doesn't exist, return empty array
+            return [];
+        }
+    }
+
+    /**
+     * Get user albums with images
+     */
+    private function getUserAlbums(int $userId, int $limit = 50): array
+    {
+        try {
+            // Get all album posts for the user
+            $albums = DB::table('Wo_Posts')
+                ->where('user_id', $userId)
+                ->where('active', 1)
+                ->whereNotNull('album_name')
+                ->where('album_name', '!=', '')
+                ->where('multi_image_post', 1)
+                ->orderByDesc('id')
+                ->limit($limit)
+                ->get();
+
+            $result = [];
+            foreach ($albums as $album) {
+                // Get album images from Wo_Albums_Media
+                $albumImages = DB::table('Wo_Albums_Media')
+                    ->where('post_id', $album->id)
+                    ->orderBy('id')
+                    ->get();
+
+                $images = [];
+                foreach ($albumImages as $image) {
+                    $images[] = [
+                        'id' => $image->id,
+                        'image_path' => $image->image ?? '',
+                        'image_url' => $image->image ? asset('storage/' . $image->image) : null,
+                    ];
+                }
+
+                // Get cover image (first image or post_photo)
+                $coverImage = null;
+                if (!empty($images)) {
+                    $coverImage = $images[0]['image_url'];
+                } elseif (!empty($album->postPhoto)) {
+                    $coverImage = asset('storage/' . $album->postPhoto);
+                }
+
+                $result[] = [
+                    'id' => $album->id,
+                    'post_id' => $album->post_id ?? $album->id,
+                    'album_name' => $album->album_name ?? '',
+                    'cover_image' => $coverImage,
+                    'images_count' => count($images),
+                    'images' => $images,
+                    'created_at' => $album->time ?? null,
+                    'created_at_human' => $album->time ? $this->timeElapsedString($album->time) : null,
+                ];
+            }
+
+            return $result;
+        } catch (\Exception $e) {
+            // Table doesn't exist or error occurred, return empty array
             return [];
         }
     }
