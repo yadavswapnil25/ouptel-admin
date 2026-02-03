@@ -450,6 +450,38 @@ class PagesController extends BaseController
                 }
             }
 
+            // Update sub_category if provided
+            if ($request->has('sub_category') && Schema::hasColumn('Wo_Pages', 'sub_category')) {
+                $subCategory = $request->input('sub_category');
+                
+                // Validate sub_category belongs to the selected category if both are provided
+                if (!empty($subCategory) && is_numeric($subCategory)) {
+                    $currentCategory = $updateData['page_category'] ?? $page->page_category;
+                    
+                    if (!empty($currentCategory) && Schema::hasTable('Wo_Sub_Categories')) {
+                        // Validate sub_category belongs to the selected category
+                        $subCategoryExists = DB::table('Wo_Sub_Categories')
+                            ->where('id', $subCategory)
+                            ->where('category_id', $currentCategory)
+                            ->where('type', 'page')
+                            ->exists();
+                        
+                        if ($subCategoryExists) {
+                            // Add to updateData for DB::table update
+                            $updateData['sub_category'] = (string) $subCategory;
+                        } else {
+                            $errors[] = 'Sub category does not belong to the selected category';
+                        }
+                    } else {
+                        // If no category validation needed, just set the sub_category
+                        $updateData['sub_category'] = (string) $subCategory;
+                    }
+                } elseif (empty($subCategory) || $subCategory === '' || $subCategory === null) {
+                    // Allow clearing sub_category by setting it to empty string
+                    $updateData['sub_category'] = '';
+                }
+            }
+
             // Update page_name if provided (with validation)
             if ($request->has('page_name')) {
                 $pageName = trim($request->input('page_name'));
@@ -756,6 +788,21 @@ class PagesController extends BaseController
             $avatarPath = $pageData->avatar ?? $page->avatar ?? '';
             $coverPath = $pageData->cover ?? $page->cover ?? '';
             
+            // Get sub_category from database query result
+            $subCategoryValue = '';
+            if ($pageData && Schema::hasColumn('Wo_Pages', 'sub_category')) {
+                $subCategoryValue = $pageData->sub_category ?? '';
+            }
+            
+            // Get sub category name if available
+            $subCategoryName = '';
+            if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
+                $subCategory = PageSubCategory::find($subCategoryValue);
+                if ($subCategory) {
+                    $subCategoryName = $subCategory->name;
+                }
+            }
+            
             // Get social media links if columns exist
             $socialLinks = [];
             if (Schema::hasColumn('Wo_Pages', 'facebook')) {
@@ -789,6 +836,8 @@ class PagesController extends BaseController
                     'page_description' => $page->page_description ?? '',
                     'about' => $page->page_description ?? '', // 'about' is mapped to page_description since column doesn't exist
                     'category' => $page->page_category ?? 0,
+                    'sub_category' => $subCategoryValue,
+                    'sub_category_name' => $subCategoryName,
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
