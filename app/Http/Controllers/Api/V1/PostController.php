@@ -53,7 +53,7 @@ class PostController extends Controller
         $validationRules = [
             'postText' => 'nullable|string|max:5000',
             'postPrivacy' => 'required|in:0,1,2,3,4', // 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group
-            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif',
+            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif,traveling,listening,watching,playing,reaction',
             'type' => 'nullable|in:regular,gif,feeling,colored', // Post creation type
             'feeling' => 'nullable|string|max:100', // Feeling parameter for type=feeling
             'page_id' => 'nullable|integer',
@@ -78,6 +78,7 @@ class PostController extends Controller
             'postTraveling' => 'nullable|string|max:100',
             'postWatching' => 'nullable|string|max:100',
             'postPlaying' => 'nullable|string|max:100',
+            'postReaction' => 'nullable|string|max:100',
             'album_name' => 'nullable|string|max:255',
             'album_images' => 'nullable|array',
             'album_images.*' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240', // 10MB max per image
@@ -272,6 +273,7 @@ class PostController extends Controller
                 'postTraveling' => $request->input('postTraveling', ''),
                 'postWatching' => $request->input('postWatching', ''),
                 'postPlaying' => $request->input('postPlaying', ''),
+                'postReaction' => $request->input('postReaction', ''),
                 'postPhoto' => $postGif ? $postGif : $postPhotoPath, // Store GIF URL or photo path in postPhoto field
                 'time' => time(),
                 'registered' => time(),
@@ -514,6 +516,13 @@ class PostController extends Controller
         if ($colorId > 0) {
             return 'colored';
         }
+        
+        // Check for activity post types (these take priority over media types in WoWonder)
+        if (!empty($request->input('postTraveling'))) return 'traveling';
+        if (!empty($request->input('postListening'))) return 'listening';
+        if (!empty($request->input('postWatching'))) return 'watching';
+        if (!empty($request->input('postPlaying'))) return 'playing';
+        if (!empty($request->input('postReaction'))) return 'reaction';
         
         // Check for GIF first (GIF URLs are stored in postPhotoPath)
         if ($request->input('postGif')) return 'gif';
@@ -979,6 +988,13 @@ class PostController extends Controller
                 'label' => 'Listening',
                 'value' => $post->postListening,
                 'text' => "is listening to {$post->postListening}",
+            ];
+        } elseif (!empty($post->postReaction)) {
+            $activity = [
+                'type' => 'reaction',
+                'label' => 'Reaction',
+                'value' => $post->postReaction,
+                'text' => "reacted to {$post->postReaction}",
             ];
         } elseif (!empty($post->postFeeling)) {
             $feelingData = $this->getFeelingData($post->postFeeling);
@@ -2040,12 +2056,33 @@ class PostController extends Controller
             // This handles edge cases where post is marked as album but images weren't saved
         }
 
+        // Determine post type from database or activity fields
+        $postType = $post->postType ?? 'text';
+        
+        // Override postType based on activity fields if present (matching WoWonder behavior)
+        if (!empty($post->postTraveling)) {
+            $postType = 'traveling';
+        } elseif (!empty($post->postListening)) {
+            $postType = 'listening';
+        } elseif (!empty($post->postWatching)) {
+            $postType = 'watching';
+        } elseif (!empty($post->postPlaying)) {
+            $postType = 'playing';
+        } elseif (!empty($post->postReaction)) {
+            $postType = 'reaction';
+        } elseif (!empty($post->color_id) && $post->color_id > 0) {
+            $postType = 'colored';
+        }
+        
+        // Get activity data
+        $activity = $this->getActivityData($post);
+        
         return [
             'id' => $post->id,
             'post_id' => $post->post_id ?? $post->id,
             'user_id' => $post->user_id,
             'post_text' => $post->postText ?? '',
-            'post_type' => $post->postType ?? 'post',
+            'post_type' => $postType,
             'post_privacy' => $post->postPrivacy ?? '0',
             'post_privacy_text' => $this->getPostPrivacyText($post->postPrivacy ?? '0'),
             
@@ -2123,9 +2160,12 @@ class PostController extends Controller
             'created_at_human' => $post->time ? $this->getHumanTime($post->time) : null,
             'time' => $post->time ?? time(),
             
+            // Activity data (for traveling, listening, watching, playing, feeling posts)
+            'activity' => $activity,
+            
             // Legacy fields for backward compatibility
             'postText' => $post->postText ?? '',
-            'postType' => $post->postType ?? 'post',
+            'postType' => $postType,
             'postPrivacy' => $post->postPrivacy ?? '0',
             'postFile' => $post->postFile ? asset('storage/' . $post->postFile) : null,
             'postFileThumb' => $post->postFileThumb ? asset('storage/' . $post->postFileThumb) : null,
