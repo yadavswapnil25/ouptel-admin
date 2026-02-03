@@ -494,14 +494,44 @@ class PagesController extends BaseController
             }
 
             // Update contact information
+            // Ensure empty strings are preserved (not converted to null) since DB columns don't allow null
             if ($request->has('website')) {
-                $updateData['website'] = $request->input('website');
+                $website = $request->input('website', '');
+                $updateData['website'] = $website !== null ? trim((string) $website) : '';
             }
             if ($request->has('phone')) {
-                $updateData['phone'] = $request->input('phone');
+                $phone = $request->input('phone', '');
+                $updateData['phone'] = $phone !== null ? trim((string) $phone) : '';
             }
             if ($request->has('address')) {
-                $updateData['address'] = $request->input('address');
+                $address = $request->input('address', '');
+                $updateData['address'] = $address !== null ? trim((string) $address) : '';
+            }
+
+            // Update social media links
+            // Check if columns exist before updating to avoid errors
+            $socialFields = ['facebook', 'instagram', 'linkedin', 'twitter', 'youtube', 'vk', 'vkontakte'];
+            foreach ($socialFields as $field) {
+                if ($request->has($field)) {
+                    // Handle vkontakte -> vk mapping
+                    $dbField = ($field === 'vkontakte') ? 'vk' : $field;
+                    
+                    // Check if column exists in database
+                    if (Schema::hasColumn('Wo_Pages', $dbField)) {
+                        $value = $request->input($field, '');
+                        // Validate URL if not empty
+                        if (!empty($value)) {
+                            if (!filter_var($value, FILTER_VALIDATE_URL)) {
+                                $errors[] = ucfirst($field) . ' URL is invalid';
+                            } else {
+                                $updateData[$dbField] = trim((string) $value);
+                            }
+                        } else {
+                            // Allow empty string to clear the link
+                            $updateData[$dbField] = '';
+                        }
+                    }
+                }
             }
 
             // Update page call-to-action settings using WoWonder's original columns
@@ -718,14 +748,34 @@ class PagesController extends BaseController
                 $responseMessage = 'Page updated successfully. Verification request submitted.';
             }
 
-            // Get fresh avatar and cover from database to ensure we have the latest values
+            // Get fresh avatar, cover, and social links from database to ensure we have the latest values
             $pageData = DB::table('Wo_Pages')
                 ->where('page_id', $id)
-                ->select('avatar', 'cover')
                 ->first();
             
             $avatarPath = $pageData->avatar ?? $page->avatar ?? '';
             $coverPath = $pageData->cover ?? $page->cover ?? '';
+            
+            // Get social media links if columns exist
+            $socialLinks = [];
+            if (Schema::hasColumn('Wo_Pages', 'facebook')) {
+                $socialLinks['facebook'] = $pageData->facebook ?? '';
+            }
+            if (Schema::hasColumn('Wo_Pages', 'instagram')) {
+                $socialLinks['instagram'] = $pageData->instagram ?? '';
+            }
+            if (Schema::hasColumn('Wo_Pages', 'linkedin')) {
+                $socialLinks['linkedin'] = $pageData->linkedin ?? '';
+            }
+            if (Schema::hasColumn('Wo_Pages', 'twitter')) {
+                $socialLinks['twitter'] = $pageData->twitter ?? '';
+            }
+            if (Schema::hasColumn('Wo_Pages', 'youtube')) {
+                $socialLinks['youtube'] = $pageData->youtube ?? '';
+            }
+            if (Schema::hasColumn('Wo_Pages', 'vk')) {
+                $socialLinks['vkontakte'] = $pageData->vk ?? '';
+            }
 
             return response()->json([
                 'api_status' => 200,
@@ -742,6 +792,13 @@ class PagesController extends BaseController
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
+                    // Social media links
+                    'facebook' => $socialLinks['facebook'] ?? '',
+                    'instagram' => $socialLinks['instagram'] ?? '',
+                    'linkedin' => $socialLinks['linkedin'] ?? '',
+                    'twitter' => $socialLinks['twitter'] ?? '',
+                    'youtube' => $socialLinks['youtube'] ?? '',
+                    'vkontakte' => $socialLinks['vkontakte'] ?? '',
                     'call_to_action' => $page->call_action_type ?? 0,
                     'call_to_target_url' => $page->call_action_type_url ?? '',
                     'can_post' => isset($page->users_post) ? (int) $page->users_post : 0,
@@ -1087,6 +1144,13 @@ class PagesController extends BaseController
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
+                    // Social media links (check if columns exist)
+                    'facebook' => Schema::hasColumn('Wo_Pages', 'facebook') ? ($page->getAttributes()['facebook'] ?? '') : '',
+                    'instagram' => Schema::hasColumn('Wo_Pages', 'instagram') ? ($page->getAttributes()['instagram'] ?? '') : '',
+                    'linkedin' => Schema::hasColumn('Wo_Pages', 'linkedin') ? ($page->getAttributes()['linkedin'] ?? '') : '',
+                    'twitter' => Schema::hasColumn('Wo_Pages', 'twitter') ? ($page->getAttributes()['twitter'] ?? '') : '',
+                    'youtube' => Schema::hasColumn('Wo_Pages', 'youtube') ? ($page->getAttributes()['youtube'] ?? '') : '',
+                    'vkontakte' => Schema::hasColumn('Wo_Pages', 'vk') ? ($page->getAttributes()['vk'] ?? '') : '',
                     'sub_category' => $subCategoryValue,
                     'sub_category_name' => $subCategoryName,
                     // Expose legacy WoWonder columns under clearer API field names
