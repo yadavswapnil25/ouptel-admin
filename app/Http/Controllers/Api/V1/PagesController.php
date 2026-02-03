@@ -2196,6 +2196,220 @@ class PagesController extends BaseController
     }
 
     /**
+     * Get page admins (mimics old API: ajax_loading.php?link1=page-setting&page={page_name}&link3=admins)
+     * 
+     * @param Request $request
+     * @param int|string $id Page ID or page name
+     * @return JsonResponse
+     */
+    public function getPageAdmins(Request $request, $id): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
+        }
+        
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
+        }
+
+        try {
+            // Find page by ID or page name
+            $page = null;
+            if (is_numeric($id)) {
+                $page = Page::where('page_id', $id)->first();
+            } else {
+                $page = Page::where('page_name', $id)->first();
+            }
+
+            if (!$page) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 4,
+                        'error_text' => 'Page not found'
+                    ]
+                ], 404);
+            }
+
+            // Check if user is page owner or admin
+            $isOwner = ((string) $page->user_id === (string) $tokenUserId);
+            $isAdmin = false;
+
+            // Check if user is an admin (try both table names)
+            if (Schema::hasTable('Wo_PageAdmins')) {
+                $isAdmin = DB::table('Wo_PageAdmins')
+                    ->where('page_id', $page->page_id)
+                    ->where('user_id', $tokenUserId)
+                    ->exists();
+            } elseif (Schema::hasTable('Wo_Pages_Admin')) {
+                $isAdmin = DB::table('Wo_Pages_Admin')
+                    ->where('page_id', $page->page_id)
+                    ->where('user_id', $tokenUserId)
+                    ->exists();
+            }
+
+            if (!$isOwner && !$isAdmin) {
+                return response()->json([
+                    'api_status' => 403,
+                    'errors' => [
+                        'error_id' => 5,
+                        'error_text' => 'Access denied - You must be the page owner or an admin to view admins'
+                    ]
+                ], 403);
+            }
+
+            // Get all admins for this page
+            $admins = [];
+            
+            // Try Wo_PageAdmins table first
+            if (Schema::hasTable('Wo_PageAdmins')) {
+                $adminRecords = DB::table('Wo_PageAdmins')
+                    ->where('page_id', $page->page_id)
+                    ->get();
+                
+                foreach ($adminRecords as $adminRecord) {
+                    $user = DB::table('Wo_Users')
+                        ->where('user_id', $adminRecord->user_id)
+                        ->first();
+                    
+                    if ($user) {
+                        $userName = $user->name ?? '';
+                        if (empty($userName)) {
+                            $firstName = $user->first_name ?? '';
+                            $lastName = $user->last_name ?? '';
+                            $userName = trim($firstName . ' ' . $lastName);
+                        }
+                        if (empty($userName)) {
+                            $userName = $user->username ?? 'Unknown User';
+                        }
+
+                        $admins[] = [
+                            'user_id' => $user->user_id,
+                            'username' => $user->username ?? 'Unknown',
+                            'name' => $userName,
+                            'email' => $user->email ?? '',
+                            'avatar' => $user->avatar ?? '',
+                            'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                            'verified' => (bool) ($user->verified ?? false),
+                            'is_owner' => ((string) $user->user_id === (string) $page->user_id),
+                            'added_at' => isset($adminRecord->time) ? date('c', $adminRecord->time) : null,
+                        ];
+                    }
+                }
+            } 
+            // Fallback to Wo_Pages_Admin table
+            elseif (Schema::hasTable('Wo_Pages_Admin')) {
+                $adminRecords = DB::table('Wo_Pages_Admin')
+                    ->where('page_id', $page->page_id)
+                    ->get();
+                
+                foreach ($adminRecords as $adminRecord) {
+                    $user = DB::table('Wo_Users')
+                        ->where('user_id', $adminRecord->user_id)
+                        ->first();
+                    
+                    if ($user) {
+                        $userName = $user->name ?? '';
+                        if (empty($userName)) {
+                            $firstName = $user->first_name ?? '';
+                            $lastName = $user->last_name ?? '';
+                            $userName = trim($firstName . ' ' . $lastName);
+                        }
+                        if (empty($userName)) {
+                            $userName = $user->username ?? 'Unknown User';
+                        }
+
+                        $admins[] = [
+                            'user_id' => $user->user_id,
+                            'username' => $user->username ?? 'Unknown',
+                            'name' => $userName,
+                            'email' => $user->email ?? '',
+                            'avatar' => $user->avatar ?? '',
+                            'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                            'verified' => (bool) ($user->verified ?? false),
+                            'is_owner' => ((string) $user->user_id === (string) $page->user_id),
+                            'added_at' => isset($adminRecord->time) ? date('c', $adminRecord->time) : null,
+                        ];
+                    }
+                }
+            }
+
+            // Always include the page owner in the admins list
+            $owner = DB::table('Wo_Users')
+                ->where('user_id', $page->user_id)
+                ->first();
+            
+            if ($owner) {
+                $ownerName = $owner->name ?? '';
+                if (empty($ownerName)) {
+                    $firstName = $owner->first_name ?? '';
+                    $lastName = $owner->last_name ?? '';
+                    $ownerName = trim($firstName . ' ' . $lastName);
+                }
+                if (empty($ownerName)) {
+                    $ownerName = $owner->username ?? 'Unknown User';
+                }
+
+                // Check if owner is already in the list
+                $ownerInList = false;
+                foreach ($admins as $admin) {
+                    if ((string) $admin['user_id'] === (string) $page->user_id) {
+                        $ownerInList = true;
+                        break;
+                    }
+                }
+
+                if (!$ownerInList) {
+                    array_unshift($admins, [
+                        'user_id' => $owner->user_id,
+                        'username' => $owner->username ?? 'Unknown',
+                        'name' => $ownerName,
+                        'email' => $owner->email ?? '',
+                        'avatar' => $owner->avatar ?? '',
+                        'avatar_url' => $owner->avatar ? asset('storage/' . $owner->avatar) : null,
+                        'verified' => (bool) ($owner->verified ?? false),
+                        'is_owner' => true,
+                        'added_at' => null,
+                    ]);
+                }
+            }
+
+            return response()->json([
+                'api_status' => 200,
+                'page_id' => $page->page_id,
+                'page_name' => $page->page_name,
+                'admins' => $admins,
+                'total_admins' => count($admins),
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => 500,
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Failed to get page admins: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
+    }
+
+    /**
      * Get file URL for avatar/cover images
      * Returns URL even if file doesn't exist (for newly uploaded files)
      * 
