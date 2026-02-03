@@ -593,6 +593,28 @@ class PostController extends Controller
     }
 
     /**
+     * Get album images for a post (shared with new-feed format)
+     *
+     * @param int $postId
+     * @return array
+     */
+    private function getAlbumImages(int $postId): array
+    {
+        $albumImages = DB::table('Wo_Albums_Media')
+            ->where('post_id', $postId)
+            ->orderBy('id')
+            ->get();
+
+        return $albumImages->map(function ($image) {
+            return [
+                'id' => $image->id,
+                'image_path' => $image->image,
+                'image_url' => asset('storage/' . $image->image),
+            ];
+        })->toArray();
+    }
+
+    /**
      * Update user's post count
      * 
      * @param string $userId
@@ -1995,6 +2017,12 @@ class PostController extends Controller
         // Get views count (for videos)
         $viewsCount = (int) ($post->videoViews ?? 0);
 
+        // Get album images if it's an album post (match new-feed format)
+        $albumImages = [];
+        if (!empty($post->album_name) && !empty($post->multi_image_post)) {
+            $albumImages = $this->getAlbumImages((int) $post->id);
+        }
+
         return [
             'id' => $post->id,
             'post_id' => $post->post_id ?? $post->id,
@@ -2029,9 +2057,11 @@ class PostController extends Controller
             'post_sticker' => $post->postSticker ?? '',
             'post_map' => $post->postMap ?? '',
             
-            // Album data
+            // Album data (match new-feed format)
             'album_name' => $post->album_name ?? '',
             'multi_image_post' => (bool) ($post->multi_image_post ?? false),
+            'album_images' => $albumImages,
+            'album_images_count' => count($albumImages),
             
             // Engagement metrics (matching new-feed format)
             'reactions_count' => $totalReactions,
