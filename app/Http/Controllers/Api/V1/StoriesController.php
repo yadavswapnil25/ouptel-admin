@@ -874,80 +874,145 @@ class StoriesController extends Controller
         $markedCount = 0;
         $alreadySeenCount = 0;
         $notFoundCount = 0;
+        $ownStoryCount = 0;
+        $errorCount = 0;
+        $errors = [];
 
         if (Schema::hasTable('Wo_StorySeen')) {
             foreach ($storyIds as $id) {
-                // Check if story exists
-                $story = DB::table('Wo_UserStory')->where('id', $id)->first();
-                if (!$story) {
-                    $notFoundCount++;
-                    continue;
-                }
-
-                // Don't mark own stories as seen
-                if ($story->user_id == $tokenUserId) {
-                    continue;
-                }
-
-                // Check if already viewed
-                $alreadyViewed = DB::table('Wo_StorySeen')
-                    ->where('story_id', $id)
-                    ->where('user_id', $tokenUserId)
-                    ->exists();
-
-                if ($alreadyViewed) {
-                    $alreadySeenCount++;
-                    continue;
-                }
-
-                // Mark as viewed
-                $seenInsertData = [
-                    'story_id' => $id,
-                    'user_id' => $tokenUserId,
-                ];
-                
-                // Only add time if column exists
-                if (Schema::hasColumn('Wo_StorySeen', 'time')) {
-                    $seenInsertData['time'] = time();
-                }
-                
                 try {
-                    DB::table('Wo_StorySeen')->insert($seenInsertData);
-                    $markedCount++;
+                    // Check if story exists (handle both string and integer IDs)
+                    $story = DB::table('Wo_UserStory')
+                        ->where(function($q) use ($id) {
+                            $q->where('id', $id)
+                              ->orWhere(DB::raw('CAST(id AS CHAR)'), (string) $id);
+                        })
+                        ->first();
+                    
+                    if (!$story) {
+                        $notFoundCount++;
+                        continue;
+                    }
 
-                    // Create notification for story owner (if notification system is enabled)
-                    if (Schema::hasTable('Wo_Notifications')) {
-                        try {
-                            $storyOwner = DB::table('Wo_Users')->where('user_id', $story->user_id)->first();
-                            if ($storyOwner) {
-                                DB::table('Wo_Notifications')->insert([
-                                    'notifier_id' => $tokenUserId,
-                                    'recipient_id' => $story->user_id,
-                                    'type' => 'viewed_story',
-                                    'url' => 'index.php?link1=timeline&u=' . ($storyOwner->username ?? ''),
-                                    'time' => time(),
-                                    'seen' => 0,
-                                ]);
+                    // Don't mark own stories as seen (handle both string and integer user_ids)
+                    $storyOwnerId = (string) $story->user_id;
+                    $currentUserId = (string) $tokenUserId;
+                    if ($storyOwnerId === $currentUserId) {
+                        $ownStoryCount++;
+                        continue;
+                    }
+
+                    // Check if already viewed (handle both string and integer types)
+                    $alreadyViewed = DB::table('Wo_StorySeen')
+                        ->where('story_id', $id)
+                        ->where(function($q) use ($tokenUserId) {
+                            $q->where('user_id', $tokenUserId)
+                              ->orWhere(DB::raw('CAST(user_id AS CHAR)'), (string) $tokenUserId);
+                        })
+                        ->exists();
+
+                    if ($alreadyViewed) {
+                        $alreadySeenCount++;
+                        continue;
+                    }
+
+                    // Mark as viewed
+                    $seenInsertData = [
+                        'story_id' => $id,
+                        'user_id' => $tokenUserId,
+                    ];
+                    
+                    // Only add time if column exists
+                    if (Schema::hasColumn('Wo_StorySeen', 'time')) {
+                        $seenInsertData['time'] = time();
+                    }
+                    
+                    try {
+                        // Try insert - handle potential unique constraint or duplicate key errors
+                        $inserted = DB::table('Wo_StorySeen')->insert($seenInsertData);
+                        
+                        // Verify the insert actually happened by checking if record exists
+                        $verifyInsert = DB::table('Wo_StorySeen')
+                            ->where('story_id', $id)
+                            ->where(function($q) use ($tokenUserId) {
+                                $q->where('user_id', $tokenUserId)
+                                  ->orWhere(DB::raw('CAST(user_id AS CHAR)'), (string) $tokenUserId);
+                            })
+                            ->exists();
+                        
+                        if ($verifyInsert) {
+                            $markedCount++;
+
+                            // Create notification for story owner (if notification system is enabled)
+                            if (Schema::hasTable('Wo_Notifications')) {
+                                try {
+                                    $storyOwner = DB::table('Wo_Users')->where('user_id', $story->user_id)->first();
+                                    if ($storyOwner) {
+                                        DB::table('Wo_Notifications')->insert([
+                                            'notifier_id' => $tokenUserId,
+                                            'recipient_id' => $story->user_id,
+                                            'type' => 'viewed_story',
+                                            'url' => 'index.php?link1=timeline&u=' . ($storyOwner->username ?? ''),
+                                            'time' => time(),
+                                            'seen' => 0,
+                                        ]);
+                                    }
+                                } catch (\Exception $e) {
+                                    // Notification creation failed, but story is still marked as seen
+                                }
                             }
-                        } catch (\Exception $e) {
-                            // Notification creation failed, but story is still marked as seen
+                        } else {
+                            // Insert returned true but record doesn't exist - might be duplicate
+                            $alreadySeenCount++;
                         }
+                    } catch (\Illuminate\Database\QueryException $e) {
+                        // Check if it's a duplicate entry error
+                        if ($e->getCode() == 23000 || str_contains($e->getMessage(), 'Duplicate entry')) {
+                            $alreadySeenCount++;
+                        } else {
+                            // Other database error
+                            $errorCount++;
+                            $errors[] = "Failed to mark story {$id} as seen: " . $e->getMessage();
+                        }
+                    } catch (\Exception $e) {
+                        // Insert failed
+                        $errorCount++;
+                        $errors[] = "Failed to mark story {$id} as seen: " . $e->getMessage();
+                        continue;
                     }
                 } catch (\Exception $e) {
-                    // Insert failed, skip this story
+                    $errorCount++;
+                    $errors[] = "Error processing story {$id}: " . $e->getMessage();
                     continue;
                 }
             }
+        } else {
+            return response()->json([
+                'api_status' => 500,
+                'errors' => [
+                    'error_id' => 500,
+                    'error_text' => 'Wo_StorySeen table does not exist'
+                ]
+            ], 500);
         }
 
-        return response()->json([
+        $response = [
             'api_status' => 200,
             'message' => 'Stories marked as seen',
             'marked' => $markedCount,
             'already_seen' => $alreadySeenCount,
             'not_found' => $notFoundCount,
+            'own_stories' => $ownStoryCount,
+            'errors_count' => $errorCount,
             'total_requested' => count($storyIds)
-        ]);
+        ];
+        
+        // Include errors if any
+        if (!empty($errors)) {
+            $response['errors'] = $errors;
+        }
+        
+        return response()->json($response);
     }
 
     /**
