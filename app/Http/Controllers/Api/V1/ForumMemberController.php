@@ -40,10 +40,11 @@ class ForumMemberController extends Controller
         $char = $request->query('char'); // Filter by first letter of username
 
         // Get distinct user_ids who have posted in this forum (topics or replies)
+        // Old WoWonder uses 'user' column for threads, 'poster_id' for replies
         $topicUserIds = ForumTopic::where('forum_id', $forumId)
             ->where('active', '1')
             ->distinct()
-            ->pluck('user_id')
+            ->pluck('user') // Old WoWonder uses 'user' not 'user_id'
             ->toArray();
 
         $replyUserIds = ForumReply::whereHas('topic', function ($q) use ($forumId) {
@@ -51,7 +52,7 @@ class ForumMemberController extends Controller
             })
             ->where('active', '1')
             ->distinct()
-            ->pluck('user_id')
+            ->pluck('poster_id') // Old WoWonder uses 'poster_id' not 'user_id'
             ->toArray();
 
         $allUserIds = array_unique(array_merge($topicUserIds, $replyUserIds));
@@ -103,15 +104,16 @@ class ForumMemberController extends Controller
         // Get forum post counts for each user
         $data = $users->map(function (User $user) use ($forumId) {
             // Count topics and replies in this forum
+            // Old WoWonder uses 'user' column for threads, 'poster_id' for replies
             $topicsCount = ForumTopic::where('forum_id', $forumId)
-                ->where('user_id', $user->user_id)
+                ->where('user', $user->user_id) // Old WoWonder uses 'user' not 'user_id'
                 ->where('active', '1')
                 ->count();
 
             $repliesCount = ForumReply::whereHas('topic', function ($q) use ($forumId) {
                     $q->where('forum_id', $forumId);
                 })
-                ->where('user_id', $user->user_id)
+                ->where('poster_id', $user->user_id) // Old WoWonder uses 'poster_id' not 'user_id'
                 ->where('active', '1')
                 ->count();
 
@@ -188,13 +190,14 @@ class ForumMemberController extends Controller
         }
 
         // Check if user has posted in this forum
+        // Old WoWonder uses 'user' column for threads, 'poster_id' for replies
         $hasPosted = ForumTopic::where('forum_id', $forumId)
-            ->where('user_id', $userId)
+            ->where('user', $userId) // Old WoWonder uses 'user' not 'user_id'
             ->exists() || 
             ForumReply::whereHas('topic', function ($q) use ($forumId) {
                 $q->where('forum_id', $forumId);
             })
-            ->where('user_id', $userId)
+            ->where('poster_id', $userId) // Old WoWonder uses 'poster_id' not 'user_id'
             ->exists();
 
         $user = User::where('user_id', $userId)->first();
@@ -274,15 +277,16 @@ class ForumMemberController extends Controller
         }
 
         // Check if user has posted in this forum
+        // Old WoWonder uses 'user' column for threads, 'poster_id' for replies
         $topicsCount = ForumTopic::where('forum_id', $forumId)
-            ->where('user_id', $memberId)
+            ->where('user', $memberId) // Old WoWonder uses 'user' not 'user_id'
             ->where('active', '1')
             ->count();
 
         $repliesCount = ForumReply::whereHas('topic', function ($q) use ($forumId) {
                 $q->where('forum_id', $forumId);
             })
-            ->where('user_id', $memberId)
+            ->where('poster_id', $memberId) // Old WoWonder uses 'poster_id' not 'user_id'
             ->where('active', '1')
             ->count();
 
@@ -335,13 +339,14 @@ class ForumMemberController extends Controller
         }
 
         // Check if user has posted in this forum
+        // Old WoWonder uses 'user' column for threads, 'poster_id' for replies
         $hasPosted = ForumTopic::where('forum_id', $forumId)
-            ->where('user_id', $userId)
+            ->where('user', $userId) // Old WoWonder uses 'user' not 'user_id'
             ->exists() || 
             ForumReply::whereHas('topic', function ($q) use ($forumId) {
                 $q->where('forum_id', $forumId);
             })
-            ->where('user_id', $userId)
+            ->where('poster_id', $userId) // Old WoWonder uses 'poster_id' not 'user_id'
             ->exists();
 
         $user = User::where('user_id', $userId)->first();

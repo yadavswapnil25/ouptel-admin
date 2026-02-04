@@ -8,28 +8,28 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ForumTopic extends Model
 {
-    protected $table = 'Wo_ForumTopics';
+    protected $table = 'Wo_Forum_Threads';
     protected $primaryKey = 'id';
     public $timestamps = false;
 
     protected $fillable = [
         'forum_id',
-        'user_id',
-        'subject',
-        'content',
+        'user', // Old WoWonder uses 'user' not 'user_id'
+        'headline', // Old WoWonder uses 'headline' not 'subject'
+        'post', // Old WoWonder uses 'post' not 'content'
         'pinned',
         'locked',
         'active',
-        'time',
+        'posted', // Old WoWonder uses 'posted' not 'time'
     ];
 
     protected $casts = [
         'active' => 'string',
-        'user_id' => 'string',
+        'user' => 'string', // Old WoWonder uses 'user' not 'user_id'
         'forum_id' => 'string',
         'pinned' => 'string',
         'locked' => 'string',
-        'time' => 'string',
+        'posted' => 'string', // Old WoWonder uses 'posted' not 'time'
     ];
 
     // Mutators to handle data type conversions
@@ -48,18 +48,18 @@ class ForumTopic extends Model
         $this->attributes['locked'] = (bool) $value ? '1' : '0';
     }
 
-    public function setTimeAttribute($value)
+    public function setPostedAttribute($value)
     {
         if (is_numeric($value)) {
-            $this->attributes['time'] = (string) $value;
+            $this->attributes['posted'] = (string) $value;
         } else {
-            $this->attributes['time'] = (string) time();
+            $this->attributes['posted'] = (string) time();
         }
     }
 
-    public function setUserIdAttribute($value)
+    public function setUserAttribute($value)
     {
-        $this->attributes['user_id'] = (string) $value;
+        $this->attributes['user'] = (string) $value;
     }
 
     public function setForumIdAttribute($value)
@@ -74,12 +74,12 @@ class ForumTopic extends Model
 
     public function user(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'user_id', 'user_id');
+        return $this->belongsTo(User::class, 'user', 'user_id'); // Old WoWonder uses 'user' column
     }
 
     public function replies(): HasMany
     {
-        return $this->hasMany(ForumReply::class, 'topic_id', 'id');
+        return $this->hasMany(ForumReply::class, 'thread_id', 'id'); // Old WoWonder uses 'thread_id' not 'topic_id'
     }
 
     public function getRepliesCountAttribute(): int
@@ -92,7 +92,7 @@ class ForumTopic extends Model
         return $this->replies()->latest('time')->first();
     }
 
-    public function getTimeAttribute($value)
+    public function getPostedAttribute($value)
     {
         if (is_numeric($value)) {
             return \Carbon\Carbon::createFromTimestamp((int) $value);
@@ -100,12 +100,23 @@ class ForumTopic extends Model
         return $value;
     }
 
-    public function getTimeAsTimestampAttribute()
+    public function getPostedAsTimestampAttribute()
     {
-        $time = $this->attributes['time'] ?? null;
-        if (is_numeric($time)) {
-            return (int) $time;
+        $posted = $this->attributes['posted'] ?? null;
+        if (is_numeric($posted)) {
+            return (int) $posted;
         }
         return time();
+    }
+    
+    // Alias for backward compatibility
+    public function getTimeAttribute()
+    {
+        return $this->getPostedAttribute($this->attributes['posted'] ?? null);
+    }
+    
+    public function getTimeAsTimestampAttribute()
+    {
+        return $this->getPostedAsTimestampAttribute();
     }
 }
