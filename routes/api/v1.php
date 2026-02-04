@@ -20,6 +20,7 @@ use App\Http\Controllers\Api\V1\EventsController;
 use App\Http\Controllers\Api\V1\FeelingsController;
 use App\Http\Controllers\Api\V1\GamesController;
 use App\Http\Controllers\Api\V1\ForumsController;
+use App\Http\Controllers\Api\V1\ForumMemberController;
 use App\Http\Controllers\Api\V1\JobsController;
 use App\Http\Controllers\Api\V1\OffersController;
 use App\Http\Controllers\Api\V1\FriendsController;
@@ -134,10 +135,19 @@ Route::get('/forums/{forumId}/topics/{topicId}/replies', [ForumsController::clas
 Route::post('/forums/{forumId}/topics/{topicId}/replies', [ForumsController::class, 'createReply']);
 
 // Forum menu routes
-Route::get('/forums/{id}/members', [ForumsController::class, 'members']);
 Route::get('/forums/search', [ForumsController::class, 'search']);
 Route::get('/my-threads', [ForumsController::class, 'myThreads']);
 Route::get('/my-messages', [ForumsController::class, 'myMessages']);
+
+// Forum member routes (matching old API: ajax_loading.php?link1=forum-members)
+Route::get('/forums/{forumId}/members/check', [ForumMemberController::class, 'check']); // Check if user is member (must be before /forums/{forumId}/members/{memberId})
+Route::get('/forums/{forumId}/members', [ForumMemberController::class, 'index']); // Get forum members list
+Route::post('/forums/{forumId}/members', [ForumMemberController::class, 'store']); // Join forum
+Route::get('/forums/{forumId}/members/{memberId}', [ForumMemberController::class, 'show']); // Get member details
+Route::put('/forums/{forumId}/members/{memberId}', [ForumMemberController::class, 'update']); // Update member role (admin only)
+Route::patch('/forums/{forumId}/members/{memberId}', [ForumMemberController::class, 'update']); // Update member role (admin only) - alternative
+Route::delete('/forums/{forumId}/members/{memberId}', [ForumMemberController::class, 'destroy']); // Remove member
+Route::delete('/forums/{forumId}/members', [ForumMemberController::class, 'destroy']); // Leave forum (remove current user)
 
 // Job routes
 Route::get('/jobs', [JobsController::class, 'index']);

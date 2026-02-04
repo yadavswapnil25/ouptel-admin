@@ -246,17 +246,58 @@ class ForumsController extends BaseController
         $perPage = (int) ($request->query('per_page', 12));
         $perPage = max(1, min($perPage, 50));
 
-        // Simplified since Wo_ForumMembers table and user_id column don't exist
-        // Return empty members list
-        $members = collect([]);
+        $role = $request->query('role');
+        $search = $request->query('search');
+
+        $query = ForumMember::where('forum_id', $id)->with(['user']);
+
+        if ($role) {
+            $query->where('role', $role);
+        }
+
+        if ($search) {
+            $like = '%' . str_replace('%', '\\%', $search) . '%';
+            $query->whereHas('user', function ($q) use ($like) {
+                $q->where('username', 'like', $like)
+                  ->orWhere('first_name', 'like', $like)
+                  ->orWhere('last_name', 'like', $like);
+            });
+        }
+
+        $paginator = $query->orderByDesc('time')->paginate($perPage);
+
+        $data = $paginator->getCollection()->map(function (ForumMember $member) {
+            $user = $member->user;
+            return [
+                'id' => $member->id,
+                'forum_id' => $member->forum_id,
+                'user_id' => $member->user_id,
+                'role' => $member->role,
+                'joined_at' => $member->time ? $member->time->toIso8601String() : null,
+                'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
+                'user' => $user ? [
+                    'user_id' => $user->user_id,
+                    'username' => $user->username,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+                    'avatar' => $user->avatar,
+                    'avatar_url' => $user->avatar_url ?? null,
+                    'verified' => $user->verified === '1',
+                    'active' => $user->active === '1',
+                ] : null,
+            ];
+        });
 
         return response()->json([
-            'data' => $members,
+            'ok' => true,
+            'data' => $data,
             'meta' => [
-                'current_page' => 1,
-                'per_page' => $perPage,
-                'total' => $members->count(),
-                'last_page' => 1,
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+                'forum_id' => $id,
             ],
         ]);
     }
