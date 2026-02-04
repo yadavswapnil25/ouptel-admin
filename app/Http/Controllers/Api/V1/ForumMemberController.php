@@ -34,8 +34,7 @@ class ForumMemberController extends Controller
         $role = $request->query('role'); // Filter by role if provided
         $search = $request->query('search'); // Search by username or name
 
-        $query = ForumMember::where('forum_id', $forumId)
-            ->with(['user']);
+        $query = ForumMember::where('forum_id', $forumId);
 
         // Filter by role if provided
         if ($role) {
@@ -52,28 +51,47 @@ class ForumMemberController extends Controller
             });
         }
 
-        $paginator = $query->orderByDesc('time')->paginate($perPage);
+        // Eager load users with null handling
+        $paginator = $query->with(['user' => function ($query) {
+            $query->select('user_id', 'username', 'first_name', 'last_name', 'avatar', 'verified', 'active');
+        }])->orderByDesc('time')->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (ForumMember $member) {
             $user = $member->user;
+            
+            // Fallback: if relationship didn't load, try to load user manually
+            if (!$user && $member->user_id) {
+                $user = User::where('user_id', $member->user_id)->first();
+            }
+            
             return [
                 'id' => $member->id,
                 'forum_id' => $member->forum_id,
                 'user_id' => $member->user_id,
                 'role' => $member->role,
-                'joined_at' => $member->time ? $member->time->toIso8601String() : null,
+                'joined_at' => ($member->time instanceof \Carbon\Carbon) ? $member->time->toIso8601String() : null,
                 'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
                 'user' => $user ? [
                     'user_id' => $user->user_id,
-                    'username' => $user->username,
-                    'first_name' => $user->first_name,
-                    'last_name' => $user->last_name,
+                    'username' => $user->username ?? null,
+                    'first_name' => $user->first_name ?? null,
+                    'last_name' => $user->last_name ?? null,
                     'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar,
+                    'avatar' => $user->avatar ?? null,
                     'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => $user->verified === '1',
-                    'active' => $user->active === '1',
-                ] : null,
+                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+                ] : [
+                    'user_id' => $member->user_id,
+                    'username' => null,
+                    'first_name' => null,
+                    'last_name' => null,
+                    'name' => null,
+                    'avatar' => null,
+                    'avatar_url' => null,
+                    'verified' => false,
+                    'active' => false,
+                ],
             ];
         });
 
@@ -146,6 +164,11 @@ class ForumMemberController extends Controller
         // Load user relationship
         $member->load('user');
         $user = $member->user;
+        
+        // Fallback: if relationship didn't load, try to load user manually
+        if (!$user && $member->user_id) {
+            $user = User::where('user_id', $member->user_id)->first();
+        }
 
         return response()->json([
             'ok' => true,
@@ -155,19 +178,29 @@ class ForumMemberController extends Controller
                 'forum_id' => $member->forum_id,
                 'user_id' => $member->user_id,
                 'role' => $member->role,
-                'joined_at' => $member->time ? $member->time->toIso8601String() : null,
+                'joined_at' => ($member->time instanceof \Carbon\Carbon) ? $member->time->toIso8601String() : null,
                 'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
                 'user' => $user ? [
                     'user_id' => $user->user_id,
-                    'username' => $user->username,
-                    'first_name' => $user->first_name,
-                    'last_name' => $user->last_name,
+                    'username' => $user->username ?? null,
+                    'first_name' => $user->first_name ?? null,
+                    'last_name' => $user->last_name ?? null,
                     'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar,
+                    'avatar' => $user->avatar ?? null,
                     'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => $user->verified === '1',
-                    'active' => $user->active === '1',
-                ] : null,
+                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+                ] : [
+                    'user_id' => $member->user_id,
+                    'username' => null,
+                    'first_name' => null,
+                    'last_name' => null,
+                    'name' => null,
+                    'avatar' => null,
+                    'avatar_url' => null,
+                    'verified' => false,
+                    'active' => false,
+                ],
             ],
         ], 201);
     }
@@ -305,6 +338,11 @@ class ForumMemberController extends Controller
 
         $member->load('user');
         $user = $member->user;
+        
+        // Fallback: if relationship didn't load, try to load user manually
+        if (!$user && $member->user_id) {
+            $user = User::where('user_id', $member->user_id)->first();
+        }
 
         return response()->json([
             'ok' => true,
@@ -314,19 +352,29 @@ class ForumMemberController extends Controller
                 'forum_id' => $member->forum_id,
                 'user_id' => $member->user_id,
                 'role' => $member->role,
-                'joined_at' => $member->time ? $member->time->toIso8601String() : null,
+                'joined_at' => ($member->time instanceof \Carbon\Carbon) ? $member->time->toIso8601String() : null,
                 'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
                 'user' => $user ? [
                     'user_id' => $user->user_id,
-                    'username' => $user->username,
-                    'first_name' => $user->first_name,
-                    'last_name' => $user->last_name,
+                    'username' => $user->username ?? null,
+                    'first_name' => $user->first_name ?? null,
+                    'last_name' => $user->last_name ?? null,
                     'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar,
+                    'avatar' => $user->avatar ?? null,
                     'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => $user->verified === '1',
-                    'active' => $user->active === '1',
-                ] : null,
+                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+                ] : [
+                    'user_id' => $member->user_id,
+                    'username' => null,
+                    'first_name' => null,
+                    'last_name' => null,
+                    'name' => null,
+                    'avatar' => null,
+                    'avatar_url' => null,
+                    'verified' => false,
+                    'active' => false,
+                ],
             ],
         ]);
     }
@@ -357,6 +405,11 @@ class ForumMemberController extends Controller
         }
 
         $user = $member->user;
+        
+        // Fallback: if relationship didn't load, try to load user manually
+        if (!$user && $member->user_id) {
+            $user = User::where('user_id', $member->user_id)->first();
+        }
 
         return response()->json([
             'ok' => true,
@@ -365,19 +418,29 @@ class ForumMemberController extends Controller
                 'forum_id' => $member->forum_id,
                 'user_id' => $member->user_id,
                 'role' => $member->role,
-                'joined_at' => $member->time ? $member->time->toIso8601String() : null,
+                'joined_at' => ($member->time instanceof \Carbon\Carbon) ? $member->time->toIso8601String() : null,
                 'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
                 'user' => $user ? [
                     'user_id' => $user->user_id,
-                    'username' => $user->username,
-                    'first_name' => $user->first_name,
-                    'last_name' => $user->last_name,
+                    'username' => $user->username ?? null,
+                    'first_name' => $user->first_name ?? null,
+                    'last_name' => $user->last_name ?? null,
                     'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar,
+                    'avatar' => $user->avatar ?? null,
                     'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => $user->verified === '1',
-                    'active' => $user->active === '1',
-                ] : null,
+                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+                ] : [
+                    'user_id' => $member->user_id,
+                    'username' => null,
+                    'first_name' => null,
+                    'last_name' => null,
+                    'name' => null,
+                    'avatar' => null,
+                    'avatar_url' => null,
+                    'verified' => false,
+                    'active' => false,
+                ],
             ],
         ]);
     }
@@ -423,6 +486,11 @@ class ForumMemberController extends Controller
         }
 
         $user = $member->user;
+        
+        // Fallback: if relationship didn't load, try to load user manually
+        if (!$user && $member->user_id) {
+            $user = User::where('user_id', $member->user_id)->first();
+        }
 
         return response()->json([
             'ok' => true,
@@ -432,19 +500,29 @@ class ForumMemberController extends Controller
                 'forum_id' => $member->forum_id,
                 'user_id' => $member->user_id,
                 'role' => $member->role,
-                'joined_at' => $member->time ? $member->time->toIso8601String() : null,
+                'joined_at' => ($member->time instanceof \Carbon\Carbon) ? $member->time->toIso8601String() : null,
                 'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
                 'user' => $user ? [
                     'user_id' => $user->user_id,
-                    'username' => $user->username,
-                    'first_name' => $user->first_name,
-                    'last_name' => $user->last_name,
+                    'username' => $user->username ?? null,
+                    'first_name' => $user->first_name ?? null,
+                    'last_name' => $user->last_name ?? null,
                     'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar,
+                    'avatar' => $user->avatar ?? null,
                     'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => $user->verified === '1',
-                    'active' => $user->active === '1',
-                ] : null,
+                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+                ] : [
+                    'user_id' => $member->user_id,
+                    'username' => null,
+                    'first_name' => null,
+                    'last_name' => null,
+                    'name' => null,
+                    'avatar' => null,
+                    'avatar_url' => null,
+                    'verified' => false,
+                    'active' => false,
+                ],
             ],
         ]);
     }

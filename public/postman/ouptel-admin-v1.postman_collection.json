@@ -807,12 +807,156 @@
       "name": "Forums - Members",
       "request": {
         "method": "GET",
-        "header": [],
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/members?per_page=12&role=&search=",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","members"],
+          "query": [
+            {"key":"per_page","value":"12","description":"Items per page (1-50)"},
+            {"key":"role","value":"","description":"Filter by role: member, admin, moderator"},
+            {"key":"search","value":"","description":"Search by username or name"}
+          ]
+        },
+        "description": "Get forum members list (matching old API: ajax_loading.php?link1=forum-members).\n\nQuery Parameters:\n- per_page (optional): Items per page (1-50, default: 12)\n- role (optional): Filter by role (member, admin, moderator)\n- search (optional): Search by username or name\n\nResponse includes user details (username, avatar, verified status, etc.)\n\nTroubleshooting: If users are empty/null in response:\n1. Ensure forum has members (use POST /forums/{forumId}/members to join)\n2. Verify user_id in Wo_ForumMembers matches user_id in Wo_Users table\n3. Check that users exist in Wo_Users table\n4. The API includes fallback logic to load users even if relationship fails"
+      }
+    },
+    {
+      "name": "Forums - Check Member",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/members/check",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","members","check"]
+        },
+        "description": "Check if current user is a member of the forum.\n\nResponse:\n- is_member: true/false\n- data: Member details if user is a member"
+      }
+    },
+    {
+      "name": "Forums - Join Forum",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"role\": \"member\"\n}"
+        },
         "url": {
           "raw": "{{base_url}}/api/v1/forums/1/members",
           "host": ["{{base_url}}"],
           "path": ["api","v1","forums","1","members"]
-        }
+        },
+        "description": "Join a forum (add current user as member).\n\nBody Parameters:\n- role (optional): Member role (member, admin, moderator). Default: 'member'\n\nResponse includes member details with user information."
+      }
+    },
+    {
+      "name": "Forums - Get Member Details",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/members/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","members","1"]
+        },
+        "description": "Get specific member details by member ID.\n\nResponse includes full member and user information."
+      }
+    },
+    {
+      "name": "Forums - Update Member Role",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"role\": \"admin\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/members/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","members","1"]
+        },
+        "description": "Update member role (admin only).\n\nBody Parameters:\n- role (required): New role (member, admin, moderator)\n\nOnly forum admins can update member roles."
+      }
+    },
+    {
+      "name": "Forums - Remove Member",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/members/1",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","members","1"]
+        },
+        "description": "Remove a member from forum.\n\n- Admins can remove any member\n- Users can remove themselves\n\nTo leave forum (remove current user), use: DELETE /forums/{forumId}/members (without memberId)"
+      }
+    },
+    {
+      "name": "Forums - Leave Forum",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/forums/1/members",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","forums","1","members"]
+        },
+        "description": "Leave forum (remove current user from forum members).\n\nThis removes the authenticated user from the forum members list."
       }
     },
     {
@@ -4464,6 +4608,14 @@
     },
     {
       "key": "target_user_id",
+      "value": "1"
+    },
+    {
+      "key": "forum_id",
+      "value": "1"
+    },
+    {
+      "key": "member_id",
       "value": "1"
     }
   ]
