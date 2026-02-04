@@ -4,7 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Forum;
-use App\Models\ForumMember;
+use App\Models\ForumTopic;
+use App\Models\ForumReply;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -16,6 +17,10 @@ class ForumMemberController extends Controller
     /**
      * Get forum members list
      * GET /forums/{forumId}/members
+     * 
+     * Matches old WoWonder API: ajax_loading.php?link1=forum-members
+     * In old code, forum members are users who have posted in forums (topics or replies)
+     * No separate membership table - just users who are active in forums
      * 
      * @param Request $request
      * @param int $forumId
@@ -30,87 +35,134 @@ class ForumMemberController extends Controller
 
         $perPage = (int) ($request->query('per_page', 12));
         $perPage = max(1, min($perPage, 50));
+        $offset = (int) ($request->query('offset', 0));
+        $search = $request->query('search'); // Search by username
+        $char = $request->query('char'); // Filter by first letter of username
 
-        $role = $request->query('role'); // Filter by role if provided
-        $search = $request->query('search'); // Search by username or name
+        // Get distinct user_ids who have posted in this forum (topics or replies)
+        $topicUserIds = ForumTopic::where('forum_id', $forumId)
+            ->where('active', '1')
+            ->distinct()
+            ->pluck('user_id')
+            ->toArray();
 
-        $query = ForumMember::where('forum_id', $forumId);
+        $replyUserIds = ForumReply::whereHas('topic', function ($q) use ($forumId) {
+                $q->where('forum_id', $forumId);
+            })
+            ->where('active', '1')
+            ->distinct()
+            ->pluck('user_id')
+            ->toArray();
 
-        // Filter by role if provided
-        if ($role) {
-            $query->where('role', $role);
+        $allUserIds = array_unique(array_merge($topicUserIds, $replyUserIds));
+
+        if (empty($allUserIds)) {
+            return response()->json([
+                'ok' => true,
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                    'forum_id' => $forumId,
+                ],
+            ]);
         }
 
-        // Search by username or name
+        // Build query for users
+        $query = User::whereIn('user_id', $allUserIds)
+            ->where('active', '1');
+
+        // Filter by offset (pagination by user_id)
+        if ($offset > 0) {
+            $query->where('user_id', '<', $offset);
+        }
+
+        // Filter by first letter of username
+        if ($char) {
+            $char = substr($char, 0, 1);
+            $query->where('username', 'like', $char . '%');
+        }
+
+        // Search by username
         if ($search) {
             $like = '%' . str_replace('%', '\\%', $search) . '%';
-            $query->whereHas('user', function ($q) use ($like) {
+            $query->where(function ($q) use ($like) {
                 $q->where('username', 'like', $like)
                   ->orWhere('first_name', 'like', $like)
                   ->orWhere('last_name', 'like', $like);
             });
         }
 
-        // Eager load users with null handling
-        $paginator = $query->with(['user' => function ($query) {
-            $query->select('user_id', 'username', 'first_name', 'last_name', 'avatar', 'verified', 'active');
-        }])->orderByDesc('time')->paginate($perPage);
+        // Get users ordered by user_id DESC (matching old WoWonder behavior)
+        $users = $query->orderByDesc('user_id')
+            ->limit($perPage)
+            ->get();
 
-        $data = $paginator->getCollection()->map(function (ForumMember $member) {
-            $user = $member->user;
-            
-            // Fallback: if relationship didn't load, try to load user manually
-            if (!$user && $member->user_id) {
-                $user = User::where('user_id', $member->user_id)->first();
-            }
-            
+        // Get forum post counts for each user
+        $data = $users->map(function (User $user) use ($forumId) {
+            // Count topics and replies in this forum
+            $topicsCount = ForumTopic::where('forum_id', $forumId)
+                ->where('user_id', $user->user_id)
+                ->where('active', '1')
+                ->count();
+
+            $repliesCount = ForumReply::whereHas('topic', function ($q) use ($forumId) {
+                    $q->where('forum_id', $forumId);
+                })
+                ->where('user_id', $user->user_id)
+                ->where('active', '1')
+                ->count();
+
+            $forumPosts = $topicsCount + $repliesCount;
+
             return [
-                'id' => $member->id,
-                'forum_id' => $member->forum_id,
-                'user_id' => $member->user_id,
-                'role' => $member->role,
-                'joined_at' => ($member->time instanceof \Carbon\Carbon) ? $member->time->toIso8601String() : null,
-                'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
-                'user' => $user ? [
-                    'user_id' => $user->user_id,
-                    'username' => $user->username ?? null,
-                    'first_name' => $user->first_name ?? null,
-                    'last_name' => $user->last_name ?? null,
-                    'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar ?? null,
-                    'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
-                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
-                ] : [
-                    'user_id' => $member->user_id,
-                    'username' => null,
-                    'first_name' => null,
-                    'last_name' => null,
-                    'name' => null,
-                    'avatar' => null,
-                    'avatar_url' => null,
-                    'verified' => false,
-                    'active' => false,
-                ],
+                'user_id' => $user->user_id,
+                'username' => $user->username ?? null,
+                'first_name' => $user->first_name ?? null,
+                'last_name' => $user->last_name ?? null,
+                'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+                'avatar' => $user->avatar ?? null,
+                'avatar_url' => $user->avatar_url ?? null,
+                'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+                'forum_posts' => $forumPosts, // Total posts (topics + replies) in this forum
             ];
         });
+
+        // Calculate total (simplified - get count of unique users)
+        $totalQuery = User::whereIn('user_id', $allUserIds)->where('active', '1');
+        if ($char) {
+            $char = substr($char, 0, 1);
+            $totalQuery->where('username', 'like', $char . '%');
+        }
+        if ($search) {
+            $like = '%' . str_replace('%', '\\%', $search) . '%';
+            $totalQuery->where(function ($q) use ($like) {
+                $q->where('username', 'like', $like)
+                  ->orWhere('first_name', 'like', $like)
+                  ->orWhere('last_name', 'like', $like);
+            });
+        }
+        $total = $totalQuery->count();
 
         return response()->json([
             'ok' => true,
             'data' => $data,
             'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
+                'current_page' => $offset > 0 ? floor($offset / $perPage) + 1 : 1,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => ceil($total / $perPage),
                 'forum_id' => $forumId,
             ],
         ]);
     }
 
     /**
-     * Join forum (add member)
-     * POST /forums/{forumId}/members
+     * Check if user has posted in forum
+     * POST /forums/{forumId}/members (not in old WoWonder - kept for API compatibility)
      * 
      * @param Request $request
      * @param int $forumId
@@ -135,81 +187,40 @@ class ForumMemberController extends Controller
             return response()->json(['ok' => false, 'message' => 'Forum not found'], 404);
         }
 
-        // Check if user is already a member
-        $existingMember = ForumMember::where('forum_id', $forumId)
+        // Check if user has posted in this forum
+        $hasPosted = ForumTopic::where('forum_id', $forumId)
             ->where('user_id', $userId)
-            ->first();
+            ->exists() || 
+            ForumReply::whereHas('topic', function ($q) use ($forumId) {
+                $q->where('forum_id', $forumId);
+            })
+            ->where('user_id', $userId)
+            ->exists();
 
-        if ($existingMember) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'You are already a member of this forum',
-                'data' => [
-                    'id' => $existingMember->id,
-                    'forum_id' => $existingMember->forum_id,
-                    'user_id' => $existingMember->user_id,
-                    'role' => $existingMember->role,
-                ],
-            ], 400);
-        }
-
-        // Create new member
-        $member = new ForumMember();
-        $member->forum_id = $forumId;
-        $member->user_id = $userId;
-        $member->role = $request->input('role', 'member'); // Default role is 'member'
-        $member->time = time();
-        $member->save();
-
-        // Load user relationship
-        $member->load('user');
-        $user = $member->user;
-        
-        // Fallback: if relationship didn't load, try to load user manually
-        if (!$user && $member->user_id) {
-            $user = User::where('user_id', $member->user_id)->first();
-        }
+        $user = User::where('user_id', $userId)->first();
 
         return response()->json([
             'ok' => true,
-            'message' => 'Successfully joined forum',
-            'data' => [
-                'id' => $member->id,
-                'forum_id' => $member->forum_id,
-                'user_id' => $member->user_id,
-                'role' => $member->role,
-                'joined_at' => ($member->time instanceof \Carbon\Carbon) ? $member->time->toIso8601String() : null,
-                'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
-                'user' => $user ? [
-                    'user_id' => $user->user_id,
-                    'username' => $user->username ?? null,
-                    'first_name' => $user->first_name ?? null,
-                    'last_name' => $user->last_name ?? null,
-                    'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar ?? null,
-                    'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
-                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
-                ] : [
-                    'user_id' => $member->user_id,
-                    'username' => null,
-                    'first_name' => null,
-                    'last_name' => null,
-                    'name' => null,
-                    'avatar' => null,
-                    'avatar_url' => null,
-                    'verified' => false,
-                    'active' => false,
-                ],
-            ],
-        ], 201);
+            'message' => $hasPosted ? 'User has posted in this forum' : 'User has not posted in this forum',
+            'has_posted' => $hasPosted,
+            'data' => $user ? [
+                'user_id' => $user->user_id,
+                'username' => $user->username ?? null,
+                'first_name' => $user->first_name ?? null,
+                'last_name' => $user->last_name ?? null,
+                'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+                'avatar' => $user->avatar ?? null,
+                'avatar_url' => $user->avatar_url ?? null,
+                'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+            ] : null,
+        ]);
     }
 
     /**
-     * Leave forum (remove member)
+     * Not applicable in old WoWonder - forum members are users who posted, not a membership system
      * DELETE /forums/{forumId}/members/{memberId}
-     * or
-     * DELETE /forums/{forumId}/members (removes current user)
+     * DELETE /forums/{forumId}/members
      * 
      * @param Request $request
      * @param int $forumId
@@ -218,174 +229,36 @@ class ForumMemberController extends Controller
      */
     public function destroy(Request $request, $forumId, $memberId = null): JsonResponse
     {
-        // Auth via Wo_AppsSessions
-        $authHeader = $request->header('Authorization');
-        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
-        }
-        
-        $token = substr($authHeader, 7);
-        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-        if (!$userId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
-        }
-
-        $forum = Forum::where('id', $forumId)->first();
-        if (!$forum) {
-            return response()->json(['ok' => false, 'message' => 'Forum not found'], 404);
-        }
-
-        // If memberId is provided, check if user has permission to remove that member
-        if ($memberId) {
-            $member = ForumMember::where('id', $memberId)
-                ->where('forum_id', $forumId)
-                ->first();
-
-            if (!$member) {
-                return response()->json(['ok' => false, 'message' => 'Member not found'], 404);
-            }
-
-            // Check if user is admin or the member themselves
-            $currentUserMember = ForumMember::where('forum_id', $forumId)
-                ->where('user_id', $userId)
-                ->first();
-
-            if (!$currentUserMember) {
-                return response()->json(['ok' => false, 'message' => 'You are not a member of this forum'], 403);
-            }
-
-            // Only allow removal if user is admin or removing themselves
-            if ($currentUserMember->role !== 'admin' && $member->user_id !== $userId) {
-                return response()->json(['ok' => false, 'message' => 'You do not have permission to remove this member'], 403);
-            }
-
-            $member->delete();
-
-            return response()->json([
-                'ok' => true,
-                'message' => 'Member removed successfully',
-            ]);
-        } else {
-            // Remove current user from forum
-            $member = ForumMember::where('forum_id', $forumId)
-                ->where('user_id', $userId)
-                ->first();
-
-            if (!$member) {
-                return response()->json(['ok' => false, 'message' => 'You are not a member of this forum'], 404);
-            }
-
-            $member->delete();
-
-            return response()->json([
-                'ok' => true,
-                'message' => 'Successfully left forum',
-            ]);
-        }
+        return response()->json([
+            'ok' => false,
+            'message' => 'Forum membership is not managed - members are users who have posted in forums. To remove a user, delete their forum posts.',
+        ], 400);
     }
 
     /**
-     * Update member role (admin only)
+     * Not applicable in old WoWonder - no role system for forum members
      * PUT/PATCH /forums/{forumId}/members/{memberId}
      * 
      * @param Request $request
      * @param int $forumId
-     * @param int $memberId
+     * @param int $memberId (user_id)
      * @return JsonResponse
      */
     public function update(Request $request, $forumId, $memberId): JsonResponse
     {
-        // Auth via Wo_AppsSessions
-        $authHeader = $request->header('Authorization');
-        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
-        }
-        
-        $token = substr($authHeader, 7);
-        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-        if (!$userId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
-        }
-
-        $forum = Forum::where('id', $forumId)->first();
-        if (!$forum) {
-            return response()->json(['ok' => false, 'message' => 'Forum not found'], 404);
-        }
-
-        // Check if current user is admin
-        $currentUserMember = ForumMember::where('forum_id', $forumId)
-            ->where('user_id', $userId)
-            ->first();
-
-        if (!$currentUserMember || $currentUserMember->role !== 'admin') {
-            return response()->json(['ok' => false, 'message' => 'Only forum admins can update member roles'], 403);
-        }
-
-        $member = ForumMember::where('id', $memberId)
-            ->where('forum_id', $forumId)
-            ->first();
-
-        if (!$member) {
-            return response()->json(['ok' => false, 'message' => 'Member not found'], 404);
-        }
-
-        $validated = $request->validate([
-            'role' => 'required|in:member,admin,moderator',
-        ]);
-
-        $member->role = $validated['role'];
-        $member->save();
-
-        $member->load('user');
-        $user = $member->user;
-        
-        // Fallback: if relationship didn't load, try to load user manually
-        if (!$user && $member->user_id) {
-            $user = User::where('user_id', $member->user_id)->first();
-        }
-
         return response()->json([
-            'ok' => true,
-            'message' => 'Member role updated successfully',
-            'data' => [
-                'id' => $member->id,
-                'forum_id' => $member->forum_id,
-                'user_id' => $member->user_id,
-                'role' => $member->role,
-                'joined_at' => ($member->time instanceof \Carbon\Carbon) ? $member->time->toIso8601String() : null,
-                'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
-                'user' => $user ? [
-                    'user_id' => $user->user_id,
-                    'username' => $user->username ?? null,
-                    'first_name' => $user->first_name ?? null,
-                    'last_name' => $user->last_name ?? null,
-                    'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar ?? null,
-                    'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
-                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
-                ] : [
-                    'user_id' => $member->user_id,
-                    'username' => null,
-                    'first_name' => null,
-                    'last_name' => null,
-                    'name' => null,
-                    'avatar' => null,
-                    'avatar_url' => null,
-                    'verified' => false,
-                    'active' => false,
-                ],
-            ],
-        ]);
+            'ok' => false,
+            'message' => 'Forum members do not have roles in the old WoWonder system. Members are simply users who have posted in forums.',
+        ], 400);
     }
 
     /**
-     * Get specific member details
-     * GET /forums/{forumId}/members/{memberId}
+     * Get specific user's forum activity
+     * GET /forums/{forumId}/members/{memberId} (memberId is user_id)
      * 
      * @param Request $request
      * @param int $forumId
-     * @param int $memberId
+     * @param int $memberId (user_id)
      * @return JsonResponse
      */
     public function show(Request $request, $forumId, $memberId): JsonResponse
@@ -395,58 +268,47 @@ class ForumMemberController extends Controller
             return response()->json(['ok' => false, 'message' => 'Forum not found'], 404);
         }
 
-        $member = ForumMember::where('id', $memberId)
-            ->where('forum_id', $forumId)
-            ->with(['user'])
-            ->first();
-
-        if (!$member) {
-            return response()->json(['ok' => false, 'message' => 'Member not found'], 404);
+        $user = User::where('user_id', $memberId)->first();
+        if (!$user) {
+            return response()->json(['ok' => false, 'message' => 'User not found'], 404);
         }
 
-        $user = $member->user;
-        
-        // Fallback: if relationship didn't load, try to load user manually
-        if (!$user && $member->user_id) {
-            $user = User::where('user_id', $member->user_id)->first();
-        }
+        // Check if user has posted in this forum
+        $topicsCount = ForumTopic::where('forum_id', $forumId)
+            ->where('user_id', $memberId)
+            ->where('active', '1')
+            ->count();
+
+        $repliesCount = ForumReply::whereHas('topic', function ($q) use ($forumId) {
+                $q->where('forum_id', $forumId);
+            })
+            ->where('user_id', $memberId)
+            ->where('active', '1')
+            ->count();
+
+        $forumPosts = $topicsCount + $repliesCount;
 
         return response()->json([
             'ok' => true,
             'data' => [
-                'id' => $member->id,
-                'forum_id' => $member->forum_id,
-                'user_id' => $member->user_id,
-                'role' => $member->role,
-                'joined_at' => ($member->time instanceof \Carbon\Carbon) ? $member->time->toIso8601String() : null,
-                'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
-                'user' => $user ? [
-                    'user_id' => $user->user_id,
-                    'username' => $user->username ?? null,
-                    'first_name' => $user->first_name ?? null,
-                    'last_name' => $user->last_name ?? null,
-                    'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar ?? null,
-                    'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
-                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
-                ] : [
-                    'user_id' => $member->user_id,
-                    'username' => null,
-                    'first_name' => null,
-                    'last_name' => null,
-                    'name' => null,
-                    'avatar' => null,
-                    'avatar_url' => null,
-                    'verified' => false,
-                    'active' => false,
-                ],
+                'user_id' => $user->user_id,
+                'username' => $user->username ?? null,
+                'first_name' => $user->first_name ?? null,
+                'last_name' => $user->last_name ?? null,
+                'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+                'avatar' => $user->avatar ?? null,
+                'avatar_url' => $user->avatar_url ?? null,
+                'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+                'forum_posts' => $forumPosts,
+                'topics_count' => $topicsCount,
+                'replies_count' => $repliesCount,
             ],
         ]);
     }
 
     /**
-     * Check if user is a member of forum
+     * Check if user has posted in forum
      * GET /forums/{forumId}/members/check
      * 
      * @param Request $request
@@ -472,58 +334,33 @@ class ForumMemberController extends Controller
             return response()->json(['ok' => false, 'message' => 'Forum not found'], 404);
         }
 
-        $member = ForumMember::where('forum_id', $forumId)
+        // Check if user has posted in this forum
+        $hasPosted = ForumTopic::where('forum_id', $forumId)
             ->where('user_id', $userId)
-            ->with(['user'])
-            ->first();
+            ->exists() || 
+            ForumReply::whereHas('topic', function ($q) use ($forumId) {
+                $q->where('forum_id', $forumId);
+            })
+            ->where('user_id', $userId)
+            ->exists();
 
-        if (!$member) {
-            return response()->json([
-                'ok' => true,
-                'is_member' => false,
-                'message' => 'User is not a member of this forum',
-            ]);
-        }
-
-        $user = $member->user;
-        
-        // Fallback: if relationship didn't load, try to load user manually
-        if (!$user && $member->user_id) {
-            $user = User::where('user_id', $member->user_id)->first();
-        }
+        $user = User::where('user_id', $userId)->first();
 
         return response()->json([
             'ok' => true,
-            'is_member' => true,
-            'data' => [
-                'id' => $member->id,
-                'forum_id' => $member->forum_id,
-                'user_id' => $member->user_id,
-                'role' => $member->role,
-                'joined_at' => ($member->time instanceof \Carbon\Carbon) ? $member->time->toIso8601String() : null,
-                'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
-                'user' => $user ? [
-                    'user_id' => $user->user_id,
-                    'username' => $user->username ?? null,
-                    'first_name' => $user->first_name ?? null,
-                    'last_name' => $user->last_name ?? null,
-                    'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar ?? null,
-                    'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
-                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
-                ] : [
-                    'user_id' => $member->user_id,
-                    'username' => null,
-                    'first_name' => null,
-                    'last_name' => null,
-                    'name' => null,
-                    'avatar' => null,
-                    'avatar_url' => null,
-                    'verified' => false,
-                    'active' => false,
-                ],
-            ],
+            'has_posted' => $hasPosted,
+            'is_member' => $hasPosted, // In old WoWonder, "member" = has posted
+            'data' => $user ? [
+                'user_id' => $user->user_id,
+                'username' => $user->username ?? null,
+                'first_name' => $user->first_name ?? null,
+                'last_name' => $user->last_name ?? null,
+                'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+                'avatar' => $user->avatar ?? null,
+                'avatar_url' => $user->avatar_url ?? null,
+                'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+            ] : null,
         ]);
     }
 }
