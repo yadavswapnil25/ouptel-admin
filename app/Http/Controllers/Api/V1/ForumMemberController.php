@@ -41,8 +41,9 @@ class ForumMemberController extends Controller
 
         // Get distinct user_ids who have posted in this forum (topics or replies)
         // Old WoWonder uses 'forum' column for threads (not 'forum_id'), 'user' for thread user, 'poster_id' for replies
+        // Old WoWonder uses 'posted > 0' to filter active threads (not 'active = 1')
         $topicUserIds = ForumTopic::where('forum', $forumId) // Old WoWonder uses 'forum' not 'forum_id'
-            ->where('active', '1')
+            ->where('posted', '>', 0) // Old WoWonder uses 'posted > 0' not 'active = 1'
             ->distinct()
             ->pluck('user') // Old WoWonder uses 'user' not 'user_id'
             ->toArray();
@@ -50,7 +51,7 @@ class ForumMemberController extends Controller
         $replyUserIds = ForumReply::whereHas('topic', function ($q) use ($forumId) {
                 $q->where('forum', $forumId); // Old WoWonder uses 'forum' not 'forum_id'
             })
-            ->where('active', '1')
+            ->where('posted_time', '>', 0) // Old WoWonder uses 'posted_time > 0' not 'active = 1'
             ->distinct()
             ->pluck('poster_id') // Old WoWonder uses 'poster_id' not 'user_id'
             ->toArray();
@@ -105,16 +106,17 @@ class ForumMemberController extends Controller
         $data = $users->map(function (User $user) use ($forumId) {
             // Count topics and replies in this forum
             // Old WoWonder uses 'forum' column for threads (not 'forum_id'), 'user' for thread user, 'poster_id' for replies
+            // Old WoWonder uses 'posted > 0' to filter active threads (not 'active = 1')
             $topicsCount = ForumTopic::where('forum', $forumId) // Old WoWonder uses 'forum' not 'forum_id'
                 ->where('user', $user->user_id) // Old WoWonder uses 'user' not 'user_id'
-                ->where('active', '1')
+                ->where('posted', '>', 0) // Old WoWonder uses 'posted > 0' not 'active = 1'
                 ->count();
 
             $repliesCount = ForumReply::whereHas('topic', function ($q) use ($forumId) {
                     $q->where('forum', $forumId); // Old WoWonder uses 'forum' not 'forum_id'
                 })
                 ->where('poster_id', $user->user_id) // Old WoWonder uses 'poster_id' not 'user_id'
-                ->where('active', '1')
+                ->where('posted_time', '>', 0) // Old WoWonder uses 'posted_time > 0' not 'active = 1'
                 ->count();
 
             $forumPosts = $topicsCount + $repliesCount;
@@ -191,13 +193,16 @@ class ForumMemberController extends Controller
 
         // Check if user has posted in this forum
         // Old WoWonder uses 'forum' column for threads (not 'forum_id'), 'user' for thread user, 'poster_id' for replies
+        // Old WoWonder uses 'posted > 0' to filter active threads (not 'active = 1')
         $hasPosted = ForumTopic::where('forum', $forumId) // Old WoWonder uses 'forum' not 'forum_id'
             ->where('user', $userId) // Old WoWonder uses 'user' not 'user_id'
+            ->where('posted', '>', 0) // Old WoWonder uses 'posted > 0' not 'active = 1'
             ->exists() || 
             ForumReply::whereHas('topic', function ($q) use ($forumId) {
                 $q->where('forum', $forumId); // Old WoWonder uses 'forum' not 'forum_id'
             })
             ->where('poster_id', $userId) // Old WoWonder uses 'poster_id' not 'user_id'
+            ->where('posted_time', '>', 0) // Old WoWonder uses 'posted_time > 0' not 'active = 1'
             ->exists();
 
         $user = User::where('user_id', $userId)->first();
@@ -278,16 +283,17 @@ class ForumMemberController extends Controller
 
         // Check if user has posted in this forum
         // Old WoWonder uses 'forum' column for threads (not 'forum_id'), 'user' for thread user, 'poster_id' for replies
+        // Old WoWonder uses 'posted > 0' to filter active threads (not 'active = 1')
         $topicsCount = ForumTopic::where('forum', $forumId) // Old WoWonder uses 'forum' not 'forum_id'
             ->where('user', $memberId) // Old WoWonder uses 'user' not 'user_id'
-            ->where('active', '1')
+            ->where('posted', '>', 0) // Old WoWonder uses 'posted > 0' not 'active = 1'
             ->count();
 
         $repliesCount = ForumReply::whereHas('topic', function ($q) use ($forumId) {
                 $q->where('forum', $forumId); // Old WoWonder uses 'forum' not 'forum_id'
             })
             ->where('poster_id', $memberId) // Old WoWonder uses 'poster_id' not 'user_id'
-            ->where('active', '1')
+            ->where('posted_time', '>', 0) // Old WoWonder uses 'posted_time > 0' not 'active = 1'
             ->count();
 
         $forumPosts = $topicsCount + $repliesCount;
@@ -340,13 +346,16 @@ class ForumMemberController extends Controller
 
         // Check if user has posted in this forum
         // Old WoWonder uses 'forum' column for threads (not 'forum_id'), 'user' for thread user, 'poster_id' for replies
+        // Old WoWonder uses 'posted > 0' to filter active threads (not 'active = 1')
         $hasPosted = ForumTopic::where('forum', $forumId) // Old WoWonder uses 'forum' not 'forum_id'
             ->where('user', $userId) // Old WoWonder uses 'user' not 'user_id'
+            ->where('posted', '>', 0) // Old WoWonder uses 'posted > 0' not 'active = 1'
             ->exists() || 
             ForumReply::whereHas('topic', function ($q) use ($forumId) {
                 $q->where('forum', $forumId); // Old WoWonder uses 'forum' not 'forum_id'
             })
             ->where('poster_id', $userId) // Old WoWonder uses 'poster_id' not 'user_id'
+            ->where('posted_time', '>', 0) // Old WoWonder uses 'posted_time > 0' not 'active = 1'
             ->exists();
 
         $user = User::where('user_id', $userId)->first();

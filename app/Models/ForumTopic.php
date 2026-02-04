@@ -19,12 +19,12 @@ class ForumTopic extends Model
         'post', // Old WoWonder uses 'post' not 'content'
         'pinned',
         'locked',
-        'active',
+        // Note: 'active' column doesn't exist - Old WoWonder uses 'posted > 0' to filter active threads
         'posted', // Old WoWonder uses 'posted' not 'time'
     ];
 
     protected $casts = [
-        'active' => 'string',
+        // Note: 'active' column doesn't exist - Old WoWonder uses 'posted > 0' to filter active threads
         'user' => 'string', // Old WoWonder uses 'user' not 'user_id'
         'forum' => 'string', // Old WoWonder uses 'forum' not 'forum_id'
         'pinned' => 'string',
@@ -33,10 +33,7 @@ class ForumTopic extends Model
     ];
 
     // Mutators to handle data type conversions
-    public function setActiveAttribute($value)
-    {
-        $this->attributes['active'] = (bool) $value ? '1' : '0';
-    }
+    // Note: 'active' column doesn't exist - Old WoWonder uses 'posted > 0' to filter active threads
 
     public function setPinnedAttribute($value)
     {
