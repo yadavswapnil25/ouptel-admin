@@ -13,7 +13,7 @@ class ForumTopic extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'forum_id',
+        'forum', // Old WoWonder uses 'forum' not 'forum_id'
         'user', // Old WoWonder uses 'user' not 'user_id'
         'headline', // Old WoWonder uses 'headline' not 'subject'
         'post', // Old WoWonder uses 'post' not 'content'
@@ -26,7 +26,7 @@ class ForumTopic extends Model
     protected $casts = [
         'active' => 'string',
         'user' => 'string', // Old WoWonder uses 'user' not 'user_id'
-        'forum_id' => 'string',
+        'forum' => 'string', // Old WoWonder uses 'forum' not 'forum_id'
         'pinned' => 'string',
         'locked' => 'string',
         'posted' => 'string', // Old WoWonder uses 'posted' not 'time'
@@ -62,14 +62,14 @@ class ForumTopic extends Model
         $this->attributes['user'] = (string) $value;
     }
 
-    public function setForumIdAttribute($value)
+    public function setForumAttribute($value)
     {
-        $this->attributes['forum_id'] = (string) $value;
+        $this->attributes['forum'] = (string) $value;
     }
 
     public function forum(): BelongsTo
     {
-        return $this->belongsTo(Forum::class, 'forum_id', 'id');
+        return $this->belongsTo(Forum::class, 'forum', 'id'); // Old WoWonder uses 'forum' not 'forum_id'
     }
 
     public function user(): BelongsTo

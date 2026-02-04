@@ -238,68 +238,16 @@ class ForumsController extends BaseController
 
     public function members(Request $request, $id): JsonResponse
     {
+        // This method is kept for backward compatibility but delegates to ForumMemberController
+        // In old WoWonder, forum members are users who have posted in forums (no separate membership table)
         $forum = Forum::where('id', $id)->first();
         if (!$forum) {
             return response()->json(['ok' => false, 'message' => 'Forum not found'], 404);
         }
 
-        $perPage = (int) ($request->query('per_page', 12));
-        $perPage = max(1, min($perPage, 50));
-
-        $role = $request->query('role');
-        $search = $request->query('search');
-
-        $query = ForumMember::where('forum_id', $id)->with(['user']);
-
-        if ($role) {
-            $query->where('role', $role);
-        }
-
-        if ($search) {
-            $like = '%' . str_replace('%', '\\%', $search) . '%';
-            $query->whereHas('user', function ($q) use ($like) {
-                $q->where('username', 'like', $like)
-                  ->orWhere('first_name', 'like', $like)
-                  ->orWhere('last_name', 'like', $like);
-            });
-        }
-
-        $paginator = $query->orderByDesc('time')->paginate($perPage);
-
-        $data = $paginator->getCollection()->map(function (ForumMember $member) {
-            $user = $member->user;
-            return [
-                'id' => $member->id,
-                'forum_id' => $member->forum_id,
-                'user_id' => $member->user_id,
-                'role' => $member->role,
-                'joined_at' => $member->time ? $member->time->toIso8601String() : null,
-                'joined_at_timestamp' => $member->getTimeAsTimestampAttribute(),
-                'user' => $user ? [
-                    'user_id' => $user->user_id,
-                    'username' => $user->username,
-                    'first_name' => $user->first_name,
-                    'last_name' => $user->last_name,
-                    'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
-                    'avatar' => $user->avatar,
-                    'avatar_url' => $user->avatar_url ?? null,
-                    'verified' => $user->verified === '1',
-                    'active' => $user->active === '1',
-                ] : null,
-            ];
-        });
-
-        return response()->json([
-            'ok' => true,
-            'data' => $data,
-            'meta' => [
-                'current_page' => $paginator->currentPage(),
-                'per_page' => $paginator->perPage(),
-                'total' => $paginator->total(),
-                'last_page' => $paginator->lastPage(),
-                'forum_id' => $id,
-            ],
-        ]);
+        // Redirect to ForumMemberController logic
+        $memberController = new \App\Http\Controllers\Api\V1\ForumMemberController();
+        return $memberController->index($request, $id);
     }
 
     public function search(Request $request): JsonResponse
