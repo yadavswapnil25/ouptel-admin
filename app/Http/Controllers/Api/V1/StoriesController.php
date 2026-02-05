@@ -135,11 +135,13 @@ class StoriesController extends Controller
         }
 
         // Validate request (matching old API structure)
+        // NOTE: We intentionally do NOT limit story_description length here
+        // to avoid errors for emoji-heavy or long inputs.
         $validator = Validator::make($request->all(), [
             'file' => 'required|file',
             'file_type' => 'required|in:video,image',
             'story_title' => 'nullable|string|max:100',
-            'story_description' => 'nullable|string|max:300',
+            'story_description' => 'nullable|string',
             'cover' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240',
         ]);
 
@@ -168,16 +170,6 @@ class StoriesController extends Controller
                 'errors' => [
                     'error_id' => 4,
                     'error_text' => 'Title is so long'
-                ]
-            ], 400);
-        }
-
-        if ($request->filled('story_description') && strlen($request->input('story_description')) > 300) {
-            return response()->json([
-                'api_status' => 400,
-                'errors' => [
-                    'error_id' => 5,
-                    'error_text' => 'Description is so long'
                 ]
             ], 400);
         }
