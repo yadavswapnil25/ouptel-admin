@@ -377,6 +377,102 @@ class CommentController extends Controller
     }
 
     /**
+     * Delete a reply to a comment
+     *
+     * DELETE /comments/replies/{replyId}
+     *
+     * Only the reply author, the parent comment author, the post author, or an admin can delete a reply.
+     *
+     * @param Request $request
+     * @param int $replyId
+     * @return JsonResponse
+     */
+    public function deleteReply(Request $request, int $replyId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        // Check if Wo_CommentReplies table exists
+        if (!DB::getSchemaBuilder()->hasTable('Wo_CommentReplies')) {
+            return response()->json(['ok' => false, 'message' => 'Reply not found'], 404);
+        }
+
+        // Load reply from Wo_CommentReplies
+        $reply = DB::table('Wo_CommentReplies')->where('id', $replyId)->first();
+        if (!$reply) {
+            return response()->json(['ok' => false, 'message' => 'Reply not found'], 404);
+        }
+
+        // Load related comment and post
+        $parentComment = Comment::where('id', $reply->comment_id)->first();
+        $post = Post::where('post_id', $reply->post_id)->first();
+        $user = User::where('user_id', $tokenUserId)->first();
+
+        // Permission checks
+        $isReplyOwner = $reply->user_id == $tokenUserId;
+        $isCommentOwner = $parentComment && $parentComment->user_id == $tokenUserId;
+        $isPostOwner = $post && $post->user_id == $tokenUserId;
+        $isAdmin = $user && method_exists($user, 'isAdmin') ? $user->isAdmin() : false;
+
+        if (!($isReplyOwner || $isCommentOwner || $isPostOwner || $isAdmin)) {
+            return response()->json(['ok' => false, 'message' => 'Access denied'], 403);
+        }
+
+        try {
+            DB::beginTransaction();
+
+            // Clean up associated files before deleting
+            if (!empty($reply->c_file)) {
+                Storage::delete($reply->c_file);
+            }
+            if (!empty($reply->record)) {
+                Storage::delete($reply->record);
+            }
+
+            // Delete reactions for this reply if Wo_PostReactions table exists and has replay_id column
+            if (DB::getSchemaBuilder()->hasTable('Wo_PostReactions') &&
+                DB::getSchemaBuilder()->hasColumn('Wo_PostReactions', 'replay_id')) {
+                DB::table('Wo_PostReactions')
+                    ->where('replay_id', $replyId)
+                    ->where('post_id', 0)
+                    ->delete();
+            }
+
+            // Delete the reply row
+            DB::table('Wo_CommentReplies')->where('id', $replyId)->delete();
+
+            DB::commit();
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Reply deleted successfully',
+                'data' => [
+                    'reply_id' => $replyId,
+                    'deleted_at' => date('c'),
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to delete reply',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Reply to a comment
      * 
      * @param Request $request
@@ -613,7 +709,7 @@ class CommentController extends Controller
                     $replies = $query->paginate($perPage, ['*'], 'page', $page);
                     $total = $replies->total();
                     
-                    $formattedReplies = $replies->map(function ($reply) use ($tokenUserId) {
+                    $formattedReplies = $replies->map(function ($reply) use ($tokenUserId, $commentId) {
                         $formatted = $this->formatCommentData($reply, $tokenUserId);
                         $formatted['is_reply'] = true;
                         $formatted['parent_comment_id'] = $commentId;

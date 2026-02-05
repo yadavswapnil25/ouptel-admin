@@ -248,6 +248,7 @@ Route::delete('/comments/{commentId}', [CommentController::class, 'deleteComment
 Route::post('/comments/{commentId}/reactions', [CommentController::class, 'registerCommentReaction']);
 Route::post('/comments/{commentId}/replies', [CommentController::class, 'replyToComment']); // Reply to a comment
 Route::get('/comments/{commentId}/replies', [CommentController::class, 'getReplies']); // Get replies for a comment
+Route::delete('/comments/replies/{replyId}', [CommentController::class, 'deleteReply']); // Delete a reply
 
 Route::post('/posts/{postId}/save', [PostController::class, 'savePost']);
 Route::get('/posts/{postId}/saved', [PostController::class, 'checkSavedPost']);
