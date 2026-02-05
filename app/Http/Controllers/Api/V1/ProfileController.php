@@ -1196,11 +1196,15 @@ class ProfileController extends Controller
             ], 400);
         }
 
-        // Get total count for pagination metadata
-        $totalPosts = DB::table('Wo_Posts')
+        // Get total count for pagination metadata (respecting optional filter)
+        $totalQuery = DB::table('Wo_Posts')
             ->where('user_id', $user->user_id)
-            ->where('active', 1)
-            ->count();
+            ->where('active', 1);
+
+        // Apply same filter logic used for fetching posts
+        $this->applyTimelineFilter($totalQuery, $filter);
+
+        $totalPosts = $totalQuery->count();
 
         // Get user posts with pagination
         if ($useCursorPagination) {
@@ -1255,6 +1259,117 @@ class ProfileController extends Controller
     }
 
     /**
+     * Apply optional filter to a timeline posts query
+     *
+     * @param \Illuminate\Database\Query\Builder $query
+     * @param string|null $filter
+     * @return void
+     */
+    private function applyTimelineFilter($query, ?string $filter = null): void
+    {
+        if (!$filter) {
+            return;
+        }
+
+        $filter = strtolower($filter);
+        switch ($filter) {
+            case 'image':
+                $query->where(function($q) {
+                    $q->where('postType', 'photo')
+                      ->orWhere(function($q2) {
+                          $q2->whereNotNull('postPhoto')
+                             ->where('postPhoto', '!=', '');
+                      });
+                });
+                break;
+
+            case 'file':
+                // Match new-feed: only real files, not videos
+                $query->where(function($q) {
+                    $q->where('postType', 'file')
+                      ->orWhere(function($q2) {
+                          $q2->whereNotNull('postFile')
+                             ->where('postFile', '!=', '')
+                             ->where(function ($q3) {
+                                 $q3->whereNull('postType')
+                                    ->orWhere('postType', '')
+                                    ->orWhere('postType', 'file');
+                             })
+                             ->whereNull('postYoutube')
+                             ->whereNull('postVimeo')
+                             ->whereNull('postFacebook')
+                             ->whereNull('postPlaytube')
+                             ->whereNull('postDeepsound');
+                      });
+                });
+                break;
+
+            case 'jobs':
+                $query->where(function($q) {
+                    $q->where('postType', 'job')
+                      ->orWhere(function($q2) {
+                          $q2->whereNotNull('job_id')
+                             ->where('job_id', '>', 0);
+                      });
+                });
+                break;
+
+            case 'audio':
+                $query->where(function($q) {
+                    $q->where('postType', 'audio')
+                      ->orWhere(function($q2) {
+                          $q2->whereNotNull('postRecord')
+                             ->where('postRecord', '!=', '');
+                      });
+                });
+                break;
+
+            case 'video':
+                // Videos are stored in postFile when postType = 'video', or in external URL columns
+                $query->where(function($q) {
+                    $q->where('postType', 'video')
+                      ->orWhere(function($q2) {
+                          $q2->whereNotNull('postYoutube')
+                             ->where('postYoutube', '!=', '');
+                      })
+                      ->orWhere(function($q2) {
+                          $q2->whereNotNull('postVimeo')
+                             ->where('postVimeo', '!=', '');
+                      })
+                      ->orWhere(function($q2) {
+                          $q2->whereNotNull('postFacebook')
+                             ->where('postFacebook', '!=', '');
+                      })
+                      ->orWhere(function($q2) {
+                          $q2->whereNotNull('postPlaytube')
+                             ->where('postPlaytube', '!=', '');
+                      })
+                      ->orWhere(function($q2) {
+                          $q2->whereNotNull('postDeepsound')
+                             ->where('postDeepsound', '!=', '');
+                      });
+                });
+                break;
+
+            case 'blogs':
+            case 'articles':
+                $query->where(function($q) {
+                    $q->where('postType', 'blog')
+                      ->orWhere(function($q2) {
+                          $q2->whereNotNull('blog_id')
+                             ->where('blog_id', '>', 0);
+                      });
+                });
+                break;
+
+            case 'feeling':
+                $query->whereNotNull('postFeeling')
+                      ->where('postFeeling', '!=', '');
+                break;
+        }
+    }
+
+    /**
      * Get timeline posts for a user (cursor-based pagination)
      * 
      * @param int $userId
@@ -1276,114 +1391,7 @@ class ProfileController extends Controller
         }
 
         // Apply optional filter (match /api/v1/new-feed behavior)
-        if ($filter) {
-            $filter = strtolower($filter);
-            switch ($filter) {
-                case 'image':
-                    $query->where(function($q) {
-                        $q->where('postType', 'photo')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postPhoto')
-                                 ->where('postPhoto', '!=', '');
-                          });
-                    });
-                    break;
-                
-                case 'file':
-                    // Match new-feed: only real files, not videos
-                    $query->where(function($q) {
-                        $q->where('postType', 'file')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postFile')
-                                 ->where('postFile', '!=', '')
-                                 ->where(function ($q3) {
-                                     $q3->whereNull('postType')
-                                        ->orWhere('postType', '')
-                                        ->orWhere('postType', 'file');
-                                 })
-                                 ->whereNull('postYoutube')
-                                 ->whereNull('postVimeo')
-                                 ->whereNull('postFacebook')
-                                 ->whereNull('postPlaytube')
-                                 ->whereNull('postDeepsound');
-                          });
-                    });
-                    break;
-                
-                case 'jobs':
-                    $query->where(function($q) {
-                        $q->where('postType', 'job')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('job_id')
-                                 ->where('job_id', '>', 0);
-                          });
-                    });
-                    break;
-                
-                case 'audio':
-                    $query->where(function($q) {
-                        $q->where('postType', 'audio')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postRecord')
-                                 ->where('postRecord', '!=', '');
-                          });
-                    });
-                    break;
-                
-                case 'video':
-                    // Videos are stored in postFile when postType = 'video', or in external URL columns
-                    // Note: postVideo column doesn't exist in Wo_Posts table
-                    $query->where(function($q) {
-                        $q->where('postType', 'video')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postYoutube')
-                                 ->where('postYoutube', '!=', '');
-                          })
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postVimeo')
-                                 ->where('postVimeo', '!=', '');
-                          })
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postFacebook')
-                                 ->where('postFacebook', '!=', '');
-                          })
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postPlaytube')
-                                 ->where('postPlaytube', '!=', '');
-                          })
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postDeepsound')
-                                 ->where('postDeepsound', '!=', '');
-                          });
-                    });
-                    break;
-                
-                case 'blogs':
-                    $query->where(function($q) {
-                        $q->where('postType', 'blog')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('blog_id')
-                                 ->where('blog_id', '>', 0);
-                          });
-                    });
-                    break;
-                
-                case 'articles':
-                    $query->where(function($q) {
-                        $q->where('postType', 'blog')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('blog_id')
-                                 ->where('blog_id', '>', 0);
-                          });
-                    });
-                    break;
-                
-                case 'feeling':
-                    $query->whereNotNull('postFeeling')
-                          ->where('postFeeling', '!=', '');
-                    break;
-            }
-        }
+        $this->applyTimelineFilter($query, $filter);
 
         // Order by time desc (matching getUserPosts method)
         $query->orderBy('time', 'desc')->limit($limit);
@@ -1409,113 +1417,7 @@ class ProfileController extends Controller
             ->where('active', 1); // Use integer 1 to match post_count calculation
 
         // Apply optional filter (same as cursor-based)
-        if ($filter) {
-            $filter = strtolower($filter);
-            switch ($filter) {
-                case 'image':
-                    $query->where(function($q) {
-                        $q->where('postType', 'photo')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postPhoto')
-                                 ->where('postPhoto', '!=', '');
-                          });
-                    });
-                    break;
-                
-                case 'file':
-                    $query->where(function($q) {
-                        $q->where('postType', 'file')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postFile')
-                                 ->where('postFile', '!=', '')
-                                 ->where(function ($q3) {
-                                     $q3->whereNull('postType')
-                                        ->orWhere('postType', '')
-                                        ->orWhere('postType', 'file');
-                                 })
-                                 ->whereNull('postYoutube')
-                                 ->whereNull('postVimeo')
-                                 ->whereNull('postFacebook')
-                                 ->whereNull('postPlaytube')
-                                 ->whereNull('postDeepsound');
-                          });
-                    });
-                    break;
-                
-                case 'jobs':
-                    $query->where(function($q) {
-                        $q->where('postType', 'job')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('job_id')
-                                 ->where('job_id', '>', 0);
-                          });
-                    });
-                    break;
-                
-                case 'audio':
-                    $query->where(function($q) {
-                        $q->where('postType', 'audio')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postRecord')
-                                 ->where('postRecord', '!=', '');
-                          });
-                    });
-                    break;
-                
-                case 'video':
-                    // Videos are stored in postFile when postType = 'video', or in external URL columns
-                    // Note: postVideo column doesn't exist in Wo_Posts table
-                    $query->where(function($q) {
-                        $q->where('postType', 'video')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postYoutube')
-                                 ->where('postYoutube', '!=', '');
-                          })
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postVimeo')
-                                 ->where('postVimeo', '!=', '');
-                          })
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postFacebook')
-                                 ->where('postFacebook', '!=', '');
-                          })
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postPlaytube')
-                                 ->where('postPlaytube', '!=', '');
-                          })
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postDeepsound')
-                                 ->where('postDeepsound', '!=', '');
-                          });
-                    });
-                    break;
-                
-                case 'blogs':
-                    $query->where(function($q) {
-                        $q->where('postType', 'blog')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('blog_id')
-                                 ->where('blog_id', '>', 0);
-                          });
-                    });
-                    break;
-                
-                case 'articles':
-                    $query->where(function($q) {
-                        $q->where('postType', 'blog')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('blog_id')
-                                 ->where('blog_id', '>', 0);
-                          });
-                    });
-                    break;
-                
-                case 'feeling':
-                    $query->whereNotNull('postFeeling')
-                          ->where('postFeeling', '!=', '');
-                    break;
-            }
-        }
+        $this->applyTimelineFilter($query, $filter);
 
         // Order by time desc (matching getUserPosts method)
         $query->orderBy('time', 'desc')
