@@ -1062,11 +1062,13 @@ class PostController extends Controller
 
     /**
      * Get activity data for a post
-     * 
-     * @param Post $post
+     *
+     * Accepts either an Eloquent Post model or a stdClass row from DB::table.
+     *
+     * @param object $post
      * @return array|null
      */
-    private function getActivityData(Post $post): ?array
+    private function getActivityData($post): ?array
     {
         $activity = null;
 
