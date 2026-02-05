@@ -302,12 +302,10 @@ class NewFeedController extends Controller
                     break;
                 
                 case 'video':
+                    // Videos are stored in postFile when postType = 'video', or in external URL columns
+                    // Note: postVideo column doesn't exist in Wo_Posts table
                     $query->where(function($q) {
                         $q->where('postType', 'video')
-                          ->orWhere(function($q2) {
-                              $q2->whereNotNull('postVideo')
-                                 ->where('postVideo', '!=', '');
-                          })
                           ->orWhere(function($q2) {
                               $q2->whereNotNull('postYoutube')
                                  ->where('postYoutube', '!=', '');
