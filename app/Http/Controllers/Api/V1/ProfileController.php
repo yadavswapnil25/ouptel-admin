@@ -1181,6 +1181,21 @@ class ProfileController extends Controller
         $beforePostId = (int) ($request->input('before_post_id', $request->query('before_post_id', 0)));
         $useCursorPagination = $beforePostId > 0;
 
+        // Optional filter parameter (match /api/v1/new-feed filter behavior)
+        $filter = $request->query('filter');
+        $validFilters = ['image', 'file', 'jobs', 'audio', 'video', 'blogs', 'articles', 'feeling'];
+        if ($filter && !in_array(strtolower($filter), $validFilters)) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '8',
+                    'error_text' => 'Invalid filter. Valid filters are: ' . implode(', ', $validFilters),
+                ]
+            ], 400);
+        }
+
         // Get total count for pagination metadata
         $totalPosts = DB::table('Wo_Posts')
             ->where('user_id', $user->user_id)
@@ -1190,13 +1205,13 @@ class ProfileController extends Controller
         // Get user posts with pagination
         if ($useCursorPagination) {
             // Cursor-based pagination (backward compatibility)
-            $posts = $this->getTimelinePosts($user->user_id, $tokenUserId, $beforePostId, $perPage);
+            $posts = $this->getTimelinePosts($user->user_id, $tokenUserId, $beforePostId, $perPage, $filter);
             $hasMore = count($posts) >= $perPage;
             $lastPostId = !empty($posts) ? end($posts)['id'] : null;
         } else {
             // Page-based pagination
             $offset = ($page - 1) * $perPage;
-            $posts = $this->getTimelinePostsPaginated($user->user_id, $tokenUserId, $offset, $perPage);
+            $posts = $this->getTimelinePostsPaginated($user->user_id, $tokenUserId, $offset, $perPage, $filter);
             $lastPage = (int) ceil($totalPosts / $perPage);
             $hasMore = $page < $lastPage;
         }
@@ -1248,7 +1263,7 @@ class ProfileController extends Controller
      * @param int $limit
      * @return array
      */
-    private function getTimelinePosts(int $userId, int $loggedUserId, int $beforePostId, int $limit = 20): array
+    private function getTimelinePosts(int $userId, int $loggedUserId, int $beforePostId, int $limit = 20, ?string $filter = null): array
     {
         // Build query - match the exact same logic as getUserPosts and post_count calculation
         $query = DB::table('Wo_Posts')
@@ -1258,6 +1273,118 @@ class ProfileController extends Controller
         // Handle cursor-based pagination
         if ($beforePostId > 0 && $beforePostId < PHP_INT_MAX) {
             $query->where('id', '<', $beforePostId);
+        }
+
+        // Apply optional filter (match /api/v1/new-feed behavior)
+        if ($filter) {
+            $filter = strtolower($filter);
+            switch ($filter) {
+                case 'image':
+                    $query->where(function($q) {
+                        $q->where('postType', 'photo')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postPhoto')
+                                 ->where('postPhoto', '!=', '');
+                          });
+                    });
+                    break;
+                
+                case 'file':
+                    // Match new-feed: only real files, not videos
+                    $query->where(function($q) {
+                        $q->where('postType', 'file')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postFile')
+                                 ->where('postFile', '!=', '')
+                                 ->where(function ($q3) {
+                                     $q3->whereNull('postType')
+                                        ->orWhere('postType', '')
+                                        ->orWhere('postType', 'file');
+                                 })
+                                 ->whereNull('postYoutube')
+                                 ->whereNull('postVimeo')
+                                 ->whereNull('postFacebook')
+                                 ->whereNull('postPlaytube')
+                                 ->whereNull('postDeepsound');
+                          });
+                    });
+                    break;
+                
+                case 'jobs':
+                    $query->where(function($q) {
+                        $q->where('postType', 'job')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('job_id')
+                                 ->where('job_id', '>', 0);
+                          });
+                    });
+                    break;
+                
+                case 'audio':
+                    $query->where(function($q) {
+                        $q->where('postType', 'audio')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postRecord')
+                                 ->where('postRecord', '!=', '');
+                          });
+                    });
+                    break;
+                
+                case 'video':
+                    $query->where(function($q) {
+                        $q->where('postType', 'video')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postVideo')
+                                 ->where('postVideo', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postYoutube')
+                                 ->where('postYoutube', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postVimeo')
+                                 ->where('postVimeo', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postFacebook')
+                                 ->where('postFacebook', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postPlaytube')
+                                 ->where('postPlaytube', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postDeepsound')
+                                 ->where('postDeepsound', '!=', '');
+                          });
+                    });
+                    break;
+                
+                case 'blogs':
+                    $query->where(function($q) {
+                        $q->where('postType', 'blog')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('blog_id')
+                                 ->where('blog_id', '>', 0);
+                          });
+                    });
+                    break;
+                
+                case 'articles':
+                    $query->where(function($q) {
+                        $q->where('postType', 'blog')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('blog_id')
+                                 ->where('blog_id', '>', 0);
+                          });
+                    });
+                    break;
+                
+                case 'feeling':
+                    $query->whereNotNull('postFeeling')
+                          ->where('postFeeling', '!=', '');
+                    break;
+            }
         }
 
         // Order by time desc (matching getUserPosts method)
@@ -1276,12 +1403,123 @@ class ProfileController extends Controller
      * @param int $perPage
      * @return array
      */
-    private function getTimelinePostsPaginated(int $userId, int $loggedUserId, int $offset, int $perPage): array
+    private function getTimelinePostsPaginated(int $userId, int $loggedUserId, int $offset, int $perPage, ?string $filter = null): array
     {
         // Build query - match the exact same logic as getUserPosts and post_count calculation
         $query = DB::table('Wo_Posts')
             ->where('user_id', $userId)
             ->where('active', 1); // Use integer 1 to match post_count calculation
+
+        // Apply optional filter (same as cursor-based)
+        if ($filter) {
+            $filter = strtolower($filter);
+            switch ($filter) {
+                case 'image':
+                    $query->where(function($q) {
+                        $q->where('postType', 'photo')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postPhoto')
+                                 ->where('postPhoto', '!=', '');
+                          });
+                    });
+                    break;
+                
+                case 'file':
+                    $query->where(function($q) {
+                        $q->where('postType', 'file')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postFile')
+                                 ->where('postFile', '!=', '')
+                                 ->where(function ($q3) {
+                                     $q3->whereNull('postType')
+                                        ->orWhere('postType', '')
+                                        ->orWhere('postType', 'file');
+                                 })
+                                 ->whereNull('postYoutube')
+                                 ->whereNull('postVimeo')
+                                 ->whereNull('postFacebook')
+                                 ->whereNull('postPlaytube')
+                                 ->whereNull('postDeepsound');
+                          });
+                    });
+                    break;
+                
+                case 'jobs':
+                    $query->where(function($q) {
+                        $q->where('postType', 'job')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('job_id')
+                                 ->where('job_id', '>', 0);
+                          });
+                    });
+                    break;
+                
+                case 'audio':
+                    $query->where(function($q) {
+                        $q->where('postType', 'audio')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postRecord')
+                                 ->where('postRecord', '!=', '');
+                          });
+                    });
+                    break;
+                
+                case 'video':
+                    $query->where(function($q) {
+                        $q->where('postType', 'video')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postVideo')
+                                 ->where('postVideo', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postYoutube')
+                                 ->where('postYoutube', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postVimeo')
+                                 ->where('postVimeo', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postFacebook')
+                                 ->where('postFacebook', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postPlaytube')
+                                 ->where('postPlaytube', '!=', '');
+                          })
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('postDeepsound')
+                                 ->where('postDeepsound', '!=', '');
+                          });
+                    });
+                    break;
+                
+                case 'blogs':
+                    $query->where(function($q) {
+                        $q->where('postType', 'blog')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('blog_id')
+                                 ->where('blog_id', '>', 0);
+                          });
+                    });
+                    break;
+                
+                case 'articles':
+                    $query->where(function($q) {
+                        $q->where('postType', 'blog')
+                          ->orWhere(function($q2) {
+                              $q2->whereNotNull('blog_id')
+                                 ->where('blog_id', '>', 0);
+                          });
+                    });
+                    break;
+                
+                case 'feeling':
+                    $query->whereNotNull('postFeeling')
+                          ->where('postFeeling', '!=', '');
+                    break;
+            }
+        }
 
         // Order by time desc (matching getUserPosts method)
         $query->orderBy('time', 'desc')
