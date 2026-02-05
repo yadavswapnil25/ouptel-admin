@@ -62,27 +62,35 @@ class HashtagController extends Controller
         $limit = max(1, min($limit, 50)); // Limit between 1 and 50
 
         // Get trending hashtags from Wo_Hashtags table
-        // Order by trend_use_num DESC (number of times used) or by counting posts
+        // Note: 'hash' column contains MD5 hash, 'tag' column contains the actual hashtag text
+        // Order by trend_use_num DESC (number of times used)
         $hashtags = DB::table('Wo_Hashtags')
             ->select('hash', 'tag', 'trend_use_num', 'last_trend_time')
             ->where(function($q) {
-                $q->whereNotNull('hash')
-                  ->where('hash', '!=', '');
+                $q->whereNotNull('tag')
+                  ->where('tag', '!=', '');
             })
+            ->where('trend_use_num', '>', 0)
             ->orderByDesc('trend_use_num')
             ->orderByDesc('last_trend_time')
-            ->limit($limit)
+            ->limit($limit * 2) // Get more to filter out ones with 0 posts
             ->get();
 
         // If Wo_Hashtags table is empty or doesn't have trend_use_num data,
         // fall back to counting hashtags from posts
-        if ($hashtags->isEmpty() || $hashtags->sum('trend_use_num') == 0) {
+        if ($hashtags->isEmpty()) {
             $hashtags = $this->getTrendingFromPosts($limit);
         } else {
             // Enrich with actual post counts from Wo_Posts
+            // Use 'tag' column (actual hashtag text), not 'hash' (MD5 hash)
             $hashtags = $hashtags->map(function($hashtag) {
-                $hashtagName = $hashtag->hash ?? $hashtag->tag ?? '';
+                $hashtagName = $hashtag->tag ?? '';
+                $hashtagName = trim($hashtagName);
                 $hashtagName = ltrim($hashtagName, '#');
+                
+                if (empty($hashtagName)) {
+                    return null;
+                }
                 
                 // Count actual posts containing this hashtag
                 $postCount = DB::table('Wo_Posts')
@@ -104,8 +112,8 @@ class HashtagController extends Controller
                 ];
             })
             ->filter(function($hashtag) {
-                // Only include hashtags that have at least 1 post
-                return $hashtag['posts_count'] > 0;
+                // Only include hashtags that have at least 1 post and are not null
+                return $hashtag !== null && $hashtag['posts_count'] > 0;
             })
             ->sortByDesc('posts_count')
             ->values()
