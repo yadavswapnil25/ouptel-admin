@@ -227,11 +227,28 @@ class NewFeedController extends Controller
                     break;
                 
                 case 'file':
+                    // File filter should return only real file attachments, not videos.
+                    // In WoWonder, some video uploads are stored in postFile, but their postType is 'video'.
+                    // Here we:
+                    // - Include rows where postType = 'file'
+                    // - Include legacy rows where postFile is set AND postType is NULL/empty/'file'
+                    // - Exclude rows explicitly marked as video via postType or video URLs.
                     $query->where(function($q) {
                         $q->where('postType', 'file')
                           ->orWhere(function($q2) {
                               $q2->whereNotNull('postFile')
-                                 ->where('postFile', '!=', '');
+                                 ->where('postFile', '!=', '')
+                                 ->where(function ($q3) {
+                                     $q3->whereNull('postType')
+                                        ->orWhere('postType', '')
+                                        ->orWhere('postType', 'file');
+                                 })
+                                 // Exclude posts that clearly have video sources
+                                 ->whereNull('postYoutube')
+                                 ->whereNull('postVimeo')
+                                 ->whereNull('postFacebook')
+                                 ->whereNull('postPlaytube')
+                                 ->whereNull('postDeepsound');
                           });
                     });
                     break;

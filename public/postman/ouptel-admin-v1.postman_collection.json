@@ -2706,6 +2706,21 @@
       }
     },
     {
+      "name": "Comments - Delete Reply",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/comments/replies/{{reply_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","comments","replies","{{reply_id}}"]
+        },
+        "description": "Delete a reply to a comment.\n\nPermissions:\n- Reply author\n- Parent comment author\n- Post author\n- Admin\n\nPath variables:\n- reply_id: ID of the reply (saved automatically from 'Comments - Reply to Comment' response as {{reply_id}})."
+      }
+    },
+    {
       "name": "Posts - Disable/Enable Comments (Old API Style)",
       "request": {
         "method": "POST",
