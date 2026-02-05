@@ -212,6 +212,20 @@ class NewFeedController extends Controller
             ->where('active', '1');
             // Note: privacy column doesn't exist in Wo_Posts table
 
+        // Exclude posts hidden by this user (Wo_HiddenPosts)
+        if (Schema::hasTable('Wo_HiddenPosts')) {
+            $hiddenIds = DB::table('Wo_HiddenPosts')
+                ->where('user_id', $userId)
+                ->pluck('post_id')
+                ->filter() // remove nulls
+                ->all();
+
+            if (!empty($hiddenIds)) {
+                // In Wo_HiddenPosts, post_id stores Wo_Posts.id (see hidePost)
+                $query->whereNotIn('id', $hiddenIds);
+            }
+        }
+
         // Apply filter if provided
         if ($filter) {
             $filter = strtolower($filter);
