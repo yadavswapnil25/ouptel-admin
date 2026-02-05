@@ -4278,6 +4278,43 @@
       }
     },
     {
+      "name": "Hashtags - Get Trending",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/hashtags/trending?limit=10",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","hashtags","trending"],
+          "query": [
+            {"key":"limit","value":"10","description":"Number of trending hashtags to return (1-50, default: 10)"}
+          ]
+        },
+        "description": "Get trending hashtags ordered by post count. Returns hashtag name and posts_count. Uses Wo_Hashtags table if available, otherwise counts from posts."
+      }
+    },
+    {
+      "name": "Hashtags - Get Posts by Hashtag",
+      "request": {
+        "method": "GET",
+        "header": [
+          {"key":"Authorization","value":"Bearer {{token}}","type":"text"}
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/hashtags/developer/posts?page=1&per_page=20",
+          "host": ["{{base_url}}"],
+          "path": ["api","v1","hashtags","developer","posts"],
+          "query": [
+            {"key":"page","value":"1","description":"Page number (default: 1)"},
+            {"key":"per_page","value":"20","description":"Posts per page (1-50, default: 20)"}
+          ]
+        },
+        "description": "Get posts for a specific hashtag. Hashtag can be provided with or without # symbol. Returns paginated list of posts containing the hashtag."
+      }
+    },
+    {
       "name": "Search - Recent Searches",
       "request": {
         "method": "GET",

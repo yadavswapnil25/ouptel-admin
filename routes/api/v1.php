@@ -53,6 +53,7 @@ use App\Http\Controllers\Api\V1\SubscriptionsController;
 use App\Http\Controllers\Api\V1\AnnouncementsController;
 use App\Http\Controllers\Api\V1\AccountVerificationController;
 use App\Http\Controllers\Api\V1\ReportController;
+use App\Http\Controllers\Api\V1\HashtagController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -406,4 +407,8 @@ Route::get('/verification/history', [AccountVerificationController::class, 'getH
 Route::post('/verification/resubmit', [AccountVerificationController::class, 'resubmit']); // Resubmit after rejection
 Route::post('/verification/cancel', [AccountVerificationController::class, 'cancel']); // Cancel pending request
 Route::get('/users/{userId}/badge', [AccountVerificationController::class, 'getUserBadge']); // Get user's badge info (public)
+
+// Hashtag routes
+Route::get('/hashtags/trending', [HashtagController::class, 'getTrending']); // Get trending hashtags
+Route::get('/hashtags/{hashtag}/posts', [HashtagController::class, 'getHashtagPosts']); // Get posts for a specific hashtag
 
