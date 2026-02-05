@@ -214,15 +214,29 @@ class NewFeedController extends Controller
 
         // Exclude posts hidden by this user (Wo_HiddenPosts)
         if (Schema::hasTable('Wo_HiddenPosts')) {
-            $hiddenIds = DB::table('Wo_HiddenPosts')
+            $hidden = DB::table('Wo_HiddenPosts')
                 ->where('user_id', $userId)
                 ->pluck('post_id')
-                ->filter() // remove nulls
-                ->all();
+                ->filter(); // remove nulls
 
-            if (!empty($hiddenIds)) {
-                // In Wo_HiddenPosts, post_id stores Wo_Posts.id (see hidePost)
-                $query->whereNotIn('id', $hiddenIds);
+            if ($hidden->isNotEmpty()) {
+                // Some installs may have stored Wo_Posts.id (int) in post_id,
+                // others may have stored Wo_Posts.post_id (string). Handle both.
+                $hiddenNumericIds = $hidden->filter(fn ($v) => is_numeric($v))
+                                           ->map(fn ($v) => (int) $v)
+                                           ->values()
+                                           ->all();
+                $hiddenStringIds  = $hidden->filter(fn ($v) => !is_numeric($v))
+                                           ->map(fn ($v) => (string) $v)
+                                           ->values()
+                                           ->all();
+
+                if (!empty($hiddenNumericIds)) {
+                    $query->whereNotIn('id', $hiddenNumericIds);
+                }
+                if (!empty($hiddenStringIds)) {
+                    $query->whereNotIn('post_id', $hiddenStringIds);
+                }
             }
         }
 
