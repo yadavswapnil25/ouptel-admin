@@ -504,6 +504,14 @@ class NewFeedController extends Controller
                 'post_feeling' => $post->postFeeling ?? null,
                 'feeling' => $feelingData,
                 'is_feeling_post' => !empty($post->postFeeling),
+
+                // Activity fields (traveling, listening, watching, playing, reaction)
+                'post_playing' => $post->postPlaying ?? null,
+                'post_travelling' => $post->postTraveling ?? null,
+                'post_watching' => $post->postWatching ?? null,
+                'post_listening' => $post->postListening ?? null,
+                'post_reaction' => $post->postReaction ?? null,
+                'activity' => $this->buildActivityData($post),
                 
                 // Engagement metrics
                 'reactions_count' => $reactionsCount,
@@ -641,7 +649,14 @@ class NewFeedController extends Controller
         if ($colorId > 0) {
             return 'colored';
         }
-        
+
+        // Activity types take priority (WoWonder behavior)
+        if (!empty($post->postTraveling)) return 'travelling';
+        if (!empty($post->postListening)) return 'listening';
+        if (!empty($post->postWatching)) return 'watching';
+        if (!empty($post->postPlaying)) return 'playing';
+        if (!empty($post->postReaction)) return 'reaction';
+
         // Check postType field if it exists
         if (!empty($post->postType)) {
             return $post->postType;
@@ -670,6 +685,65 @@ class NewFeedController extends Controller
             return 'album';
         }
         return 'text';
+    }
+
+    /**
+     * Build activity data for a post (traveling, listening, watching, playing, reaction, feeling)
+     *
+     * @param object $post
+     * @return array|null
+     */
+    private function buildActivityData($post): ?array
+    {
+        $activity = null;
+
+        if (!empty($post->postPlaying)) {
+            $activity = [
+                'type' => 'playing',
+                'label' => 'Playing',
+                'value' => $post->postPlaying,
+                'text' => "is playing {$post->postPlaying}",
+            ];
+        } elseif (!empty($post->postTraveling)) {
+            $activity = [
+                'type' => 'travelling',
+                'label' => 'Travelling',
+                'value' => $post->postTraveling,
+                'text' => "is travelling to {$post->postTraveling}",
+            ];
+        } elseif (!empty($post->postWatching)) {
+            $activity = [
+                'type' => 'watching',
+                'label' => 'Watching',
+                'value' => $post->postWatching,
+                'text' => "is watching {$post->postWatching}",
+            ];
+        } elseif (!empty($post->postListening)) {
+            $activity = [
+                'type' => 'listening',
+                'label' => 'Listening',
+                'value' => $post->postListening,
+                'text' => "is listening to {$post->postListening}",
+            ];
+        } elseif (!empty($post->postReaction)) {
+            $activity = [
+                'type' => 'reaction',
+                'label' => 'Reaction',
+                'value' => $post->postReaction,
+                'text' => "reacted to {$post->postReaction}",
+            ];
+        } elseif (!empty($post->postFeeling)) {
+            $feelingData = $this->getFeelingData($post->postFeeling);
+            $activity = [
+                'type' => 'feeling',
+                'label' => 'Feeling',
+                'value' => $post->postFeeling,
+                'text' => "is feeling " . ($feelingData['name'] ?? $post->postFeeling),
+                'icon' => $feelingData['icon'] ?? null,
+            ];
+        }
+
+        return $activity;
     }
 
     /**
