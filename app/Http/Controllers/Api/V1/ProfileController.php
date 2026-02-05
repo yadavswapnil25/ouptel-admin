@@ -1274,11 +1274,22 @@ class ProfileController extends Controller
         $filter = strtolower($filter);
         switch ($filter) {
             case 'image':
+                // Match new-feed filter logic exactly
                 $query->where(function($q) {
                     $q->where('postType', 'photo')
                       ->orWhere(function($q2) {
                           $q2->whereNotNull('postPhoto')
                              ->where('postPhoto', '!=', '');
+                      })
+                      ->orWhere(function($q2) {
+                          // Include album posts (multi-image posts) - albums are also image posts
+                          $q2->whereNotNull('album_name')
+                             ->where('album_name', '!=', '');
+                      })
+                      ->orWhere(function($q2) {
+                          // Include multi-image posts
+                          $q2->where('multi_image_post', 1)
+                             ->orWhere('multi_image_post', '1');
                       });
                 });
                 break;
