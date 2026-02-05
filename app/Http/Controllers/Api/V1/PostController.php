@@ -2593,9 +2593,10 @@ class PostController extends Controller
         }
 
         // Validate request - accept both 'post_id' and 'post' parameters (matching old API)
-        $postId = (int) ($request->input('post_id', $request->input('post', 0)));
+        // In old WoWonder, the client usually sends the string post_id, not the numeric id
+        $postIdParam = $request->input('post_id', $request->input('post', null));
 
-        if (empty($postId) || $postId <= 0) {
+        if (empty($postIdParam)) {
             return response()->json([
                 'api_status' => 400,
                 'errors' => [
@@ -2605,8 +2606,18 @@ class PostController extends Controller
             ], 400);
         }
 
-        // Check if post exists
-        $post = DB::table('Wo_Posts')->where('id', $postId)->first();
+        // Check if post exists (support both numeric id and string post_id like old WoWonder)
+        $postQuery = DB::table('Wo_Posts');
+        if (is_numeric($postIdParam)) {
+            $postQuery->where(function ($q) use ($postIdParam) {
+                $q->where('id', (int) $postIdParam)
+                  ->orWhere('post_id', $postIdParam);
+            });
+        } else {
+            $postQuery->where('post_id', $postIdParam);
+        }
+
+        $post = $postQuery->first();
         if (!$post) {
             return response()->json([
                 'api_status' => 400,
@@ -2618,6 +2629,18 @@ class PostController extends Controller
         }
 
         try {
+            // Always use the numeric primary key id from Wo_Posts for hiding
+            $postId = $post->id ?? null;
+            if (empty($postId)) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 7,
+                        'error_text' => 'Unable to resolve post id'
+                    ]
+                ], 400);
+            }
+
             // Check if post is already hidden
             $isHidden = DB::table('Wo_HiddenPosts')
                 ->where('user_id', $tokenUserId)
