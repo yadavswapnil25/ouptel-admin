@@ -129,16 +129,16 @@ Route::post('/games/popular', [GamesController::class, 'popular']); // Get popul
 Route::get('/forums', [ForumsController::class, 'index']);
 Route::post('/forums', [ForumsController::class, 'store']);
 Route::get('/forums/meta', [ForumsController::class, 'meta']);
+// Forum menu routes (must come before /forums/{id} to avoid route conflicts)
+Route::get('/forums/search', [ForumsController::class, 'search']);
+Route::get('/my-threads', [ForumsController::class, 'myThreads']);
+Route::get('/my-messages', [ForumsController::class, 'myMessages']);
+// Specific forum routes (must come after specific routes like /search)
 Route::get('/forums/{id}', [ForumsController::class, 'show']);
 Route::get('/forums/{id}/topics', [ForumsController::class, 'topics']);
 Route::post('/forums/{id}/topics', [ForumsController::class, 'createTopic']);
 Route::get('/forums/{forumId}/topics/{topicId}/replies', [ForumsController::class, 'topicReplies']);
 Route::post('/forums/{forumId}/topics/{topicId}/replies', [ForumsController::class, 'createReply']);
-
-// Forum menu routes
-Route::get('/forums/search', [ForumsController::class, 'search']);
-Route::get('/my-threads', [ForumsController::class, 'myThreads']);
-Route::get('/my-messages', [ForumsController::class, 'myMessages']);
 
 // Forum member routes (matching old API: ajax_loading.php?link1=forum-members)
 Route::get('/forums/{forumId}/members/check', [ForumMemberController::class, 'check']); // Check if user is member (must be before /forums/{forumId}/members/{memberId})
