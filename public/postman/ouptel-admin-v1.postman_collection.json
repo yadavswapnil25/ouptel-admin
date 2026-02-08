@@ -133,6 +133,32 @@
       }
     },
     {
+      "name": "Albums - Get Single",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/api/v1/albums/{{album_id}}",
+          "host": [
+            "{{base_url}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "albums",
+            "{{album_id}}"
+          ]
+        },
+        "description": "Get a single album by ID. Returns full album details including all images, user information, and metadata. Works with album posts (posts with album_name)."
+      }
+    },
+    {
       "name": "Events - Browse",
       "request": {
         "method": "GET",
@@ -2482,7 +2508,7 @@
       }
     },
     {
-      "name": "Posts - Create Comment",
+      "name": "Posts - Create Comment (Optimized for Albums)",
       "request": {
         "method": "POST",
         "header": [
@@ -2491,8 +2517,11 @@
         "body": {
           "mode": "formdata",
           "formdata": [
-            {"key":"text","value":"This is a great post!","type":"text"},
-            {"key":"hash","value":"8d7b7bd14327341ba2db","type":"text"}
+            {"key":"text","value":"This is a great post!","type":"text","description":"Comment text (optional if image/audio provided)"},
+            {"key":"page_id","value":"","type":"text","description":"Page ID for page posts (optional)"},
+            {"key":"image","value":"","type":"file","description":"Image file upload (optional)"},
+            {"key":"image_url","value":"","type":"text","description":"Import image from URL - WoWonder feature (optional)"},
+            {"key":"audio","value":"","type":"file","description":"Audio file upload (optional)"}
           ]
         },
         "url": {
@@ -2500,7 +2529,7 @@
           "host": ["{{base_url}}"],
           "path": ["api","v1","posts","{{post_id}}","comments"]
         },
-        "description": "Create a comment on a post"
+        "description": "Register a comment on a post (optimized for albums, matches WoWonder format). Supports text, image upload, image URL import, and audio. Text is optional if image/audio is provided. Returns WoWonder-style response: api_status, action='commented', comment_data with post_comments_count."
       },
       "event": [
         {

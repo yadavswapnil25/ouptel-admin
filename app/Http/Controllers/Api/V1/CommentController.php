@@ -18,7 +18,8 @@ use Illuminate\Support\Str;
 class CommentController extends Controller
 {
     /**
-     * Register a new comment on a post (mimics WoWonder requests.php?f=posts&s=register_comment)
+     * Register a new comment on a post (optimized for albums, matches WoWonder format)
+     * Reference: WoWonder requests.php?f=posts&s=register_comment
      * 
      * @param Request $request
      * @param int $postId
@@ -29,64 +30,133 @@ class CommentController extends Controller
         // Auth via Wo_AppsSessions
         $authHeader = $request->header('Authorization');
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
         }
         
         $token = substr($authHeader, 7);
         $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         if (!$tokenUserId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
         }
 
-        // Validate request parameters
+        // Validate request parameters - text is optional if image/audio is provided (WoWonder style)
         $validator = Validator::make($request->all(), [
-            'text' => 'required|string|max:5000',
-            'hash' => 'nullable|string', // For compatibility with WoWonder hash system
+            'text' => 'nullable|string|max:5000',
+            'page_id' => 'nullable|integer',
+            'image_url' => 'nullable|url', // Support image URL import (WoWonder feature)
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:2048',
+            'audio' => 'nullable|file|mimes:mp3,wav,ogg|max:5120',
         ]);
 
         if ($validator->fails()) {
             return response()->json([
-                'ok' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 3,
+                    'error_text' => 'Validation failed',
+                    'validation_errors' => $validator->errors()
+                ]
             ], 422);
         }
 
-        // Check if post exists
-        $post = Post::where('id', $postId)->orWhere('post_id', $postId)->first();
+        // Check if at least text, image, or audio is provided
+        $hasText = !empty($request->input('text')) && !ctype_space($request->input('text'));
+        $hasImage = $request->hasFile('image') || !empty($request->input('image_url'));
+        $hasAudio = $request->hasFile('audio');
+
+        if (!$hasText && !$hasImage && !$hasAudio) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'Please provide text, image, or audio for the comment'
+                ]
+            ], 422);
+        }
+
+        // Check if post exists (including album posts)
+        $post = Post::where('id', $postId)
+            ->orWhere('post_id', $postId)
+            ->first();
+        
         if (!$post) {
-            return response()->json(['ok' => false, 'message' => 'Post not found'], 404);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 5,
+                    'error_text' => 'Post not found'
+                ]
+            ], 404);
         }
 
         // Check if user can comment on this post
         if (!$this->canCommentOnPost($post, $tokenUserId)) {
-            return response()->json(['ok' => false, 'message' => 'Access denied or comments disabled'], 403);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Access denied or comments disabled'
+                ]
+            ], 403);
         }
 
         // Check if user exists
         $user = User::where('user_id', $tokenUserId)->first();
         if (!$user) {
-            return response()->json(['ok' => false, 'message' => 'User not found'], 404);
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 7,
+                    'error_text' => 'User not found'
+                ]
+            ], 404);
         }
 
         try {
             DB::beginTransaction();
 
-            // File uploads are not supported in the simplified version
-            // Only basic text comments are supported
+            // Prepare comment data
+            $pageId = $request->input('page_id', '');
+            $textComment = $hasText ? trim($request->input('text')) : '';
 
-            // Prepare comment data - only include fields that exist in Wo_Comments table
             $commentData = [
                 'user_id' => $tokenUserId,
                 'post_id' => $post->post_id,
-                'text' => $request->input('text'),
+                'text' => $textComment,
                 'time' => time(),
             ];
 
-            // Handle file uploads if provided
-            if ($request->hasFile('image')) {
-                $commentData['c_file'] = $this->handleFileUpload($request->file('image'), 'comments', 'image');
+            // Add page_id if provided
+            if (!empty($pageId)) {
+                $commentData['page_id'] = (int)$pageId;
             }
+
+            // Handle image upload or import from URL (WoWonder style)
+            $commentImage = '';
+            if ($request->hasFile('image')) {
+                $commentImage = $this->handleFileUpload($request->file('image'), 'comments', 'image');
+            } elseif (!empty($request->input('image_url'))) {
+                // Import image from URL (WoWonder feature)
+                $commentImage = $this->importImageFromUrl($request->input('image_url'));
+            }
+            
+            if (!empty($commentImage)) {
+                $commentData['c_file'] = $commentImage;
+            }
+
+            // Handle audio upload
             if ($request->hasFile('audio')) {
                 $commentData['record'] = $this->handleFileUpload($request->file('audio'), 'comments', 'audio');
             }
@@ -94,38 +164,33 @@ class CommentController extends Controller
             // Create the comment
             $comment = Comment::create($commentData);
 
-            // Reply count updates are not supported in this simplified version
+            // Get comment count for the post (WoWonder style)
+            $commentCount = Comment::where('post_id', $post->post_id)->count();
 
             // Send notifications
             $this->sendCommentNotifications($comment, $post, $tokenUserId);
 
             DB::commit();
 
+            // Return response in WoWonder format
             return response()->json([
-                'ok' => true,
-                'message' => 'Comment posted successfully',
-                'data' => [
-                    'comment_id' => $comment->id,
-                    'post_id' => $post->post_id,
+                'api_status' => 200,
+                'action' => 'commented',
+                'comment_data' => [
                     'text' => $comment->text,
-                    'author' => [
-                        'user_id' => $user->user_id,
-                        'username' => $user->username,
-                        'name' => $user->name,
-                        'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                    ],
-                    'created_at' => date('c', $comment->time),
-                    'created_at_human' => date('Y-m-d H:i:s', $comment->time),
+                    'post_comments_count' => $commentCount
                 ]
-            ], 201);
+            ], 200);
 
         } catch (\Exception $e) {
             DB::rollBack();
 
             return response()->json([
-                'ok' => false,
-                'message' => 'Failed to post comment',
-                'error' => $e->getMessage()
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 8,
+                    'error_text' => 'Failed to register comment: ' . $e->getMessage()
+                ]
             ], 500);
         }
     }
@@ -1075,6 +1140,41 @@ class CommentController extends Controller
      * @param string $type
      * @return string
      */
+    /**
+     * Import image from URL (WoWonder feature)
+     */
+    private function importImageFromUrl(string $imageUrl): string
+    {
+        try {
+            // Download image from URL
+            $imageContent = file_get_contents($imageUrl);
+            if ($imageContent === false) {
+                throw new \Exception('Failed to download image from URL');
+            }
+
+            // Get image extension from URL or content
+            $extension = 'jpg'; // Default
+            $urlPath = parse_url($imageUrl, PHP_URL_PATH);
+            if ($urlPath) {
+                $urlExtension = pathinfo($urlPath, PATHINFO_EXTENSION);
+                if (in_array(strtolower($urlExtension), ['jpg', 'jpeg', 'png', 'gif', 'webp'])) {
+                    $extension = strtolower($urlExtension);
+                }
+            }
+
+            // Generate unique filename
+            $fileName = 'imported_' . time() . '_' . uniqid() . '.' . $extension;
+            $path = 'comments/' . $fileName;
+
+            // Save to storage
+            \Illuminate\Support\Facades\Storage::disk('public')->put($path, $imageContent);
+
+            return $path;
+        } catch (\Exception $e) {
+            throw new \Exception('Failed to import image from URL: ' . $e->getMessage());
+        }
+    }
+
     private function handleFileUpload($file, string $directory, string $type): string
     {
         if (!$file) return '';
