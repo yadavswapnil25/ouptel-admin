@@ -15,6 +15,9 @@ class Forum extends Model
     protected $fillable = [
         'name',
         'description',
+        'sections',
+        'posts',
+        'last_post',
     ];
 
     protected $casts = [
@@ -39,17 +42,17 @@ class Forum extends Model
     //     return $this->belongsTo(User::class, 'user_id', 'user_id');
     // }
 
-    // Note: Wo_ForumTopics table doesn't exist
-    // public function topics(): HasMany
-    // {
-    //     return $this->hasMany(ForumTopic::class, 'forum_id', 'id');
-    // }
+    // Relationship to forum topics/threads
+    public function topics(): HasMany
+    {
+        return $this->hasMany(ForumTopic::class, 'forum', 'id');
+    }
 
-    // Note: Wo_ForumMembers table doesn't exist
-    // public function members(): HasMany
-    // {
-    //     return $this->hasMany(ForumMember::class, 'forum_id', 'id');
-    // }
+    // Relationship to forum members
+    public function members(): HasMany
+    {
+        return $this->hasMany(ForumMember::class, 'forum_id', 'id');
+    }
 
     // Note: privacy and join_privacy accessors removed since columns don't exist
 
@@ -57,14 +60,12 @@ class Forum extends Model
 
     public function getTopicsCountAttribute(): int
     {
-        // Simplified since Wo_ForumTopics table doesn't exist
-        return 0;
+        return $this->topics()->where('posted', '>', 0)->count();
     }
 
     public function getMembersCountAttribute(): int
     {
-        // Simplified since Wo_ForumMembers table doesn't exist
-        return 0;
+        return $this->members()->count();
     }
 
     public function getIsJoinedAttribute($userId = null): bool
