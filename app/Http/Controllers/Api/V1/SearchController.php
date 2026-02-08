@@ -302,9 +302,18 @@ class SearchController extends Controller
             }
 
             if ($country !== '' && strtolower($country) !== 'all') {
-                // Try to match by country text column if present; otherwise ignore
-                if (Schema::hasColumn('Wo_Users', 'country')) {
-                    $usersQuery->where('country', $country);
+                // Convert country name to country_id if needed
+                $countryId = $this->getCountryId($country);
+                
+                if ($countryId !== null) {
+                    // Filter by country_id (primary method)
+                    if (Schema::hasColumn('Wo_Users', 'country_id')) {
+                        $usersQuery->where('country_id', $countryId);
+                    }
+                    // Fallback: try country text column if country_id doesn't exist
+                    elseif (Schema::hasColumn('Wo_Users', 'country')) {
+                        $usersQuery->where('country', $country);
+                    }
                 }
             }
 
@@ -498,8 +507,18 @@ class SearchController extends Controller
         }
 
         if (!empty($country) && $country !== 'all') {
-            if (Schema::hasColumn('Wo_Users', 'country')) {
-                $query->where('country', $country);
+            // Convert country name to country_id if needed
+            $countryId = $this->getCountryId($country);
+            
+            if ($countryId !== null) {
+                // Filter by country_id (primary method)
+                if (Schema::hasColumn('Wo_Users', 'country_id')) {
+                    $query->where('country_id', $countryId);
+                }
+                // Fallback: try country text column if country_id doesn't exist
+                elseif (Schema::hasColumn('Wo_Users', 'country')) {
+                    $query->where('country', $country);
+                }
             }
         }
 
@@ -833,6 +852,38 @@ class SearchController extends Controller
         
         // Fallback to username
         return $user->username ?? 'Unknown User';
+    }
+
+    /**
+     * Get country ID from country name or ID
+     * 
+     * @param string $country Country name (e.g., "Canada") or country ID (e.g., "2")
+     * @return int|null Country ID or null if not found
+     */
+    private function getCountryId(string $country): ?int
+    {
+        // If country is already a numeric ID, return it
+        if (is_numeric($country)) {
+            return (int) $country;
+        }
+
+        // Get countries array from CountriesController
+        $countriesController = new \App\Http\Controllers\Api\V1\CountriesController();
+        $reflection = new \ReflectionClass($countriesController);
+        $method = $reflection->getMethod('getCountriesArray');
+        $method->setAccessible(true);
+        $countries = $method->invoke($countriesController);
+
+        // Search for country name (case-insensitive)
+        $countryLower = strtolower(trim($country));
+        foreach ($countries as $id => $name) {
+            if (strtolower($name) === $countryLower) {
+                return (int) $id;
+            }
+        }
+
+        // If not found, return null
+        return null;
     }
 }
 
