@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Models\Post;
+use App\Models\Comment;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
@@ -173,6 +175,46 @@ class AlbumController extends BaseController
             ];
         })->toArray();
 
+        // Get comments for the album post
+        $comments = Comment::with('user')
+            ->where('post_id', $album->post_id)
+            ->orderBy('time', 'desc')
+            ->limit(20) // Get latest 20 comments
+            ->get();
+
+        // Format comments
+        $formattedComments = $comments->map(function($comment) {
+            $user = $comment->user;
+            
+            // Get replies count
+            $repliesCount = 0;
+            if (DB::getSchemaBuilder()->hasTable('Wo_CommentReplies')) {
+                $repliesCount = DB::table('Wo_CommentReplies')
+                    ->where('comment_id', $comment->id)
+                    ->count();
+            }
+
+            return [
+                'id' => $comment->id,
+                'post_id' => $comment->post_id,
+                'text' => $comment->text ?? '',
+                'c_file' => $comment->c_file ? asset('storage/' . $comment->c_file) : null,
+                'record' => $comment->record ? asset('storage/' . $comment->record) : null,
+                'replies_count' => $repliesCount,
+                'author' => [
+                    'user_id' => $user->user_id ?? $comment->user_id,
+                    'username' => $user->username ?? 'Unknown',
+                    'name' => $user->name ?? $user->username ?? 'Unknown',
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                ],
+                'created_at' => $comment->time ? date('c', $comment->time) : null,
+                'created_at_human' => $comment->time ? $this->getHumanTime($comment->time) : null,
+            ];
+        })->toArray();
+
+        // Get total comments count
+        $commentsCount = Comment::where('post_id', $album->post_id)->count();
+
         return response()->json([
             'ok' => true,
             'data' => [
@@ -190,8 +232,25 @@ class AlbumController extends BaseController
                     'name' => optional($album->user)->name ?? optional($album->user)->username ?? 'Unknown',
                     'avatar_url' => optional($album->user)->avatar_url,
                 ],
+                'comments_count' => $commentsCount,
+                'comments' => $formattedComments,
             ],
         ]);
+    }
+
+    /**
+     * Get human readable time
+     */
+    private function getHumanTime(int $timestamp): string
+    {
+        $time = time() - $timestamp;
+        
+        if ($time < 60) return 'Just now';
+        if ($time < 3600) return floor($time / 60) . 'm';
+        if ($time < 86400) return floor($time / 3600) . 'h';
+        if ($time < 2592000) return floor($time / 86400) . 'd';
+        if ($time < 31536000) return floor($time / 2592000) . 'mo';
+        return floor($time / 31536000) . 'y';
     }
 }
 
