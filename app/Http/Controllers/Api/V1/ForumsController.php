@@ -254,6 +254,8 @@ class ForumsController extends BaseController
     {
         $perPage = (int) ($request->query('per_page', 12));
         $perPage = max(1, min($perPage, 50));
+        $page = (int) ($request->query('page', 1));
+        $page = max(1, $page);
 
         $term = $request->query('q', $request->query('term'));
         if (empty($term)) {
@@ -268,7 +270,6 @@ class ForumsController extends BaseController
                   ->orWhere('description', 'like', $like);
             })
             ->orderByDesc('id')
-            ->limit(10)
             ->get()
             ->map(function (Forum $forum) {
                 return [
@@ -276,32 +277,69 @@ class ForumsController extends BaseController
                     'name' => $forum->name,
                     'description' => $forum->description,
                     'type' => 'forum',
-                    'created_at' => null, // time column doesn't exist
+                    'created_at' => null,
+                    'sort_timestamp' => $forum->id, // Use ID as fallback for sorting
                 ];
             });
 
-        // Note: Wo_ForumTopics table doesn't exist
-        // Return empty topics data
-        $topics = collect([]);
+        // Search topics (threads) in Wo_Forum_Threads table
+        $topics = ForumTopic::where(function ($q) use ($like) {
+                $q->where('headline', 'like', $like)
+                  ->orWhere('post', 'like', $like);
+            })
+            ->where('posted', '>', 0) // Only active threads (posted > 0)
+            ->orderByDesc('posted')
+            ->get()
+            ->map(function (ForumTopic $topic) {
+                return [
+                    'id' => $topic->id,
+                    'name' => $topic->headline,
+                    'description' => mb_substr($topic->post, 0, 200), // Truncate description
+                    'type' => 'topic',
+                    'forum_id' => $topic->forum,
+                    'created_at' => $topic->posted,
+                    'sort_timestamp' => is_numeric($topic->posted) ? (int) $topic->posted : 0,
+                ];
+            });
 
-        // Note: Wo_ForumReplies table doesn't exist
-        // Return empty replies data
-        $replies = collect([]);
+        // Search replies in Wo_ForumThreadReplies table
+        $replies = ForumReply::where('post', 'like', $like)
+            ->where('active', '1') // Only active replies
+            ->orderByDesc('posted_time')
+            ->get()
+            ->map(function (ForumReply $reply) {
+                return [
+                    'id' => $reply->id,
+                    'name' => 'Reply', // Replies don't have a title
+                    'description' => mb_substr($reply->post, 0, 200), // Truncate description
+                    'type' => 'reply',
+                    'thread_id' => $reply->thread_id,
+                    'created_at' => $reply->posted_time,
+                    'sort_timestamp' => is_numeric($reply->posted_time) ? (int) $reply->posted_time : 0,
+                ];
+            });
 
+        // Merge all results and sort by timestamp (newest first)
         $allResults = collect()
             ->merge($forums)
             ->merge($topics)
             ->merge($replies)
-            ->sortByDesc('created_at')
-            ->take($perPage);
+            ->sortByDesc('sort_timestamp')
+            ->values();
+
+        // Calculate pagination
+        $total = $allResults->count();
+        $lastPage = (int) ceil($total / $perPage);
+        $offset = ($page - 1) * $perPage;
+        $paginatedResults = $allResults->slice($offset, $perPage)->values();
 
         return response()->json([
-            'data' => $allResults,
+            'data' => $paginatedResults,
             'meta' => [
-                'current_page' => 1,
+                'current_page' => $page,
                 'per_page' => $perPage,
-                'total' => $allResults->count(),
-                'last_page' => 1,
+                'total' => $total,
+                'last_page' => $lastPage,
                 'search_term' => $term,
             ],
         ]);
