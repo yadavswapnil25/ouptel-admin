@@ -57,6 +57,7 @@ use App\Http\Controllers\Api\V1\HashtagController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
+Route::get('/albums/{id}', [AlbumController::class, 'show']); // Get single album by ID
 Route::post('/create-album', [AlbumController::class, 'store']);
 
 // Authentication routes

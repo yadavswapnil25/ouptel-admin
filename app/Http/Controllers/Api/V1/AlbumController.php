@@ -143,6 +143,56 @@ class AlbumController extends BaseController
             ],
         ]);
     }
+
+    public function show(Request $request, $id): JsonResponse
+    {
+        // Find the album (stored as Post with album_name)
+        $album = Post::where('id', $id)
+            ->whereNotNull('album_name')
+            ->where('album_name', '!=', '')
+            ->where('multi_image_post', 1)
+            ->where('active', 1)
+            ->first();
+
+        if (!$album) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Album not found',
+            ], 404);
+        }
+
+        // Get album images from AlbumMedia table
+        $albumImages = \App\Models\AlbumMedia::where('post_id', $album->id)
+            ->orderBy('id')
+            ->get();
+
+        $imageUrls = $albumImages->map(function($albumImage) {
+            return [
+                'id' => $albumImage->id,
+                'image_url' => asset('storage/' . $albumImage->image),
+            ];
+        })->toArray();
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'id' => $album->id,
+                'post_id' => $album->post_id,
+                'album_name' => $album->album_name,
+                'description' => $album->postText ?? '',
+                'cover_image' => $album->post_image_url,
+                'images_count' => $albumImages->count(),
+                'images' => $imageUrls,
+                'created_at' => $album->time ? \Carbon\Carbon::createFromTimestamp($album->time)->toIso8601String() : null,
+                'user' => [
+                    'user_id' => optional($album->user)->user_id,
+                    'username' => optional($album->user)->username ?? 'Unknown',
+                    'name' => optional($album->user)->name ?? optional($album->user)->username ?? 'Unknown',
+                    'avatar_url' => optional($album->user)->avatar_url,
+                ],
+            ],
+        ]);
+    }
 }
 
 
