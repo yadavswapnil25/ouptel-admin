@@ -10,6 +10,47 @@ use Illuminate\Support\Facades\DB;
 
 class EventsController extends BaseController
 {
+    /**
+     * Format time with AM/PM
+     * Handles TIME type from MySQL database (stored as H:i format)
+     */
+    private function formatTimeWithAmPm($time): string
+    {
+        if (empty($time)) {
+            return '';
+        }
+        
+        // Handle Carbon instance
+        if ($time instanceof \Carbon\Carbon) {
+            return $time->format('h:i A');
+        }
+        
+        // Handle string time format (H:i or H:i:s from MySQL TIME type)
+        if (is_string($time)) {
+            try {
+                // Try H:i format first (most common for TIME type)
+                $carbonTime = \Carbon\Carbon::createFromFormat('H:i:s', $time);
+                return $carbonTime->format('h:i A');
+            } catch (\Exception $e) {
+                try {
+                    // Try H:i format (without seconds)
+                    $carbonTime = \Carbon\Carbon::createFromFormat('H:i', $time);
+                    return $carbonTime->format('h:i A');
+                } catch (\Exception $e2) {
+                    try {
+                        // Try parsing as general time
+                        $carbonTime = \Carbon\Carbon::parse($time);
+                        return $carbonTime->format('h:i A');
+                    } catch (\Exception $e3) {
+                        return $time; // Return original if all parsing fails
+                    }
+                }
+            }
+        }
+        
+        return (string) $time;
+    }
+
     private function mapEvent(Event $event): array
     {
         // Determine if cover field contains an image path or text
@@ -23,10 +64,10 @@ class EventsController extends BaseController
             'name' => $event->name,
             'location' => $event->location,
             'description' => $event->description_short,
-            'start_date' => $event->start_date?->format('Y-m-d'),
-            'start_time' => $event->start_time?->format('H:i'),
-            'end_date' => $event->end_date?->format('Y-m-d'),
-            'end_time' => $event->end_time?->format('H:i'),
+            'start_date' => $event->start_date?->format('d-m-Y'), // Format: DD-MM-YYYY (e.g., 14-02-2026)
+            'start_time' => $event->start_time ? $this->formatTimeWithAmPm($event->start_time) : null, // Format: hh:mm AM/PM
+            'end_date' => $event->end_date?->format('d-m-Y'), // Format: DD-MM-YYYY
+            'end_time' => $event->end_time ? $this->formatTimeWithAmPm($event->end_time) : null, // Format: hh:mm AM/PM
             'cover_url' => $event->cover_url,
             'image_url' => $isImagePath ? asset('storage/' . $event->cover) : null,
             'cover_image_url' => null, // Since we store only one image in cover field
@@ -154,10 +195,10 @@ class EventsController extends BaseController
                 'name' => $event->name,
                 'description' => $event->description,
                 'location' => $event->location,
-                'start_date' => $event->start_date?->format('Y-m-d'),
-                'start_time' => $event->start_time?->format('H:i'),
-                'end_date' => $event->end_date?->format('Y-m-d'),
-                'end_time' => $event->end_time?->format('H:i'),
+                'start_date' => $event->start_date?->format('d-m-Y'), // Format: DD-MM-YYYY
+                'start_time' => $event->start_time ? $this->formatTimeWithAmPm($event->start_time) : null, // Format: hh:mm AM/PM
+                'end_date' => $event->end_date?->format('d-m-Y'), // Format: DD-MM-YYYY
+                'end_time' => $event->end_time ? $this->formatTimeWithAmPm($event->end_time) : null, // Format: hh:mm AM/PM
                 'image_url' => $imagePath ? asset('storage/' . $imagePath) : null,
                 'cover_image_url' => $coverImagePath ? asset('storage/' . $coverImagePath) : null,
                 'cover_url' => $event->cover_url,
