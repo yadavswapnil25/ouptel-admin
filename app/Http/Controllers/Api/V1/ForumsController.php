@@ -262,6 +262,14 @@ class ForumsController extends BaseController
             return response()->json(['ok' => false, 'message' => 'Search term is required'], 400);
         }
 
+        // Resolve user via token when needed (for is_joined, is_owner flags)
+        $authHeader = $request->header('Authorization');
+        $tokenUserId = null;
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
         $like = '%' . str_replace('%', '\\%', $term) . '%';
 
         // Search forums
@@ -271,13 +279,25 @@ class ForumsController extends BaseController
             })
             ->orderByDesc('id')
             ->get()
-            ->map(function (Forum $forum) {
+            ->map(function (Forum $forum) use ($tokenUserId) {
                 return [
                     'id' => $forum->id,
                     'name' => $forum->name,
                     'description' => $forum->description,
+                    'category' => null, // Column doesn't exist
+                    'privacy' => 'public', // Default value since column doesn't exist
+                    'join_privacy' => 'public', // Default value since column doesn't exist
+                    'topics_count' => $forum->topics_count,
+                    'members_count' => $forum->members_count,
+                    'is_joined' => false, // Simplified since user_id doesn't exist
+                    'is_owner' => false, // Simplified since user_id doesn't exist
+                    'created_at' => null, // time column doesn't exist
+                    'owner' => [
+                        'user_id' => null,
+                        'username' => 'Unknown',
+                        'avatar_url' => null,
+                    ],
                     'type' => 'forum',
-                    'created_at' => null,
                     'sort_timestamp' => $forum->id, // Use ID as fallback for sorting
                 ];
             });
