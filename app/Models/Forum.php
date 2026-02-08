@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Schema;
 
 class Forum extends Model
 {
@@ -49,6 +50,7 @@ class Forum extends Model
     }
 
     // Relationship to forum members
+    // Note: Wo_ForumMembers table might not exist
     public function members(): HasMany
     {
         return $this->hasMany(ForumMember::class, 'forum_id', 'id');
@@ -60,12 +62,32 @@ class Forum extends Model
 
     public function getTopicsCountAttribute(): int
     {
-        return $this->topics()->where('posted', '>', 0)->count();
+        // Check if Wo_Forum_Threads table exists before querying
+        if (!Schema::hasTable('Wo_Forum_Threads')) {
+            return 0;
+        }
+        
+        try {
+            return $this->topics()->where('posted', '>', 0)->count();
+        } catch (\Exception $e) {
+            // If table doesn't exist or query fails, return 0
+            return 0;
+        }
     }
 
     public function getMembersCountAttribute(): int
     {
-        return $this->members()->count();
+        // Check if Wo_ForumMembers table exists before querying
+        if (!Schema::hasTable('Wo_ForumMembers')) {
+            return 0;
+        }
+        
+        try {
+            return $this->members()->count();
+        } catch (\Exception $e) {
+            // If table doesn't exist or query fails, return 0
+            return 0;
+        }
     }
 
     public function getIsJoinedAttribute($userId = null): bool
