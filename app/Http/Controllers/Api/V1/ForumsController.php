@@ -303,15 +303,20 @@ class ForumsController extends BaseController
             });
 
         // Search replies in Wo_ForumThreadReplies table
-        $replies = ForumReply::where('post', 'like', $like)
-            ->where('active', '1') // Only active replies
+        // Note: Actual columns are post_text (not post) and there's no active column
+        $replies = DB::table('Wo_ForumThreadReplies')
+            ->where(function ($q) use ($like) {
+                $q->where('post_subject', 'like', $like)
+                  ->orWhere('post_text', 'like', $like);
+            })
+            ->where('posted_time', '>', 0) // Only active replies (posted_time > 0)
             ->orderByDesc('posted_time')
             ->get()
-            ->map(function (ForumReply $reply) {
+            ->map(function ($reply) {
                 return [
                     'id' => $reply->id,
-                    'name' => 'Reply', // Replies don't have a title
-                    'description' => mb_substr($reply->post, 0, 200), // Truncate description
+                    'name' => $reply->post_subject ?: 'Reply', // Use post_subject if available
+                    'description' => mb_substr($reply->post_text ?? '', 0, 200), // Truncate description
                     'type' => 'reply',
                     'thread_id' => $reply->thread_id,
                     'created_at' => $reply->posted_time,
