@@ -134,6 +134,8 @@ Route::get('/forums/meta', [ForumsController::class, 'meta']);
 Route::get('/forums/search', [ForumsController::class, 'search']);
 Route::get('/my-threads', [ForumsController::class, 'myThreads']);
 Route::get('/my-messages', [ForumsController::class, 'myMessages']);
+// All forum members across all forums (no forumId required)
+Route::get('/forums/members', [ForumMemberController::class, 'all']);
 // Specific forum routes (must come after specific routes like /search)
 Route::get('/forums/{id}', [ForumsController::class, 'show']);
 Route::get('/forums/{id}/topics', [ForumsController::class, 'topics']);
