@@ -204,20 +204,82 @@ class ForumMemberController extends Controller
 
         $allUserIds = array_unique(array_merge($topicUserIds, $replyUserIds));
 
+        /**
+         * If there are no forum topics/replies at all (no forums in use yet),
+         * fall back to returning ALL active users as \"forum members\".
+         * This matches your requirement: \"I don't have forum, get all forum members\".
+         */
         if (empty($allUserIds)) {
+            $query = User::where('active', '1');
+
+            // Filter by offset (pagination by user_id)
+            if ($offset > 0) {
+                $query->where('user_id', '<', $offset);
+            }
+
+            // Filter by first letter of username
+            if ($char) {
+                $char = substr($char, 0, 1);
+                $query->where('username', 'like', $char . '%');
+            }
+
+            // Search by username / first / last name
+            if ($search) {
+                $like = '%' . str_replace('%', '\\%', $search) . '%';
+                $query->where(function ($q) use ($like) {
+                    $q->where('username', 'like', $like)
+                      ->orWhere('first_name', 'like', $like)
+                      ->orWhere('last_name', 'like', $like);
+                });
+            }
+
+            $users = $query->orderByDesc('user_id')
+                ->limit($perPage)
+                ->get();
+
+            $data = $users->map(function (User $user) {
+                return [
+                    'user_id' => $user->user_id,
+                    'username' => $user->username ?? null,
+                    'first_name' => $user->first_name ?? null,
+                    'last_name' => $user->last_name ?? null,
+                    'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+                    'avatar' => $user->avatar ?? null,
+                    'avatar_url' => $user->avatar_url ?? null,
+                    'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                    'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+                    'forum_posts' => 0, // No forums in use yet, so 0 posts
+                ];
+            });
+
+            $totalQuery = User::where('active', '1');
+            if ($char) {
+                $char = substr($char, 0, 1);
+                $totalQuery->where('username', 'like', $char . '%');
+            }
+            if ($search) {
+                $like = '%' . str_replace('%', '\\%', $search) . '%';
+                $totalQuery->where(function ($q) use ($like) {
+                    $q->where('username', 'like', $like)
+                      ->orWhere('first_name', 'like', $like)
+                      ->orWhere('last_name', 'like', $like);
+                });
+            }
+            $total = $totalQuery->count();
+
             return response()->json([
                 'ok' => true,
-                'data' => [],
+                'data' => $data,
                 'meta' => [
-                    'current_page' => 1,
+                    'current_page' => $offset > 0 ? floor($offset / $perPage) + 1 : 1,
                     'per_page' => $perPage,
-                    'total' => 0,
-                    'last_page' => 1,
+                    'total' => $total,
+                    'last_page' => ceil($total / $perPage),
                 ],
             ]);
         }
 
-        // Build query for users
+        // Build query for users (only those who posted in forums)
         $query = User::whereIn('user_id', $allUserIds)
             ->where('active', '1');
 
