@@ -165,6 +165,146 @@ class ForumMemberController extends Controller
     }
 
     /**
+     * Get all forum members across all forums
+     * GET /forums/members
+     *
+     * This endpoint aggregates users who have posted in ANY forum
+     * (topics or replies), matching the behavior of showing all
+     * forum members without passing a specific forum ID.
+     *
+     * Query params:
+     * - per_page: int (1..50, default 12)
+     * - offset: int (user_id offset for pagination, default 0)
+     * - search: string (search by username / first / last name)
+     * - char: string (single character to filter by first letter of username)
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function all(Request $request): JsonResponse
+    {
+        $perPage = (int) ($request->query('per_page', 12));
+        $perPage = max(1, min($perPage, 50));
+        $offset = (int) ($request->query('offset', 0));
+        $search = $request->query('search'); // Search by username
+        $char = $request->query('char'); // Filter by first letter of username
+
+        // Get distinct user_ids who have posted in ANY forum (topics or replies)
+        // Old WoWonder uses 'forum' column for threads (not 'forum_id'), 'user' for thread user, 'poster_id' for replies
+        // Old WoWonder uses 'posted > 0' to filter active threads (not 'active = 1')
+        $topicUserIds = ForumTopic::where('posted', '>', 0) // Old WoWonder uses 'posted > 0' not 'active = 1'
+            ->distinct()
+            ->pluck('user') // Old WoWonder uses 'user' not 'user_id'
+            ->toArray();
+
+        $replyUserIds = ForumReply::where('posted_time', '>', 0) // Old WoWonder uses 'posted_time > 0' not 'active = 1'
+            ->distinct()
+            ->pluck('poster_id') // Old WoWonder uses 'poster_id' not 'user_id'
+            ->toArray();
+
+        $allUserIds = array_unique(array_merge($topicUserIds, $replyUserIds));
+
+        if (empty($allUserIds)) {
+            return response()->json([
+                'ok' => true,
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => $perPage,
+                    'total' => 0,
+                    'last_page' => 1,
+                ],
+            ]);
+        }
+
+        // Build query for users
+        $query = User::whereIn('user_id', $allUserIds)
+            ->where('active', '1');
+
+        // Filter by offset (pagination by user_id)
+        if ($offset > 0) {
+            $query->where('user_id', '<', $offset);
+        }
+
+        // Filter by first letter of username
+        if ($char) {
+            $char = substr($char, 0, 1);
+            $query->where('username', 'like', $char . '%');
+        }
+
+        // Search by username / first / last name
+        if ($search) {
+            $like = '%' . str_replace('%', '\\%', $search) . '%';
+            $query->where(function ($q) use ($like) {
+                $q->where('username', 'like', $like)
+                  ->orWhere('first_name', 'like', $like)
+                  ->orWhere('last_name', 'like', $like);
+            });
+        }
+
+        // Get users ordered by user_id DESC (matching old WoWonder behavior)
+        $users = $query->orderByDesc('user_id')
+            ->limit($perPage)
+            ->get();
+
+        // For each user, count their total forum posts (topics + replies) across ALL forums
+        $data = $users->map(function (User $user) {
+            // Count topics and replies in all forums
+            // Old WoWonder uses 'forum' column for threads (not 'forum_id'), 'user' for thread user, 'poster_id' for replies
+            // Old WoWonder uses 'posted > 0' to filter active threads (not 'active = 1')
+            $topicsCount = ForumTopic::where('user', $user->user_id) // Old WoWonder uses 'user' not 'user_id'
+                ->where('posted', '>', 0) // Old WoWonder uses 'posted > 0' not 'active = 1'
+                ->count();
+
+            $repliesCount = ForumReply::where('poster_id', $user->user_id) // Old WoWonder uses 'poster_id' not 'user_id'
+                ->where('posted_time', '>', 0) // Old WoWonder uses 'posted_time > 0' not 'active = 1'
+                ->count();
+
+            $forumPosts = $topicsCount + $repliesCount;
+
+            return [
+                'user_id' => $user->user_id,
+                'username' => $user->username ?? null,
+                'first_name' => $user->first_name ?? null,
+                'last_name' => $user->last_name ?? null,
+                'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')),
+                'avatar' => $user->avatar ?? null,
+                'avatar_url' => $user->avatar_url ?? null,
+                'verified' => isset($user->verified) ? ($user->verified === '1' || $user->verified === 1) : false,
+                'active' => isset($user->active) ? ($user->active === '1' || $user->active === 1) : false,
+                'forum_posts' => $forumPosts, // Total posts (topics + replies) in all forums
+            ];
+        });
+
+        // Calculate total (simplified - get count of unique users)
+        $totalQuery = User::whereIn('user_id', $allUserIds)->where('active', '1');
+        if ($char) {
+            $char = substr($char, 0, 1);
+            $totalQuery->where('username', 'like', $char . '%');
+        }
+        if ($search) {
+            $like = '%' . str_replace('%', '\\%', $search) . '%';
+            $totalQuery->where(function ($q) use ($like) {
+                $q->where('username', 'like', $like)
+                  ->orWhere('first_name', 'like', $like)
+                  ->orWhere('last_name', 'like', $like);
+            });
+        }
+        $total = $totalQuery->count();
+
+        return response()->json([
+            'ok' => true,
+            'data' => $data,
+            'meta' => [
+                'current_page' => $offset > 0 ? floor($offset / $perPage) + 1 : 1,
+                'per_page' => $perPage,
+                'total' => $total,
+                'last_page' => ceil($total / $perPage),
+            ],
+        ]);
+    }
+
+    /**
      * Check if user has posted in forum
      * POST /forums/{forumId}/members (not in old WoWonder - kept for API compatibility)
      * 

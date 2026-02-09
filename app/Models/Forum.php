@@ -64,7 +64,7 @@ class Forum extends Model
     {
         // Check if Wo_Forum_Threads table exists before querying
         if (!Schema::hasTable('Wo_Forum_Threads')) {
-            return 0;
+        return 0;
         }
         
         try {
@@ -79,7 +79,7 @@ class Forum extends Model
     {
         // Check if Wo_ForumMembers table exists before querying
         if (!Schema::hasTable('Wo_ForumMembers')) {
-            return 0;
+        return 0;
         }
         
         try {
