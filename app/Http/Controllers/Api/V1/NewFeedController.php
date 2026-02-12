@@ -418,6 +418,14 @@ class NewFeedController extends Controller
             // Use post_id field (which is used to store reactions) with fallback to id
             $postIdForReactions = $post->post_id ?? $post->id;
             $reactionsCount = $this->getPostReactionsCount($postIdForReactions, $post);
+
+            // Get detailed reaction breakdown and user's reaction (for reaction bar UI)
+            $reactionCounts = $this->getPostReactionCountsDetailed($postIdForReactions);
+            $totalReactionsFromCounts = array_sum($reactionCounts);
+            if ($reactionsCount === 0 && $totalReactionsFromCounts > 0) {
+                $reactionsCount = $totalReactionsFromCounts;
+            }
+            $userReaction = $this->getUserReactionDetailed($postIdForReactions, $userId);
             
             // Get post comments count (try Wo_Comments table first, fallback to post_comments column)
             // Use post_id field (which is used to store comments) with fallback to id
@@ -513,6 +521,8 @@ class NewFeedController extends Controller
                 
                 // Engagement metrics
                 'reactions_count' => $reactionsCount,
+                'reaction_counts' => $reactionCounts,
+                'total_reactions' => $reactionsCount,
                 'comments_count' => $commentsCount,
                 'shares_count' => $post->postShare ?? 0,
                 'views_count' => $post->videoViews ?? 0,
@@ -522,6 +532,8 @@ class NewFeedController extends Controller
                 
                 // User interaction
                 'is_liked' => $this->isPostLiked($post->id, $userId),
+                'user_reaction' => $userReaction,
+                'current_reaction' => $userReaction,
                 'is_saved' => $this->isPostSaved($post->id, $userId),
                 'is_owner' => $post->user_id == $userId,
                 'is_boosted' => (bool) ($post->boosted ?? false),
@@ -797,6 +809,76 @@ class NewFeedController extends Controller
             return (int) ($postLikes ?? 0);
         } catch (\Exception $e) {
             return 0;
+        }
+    }
+
+    /**
+     * Get detailed reaction counts per type (1-6) for a post
+     *
+     * @param int $postId
+     * @return array<int,int>
+     */
+    private function getPostReactionCountsDetailed(int $postId): array
+    {
+        // Default structure for all reaction types
+        $counts = [
+            1 => 0, // Like
+            2 => 0, // Love
+            3 => 0, // Haha
+            4 => 0, // Wow
+            5 => 0, // Sad
+            6 => 0, // Angry
+        ];
+
+        if (!Schema::hasTable('Wo_Reactions')) {
+            return $counts;
+        }
+
+        try {
+            $reactions = DB::table('Wo_Reactions')
+                ->where('post_id', $postId)
+                ->where('comment_id', 0)
+                ->selectRaw('reaction, COUNT(*) as count')
+                ->groupBy('reaction')
+                ->get();
+
+            foreach ($reactions as $reaction) {
+                $type = (int) ($reaction->reaction ?? 0);
+                if (isset($counts[$type])) {
+                    $counts[$type] = (int) $reaction->count;
+                }
+            }
+        } catch (\Exception $e) {
+            // If query fails, return default zero counts
+            return $counts;
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Get the current user's reaction type for a post
+     *
+     * @param int $postId
+     * @param string $userId
+     * @return int|null
+     */
+    private function getUserReactionDetailed(int $postId, string $userId): ?int
+    {
+        if (!Schema::hasTable('Wo_Reactions')) {
+            return null;
+        }
+
+        try {
+            $reaction = DB::table('Wo_Reactions')
+                ->where('post_id', $postId)
+                ->where('user_id', $userId)
+                ->where('comment_id', 0)
+                ->value('reaction');
+
+            return $reaction !== null ? (int) $reaction : null;
+        } catch (\Exception $e) {
+            return null;
         }
     }
 
