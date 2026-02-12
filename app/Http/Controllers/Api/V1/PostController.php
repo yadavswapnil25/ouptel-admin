@@ -1161,109 +1161,150 @@ class PostController extends Controller
      * @return JsonResponse
      */
     public function registerReaction(Request $request, int $postId): JsonResponse
-    {
-        // Auth via Wo_AppsSessions
-        $authHeader = $request->header('Authorization');
-        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
-        }
-        
-        $token = substr($authHeader, 7);
-        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-        if (!$tokenUserId) {
-            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+{
+    // Auth via Wo_AppsSessions
+    $authHeader = $request->header('Authorization');
+    if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+        return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+    }
+    
+    $token = substr($authHeader, 7);
+    $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+    if (!$tokenUserId) {
+        return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+    }
+
+    // Validate request parameters
+    $validator = Validator::make($request->all(), [
+        'reaction' => 'required|integer|in:1,2,3,4,5,6', // 1=Like, 2=Love, 3=Haha, 4=Wow, 5=Sad, 6=Angry
+        'hash' => 'nullable|string', // For compatibility with WoWonder hash system
+    ]);
+
+    if ($validator->fails()) {
+        return response()->json([
+            'ok' => false,
+            'message' => 'Validation failed',
+            'errors' => $validator->errors()
+        ], 422);
+    }
+
+    // Check if post exists
+    $post = Post::where('id', $postId)->orWhere('post_id', $postId)->first();
+    if (!$post) {
+        return response()->json(['ok' => false, 'message' => 'Post not found'], 404);
+    }
+
+    // Check if user can react to this post
+    if (!$this->canViewPost($post, $tokenUserId)) {
+        return response()->json(['ok' => false, 'message' => 'Access denied'], 403);
+    }
+
+    $reactionType = $request->input('reaction');
+
+    try {
+        DB::beginTransaction();
+
+        // Check if user already reacted to this post
+        $existingReaction = PostReaction::where('post_id', $post->post_id)
+            ->where('user_id', $tokenUserId)
+            ->where('comment_id', 0) // Only post reactions, not comment reactions
+            ->first();
+
+        if ($existingReaction) {
+            if ($existingReaction->reaction == $reactionType) {
+                // User is trying to react with the same reaction - remove it
+                $existingReaction->delete();
+                $action = 'removed';
+            } else {
+                // User is changing reaction type
+                $existingReaction->update(['reaction' => $reactionType]);
+                $action = 'updated';
+            }
+        } else {
+            // Create new reaction
+            PostReaction::create([
+                'user_id'    => $tokenUserId,
+                'post_id'    => $post->post_id,
+                'comment_id' => 0,
+                'replay_id'  => 0,
+                'message_id' => 0,
+                'story_id'   => 0,
+                'reaction'   => $reactionType,
+            ]);
+            $action = 'added';
         }
 
-        // Validate request parameters
-        $validator = Validator::make($request->all(), [
-            'reaction' => 'required|integer|in:1,2,3,4,5,6', // 1=Like, 2=Love, 3=Haha, 4=Wow, 5=Sad, 6=Angry
-            'hash' => 'nullable|string', // For compatibility with WoWonder hash system
+        /**
+         * Notification logic (for post owner)
+         * Table: Wo_Notifications
+         * type: 'liked_post' so it is picked up by NotificationsController
+         */
+        // IMPORTANT: adjust owner column if your posts table uses something
+        // else (e.g. $post->publisher_id instead of $post->user_id)
+        $postOwnerId = $post->user_id ?? null;
+
+        if ($postOwnerId && $postOwnerId != $tokenUserId) {
+            if ($action === 'removed') {
+                // Remove existing like notification when user unreacts
+                DB::table('Wo_Notifications')
+                    ->where('recipient_id', $postOwnerId)
+                    ->where('notifier_id', $tokenUserId)
+                    ->where('post_id', $post->post_id)
+                    ->where('type', 'liked_post')
+                    ->delete();
+            } else {
+                // Create or update like notification
+                DB::table('Wo_Notifications')->updateOrInsert(
+                    [
+                        'notifier_id'  => $tokenUserId,
+                        'recipient_id' => $postOwnerId,
+                        'post_id'      => $post->post_id,
+                        'type'         => 'liked_post',
+                    ],
+                    [
+                        'type2'    => $post->postType ?? $post->post_type ?? 'post',
+                        'text'     => $post->postText ?? $post->post_text ?? null,
+                        'url'      => '/post/' . $post->post_id,
+                        'page_id'  => $post->page_id ?? 0,
+                        'group_id' => $post->group_id ?? 0,
+                        'event_id' => 0,
+                        'time'     => time(),
+                        'seen'     => 0,
+                    ]
+                );
+            }
+        }
+
+        // Get updated reaction counts
+        $reactionCounts = $this->getPostReactionCounts($post->post_id);
+
+        DB::commit();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Reaction ' . $action . ' successfully',
+            'data' => [
+                'post_id'         => $post->post_id,
+                'action'          => $action,
+                'reaction_type'   => $reactionType,
+                'reaction_name'   => $this->getReactionName($reactionType),
+                'reaction_icon'   => $this->getReactionIcon($reactionType),
+                'reaction_counts' => $reactionCounts,
+                'total_reactions' => array_sum($reactionCounts),
+                'user_reaction'   => $action === 'removed' ? null : $reactionType,
+            ]
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
-        // Check if post exists
-        $post = Post::where('id', $postId)->orWhere('post_id', $postId)->first();
-        if (!$post) {
-            return response()->json(['ok' => false, 'message' => 'Post not found'], 404);
-        }
-
-        // Check if user can react to this post
-        if (!$this->canViewPost($post, $tokenUserId)) {
-            return response()->json(['ok' => false, 'message' => 'Access denied'], 403);
-        }
-
-        $reactionType = $request->input('reaction');
-
-        try {
-            DB::beginTransaction();
-
-            // Check if user already reacted to this post
-            $existingReaction = PostReaction::where('post_id', $post->post_id)
-                ->where('user_id', $tokenUserId)
-                ->where('comment_id', 0) // Only post reactions, not comment reactions
-                ->first();
-
-            if ($existingReaction) {
-                if ($existingReaction->reaction == $reactionType) {
-                    // User is trying to react with the same reaction - remove it
-                    $existingReaction->delete();
-                    $action = 'removed';
-                } else {
-                    // User is changing reaction type
-                    $existingReaction->update(['reaction' => $reactionType]);
-                    $action = 'updated';
-                }
-            } else {
-                // Create new reaction
-                PostReaction::create([
-                    'user_id' => $tokenUserId,
-                    'post_id' => $post->post_id,
-                    'comment_id' => 0,
-                    'replay_id' => 0,
-                    'message_id' => 0,
-                    'story_id' => 0,
-                    'reaction' => $reactionType,
-                ]);
-                $action = 'added';
-            }
-
-            // Get updated reaction counts
-            $reactionCounts = $this->getPostReactionCounts($post->post_id);
-
-            DB::commit();
-
-            return response()->json([
-                'ok' => true,
-                'message' => 'Reaction ' . $action . ' successfully',
-                'data' => [
-                    'post_id' => $post->post_id,
-                    'action' => $action,
-                    'reaction_type' => $reactionType,
-                    'reaction_name' => $this->getReactionName($reactionType),
-                    'reaction_icon' => $this->getReactionIcon($reactionType),
-                    'reaction_counts' => $reactionCounts,
-                    'total_reactions' => array_sum($reactionCounts),
-                    'user_reaction' => $action === 'removed' ? null : $reactionType,
-                ]
-            ]);
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            
-            return response()->json([
-                'ok' => false,
-                'message' => 'Failed to register reaction',
-                'error' => $e->getMessage()
-            ], 500);
-        }
+    } catch (\Exception $e) {
+        DB::rollBack();
+        
+        return response()->json([
+            'ok' => false,
+            'message' => 'Failed to register reaction',
+            'error' => $e->getMessage()
+        ], 500);
     }
+}
 
     /**
      * Get post reaction counts
