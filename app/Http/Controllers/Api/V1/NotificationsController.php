@@ -57,26 +57,24 @@ class NotificationsController extends Controller
             ], 404);
         }
 
-        // Get notifications (excluding certain types)
+        // Get notifications (exclude only specific system types like Wo_GetNotifications remove_notification)
         $notifications = $this->getUserNotifications($tokenUserId);
-        
-        // Count unread notifications (including follow requests)
-        $notificationTypes = [
-            'requested_to_join_group', 
-            'interested_event', 
-            'going_event', 
-            'invited_event', 
-            'forum_reply', 
+
+        // Types to EXCLUDE from the count (same list used in the old WoWonder API)
+        $excludedTypes = [
+            'requested_to_join_group',
+            'interested_event',
+            'going_event',
+            'invited_event',
+            'forum_reply',
             'admin_notification',
-            'following',           // Someone followed you
-            'follow_request',      // Follow request
-            'accepted_request',    // Follow request accepted
         ];
-        
+
+        // Count unread notifications for all other types (likes, comments, follows, etc.)
         $countNotifications = DB::table('Wo_Notifications')
             ->where('recipient_id', $tokenUserId)
             ->where('seen', 0)
-            ->whereIn('type', $notificationTypes)
+            ->whereNotIn('type', $excludedTypes)
             ->count();
 
         // Count friend requests
@@ -337,22 +335,19 @@ class NotificationsController extends Controller
      */
     private function getUserNotifications(string $userId): array
     {
-        // Get all notification types including follow/friend requests
-        $notificationTypes = [
-            'requested_to_join_group', 
-            'interested_event', 
-            'going_event', 
-            'invited_event', 
-            'forum_reply', 
+        // Types to EXCLUDE from results (match Wo_GetNotifications remove_notification list)
+        $excludedTypes = [
+            'requested_to_join_group',
+            'interested_event',
+            'going_event',
+            'invited_event',
+            'forum_reply',
             'admin_notification',
-            'following',           // Someone followed you
-            'follow_request',      // Follow request (if separate type exists)
-            'accepted_request',    // Follow request accepted
         ];
-        
+
         $notifications = DB::table('Wo_Notifications')
             ->where('recipient_id', $userId)
-            ->whereIn('type', $notificationTypes)
+            ->whereNotIn('type', $excludedTypes)
             ->orderByDesc('time')
             ->limit(50)
             ->get();
