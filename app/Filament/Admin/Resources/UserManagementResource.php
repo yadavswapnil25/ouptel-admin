@@ -87,12 +87,22 @@ class UserManagementResource extends Resource
                             ->required(),
 
                         Select::make('admin')
+                            ->label('Account Type')
                             ->options([
                                 '0' => 'User',
-                                '1' => 'Admin',
+                                '1' => 'Super Admin',
                                 '2' => 'Moderator',
                             ])
+                            ->helperText('Legacy account type. RBAC roles are assigned below.')
                             ->required(),
+
+                        Select::make('adminRoles')
+                            ->label('Admin Roles')
+                            ->relationship('adminRoles', 'name')
+                            ->multiple()
+                            ->searchable()
+                            ->preload()
+                            ->helperText('Assign one or more panel roles (e.g. Developer, Editor, Moderator).'),
 
                         Toggle::make('verified')
                             ->label('Verified User')
