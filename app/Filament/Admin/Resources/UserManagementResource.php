@@ -63,6 +63,15 @@ class UserManagementResource extends Resource
                             ->maxLength(255)
                             ->unique(ignoreRecord: true),
 
+                        TextInput::make('password')
+                            ->password()
+                            ->revealable()
+                            ->required(fn (string $operation): bool => $operation === 'create')
+                            ->dehydrated(fn ($state): bool => filled($state))
+                            ->minLength(6)
+                            ->maxLength(255)
+                            ->helperText('Set a password for new users. Leave blank while editing to keep current password.'),
+
                         TextInput::make('first_name')
                             ->maxLength(60),
 
