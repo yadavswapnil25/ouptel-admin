@@ -27,6 +27,7 @@ use Filament\Tables\Actions\DeleteAction;
 use Filament\Tables\Actions\EditAction;
 use Filament\Tables\Actions\ViewAction;
 use Filament\Notifications\Notification;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class PageResource extends Resource
 {

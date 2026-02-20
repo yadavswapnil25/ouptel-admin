@@ -24,6 +24,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\Section;
 use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class GroupFieldResource extends Resource
 {

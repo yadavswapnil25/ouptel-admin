@@ -25,6 +25,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Grid;
 use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class ReviewResource extends Resource
 {

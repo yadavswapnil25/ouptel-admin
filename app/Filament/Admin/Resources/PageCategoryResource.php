@@ -20,6 +20,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
 use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class PageCategoryResource extends Resource
 {

@@ -38,6 +38,7 @@ use Filament\Infolists\Components\Grid as InfolistGrid;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class VerificationRequestsResource extends Resource
 {

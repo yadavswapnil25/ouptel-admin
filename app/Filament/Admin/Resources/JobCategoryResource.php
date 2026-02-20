@@ -20,6 +20,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Section;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Schema;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class JobCategoryResource extends Resource
 {

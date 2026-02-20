@@ -23,6 +23,7 @@ use Filament\Forms\Components\Section;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class PostReactionResource extends Resource
 {

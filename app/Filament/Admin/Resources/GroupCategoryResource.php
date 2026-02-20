@@ -19,6 +19,7 @@ use Filament\Tables\Actions\DeleteBulkAction;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Section;
 use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class GroupCategoryResource extends Resource
 {

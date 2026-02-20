@@ -25,6 +25,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class OnlineUsersResource extends Resource
 {

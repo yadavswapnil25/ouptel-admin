@@ -13,6 +13,7 @@ use Filament\Tables\Table;
 use Filament\Tables\Filters\Filter;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class GroupResource extends Resource
 {

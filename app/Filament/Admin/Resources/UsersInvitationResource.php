@@ -20,6 +20,7 @@ use Filament\Tables\Actions\DeleteBulkAction;
 use Filament\Tables\Actions\CreateAction;
 use Filament\Actions\Action;
 use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 
 class UsersInvitationResource extends Resource
 {
