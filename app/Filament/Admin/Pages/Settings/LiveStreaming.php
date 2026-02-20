@@ -11,9 +11,12 @@ use Filament\Pages\Page;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Models\Setting;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class LiveStreaming extends Page
 {
+    use HasPageAccess;
+
     protected static ?string $navigationIcon = 'heroicon-o-video-camera';
     protected static ?string $navigationLabel = 'Setup Live Streaming';
     protected static ?string $title = 'Live Streaming Configuration';
@@ -124,7 +127,6 @@ class LiveStreaming extends Page
         }
     }
 }
-
 
 
 

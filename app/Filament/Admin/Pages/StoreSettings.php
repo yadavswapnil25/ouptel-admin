@@ -16,9 +16,12 @@ use Filament\Forms\Concerns\InteractsWithForms;
 use Filament\Forms\Contracts\HasForms;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class StoreSettings extends Page implements HasForms
 {
+    use HasPageAccess;
+
     use InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-cog-6-tooth';

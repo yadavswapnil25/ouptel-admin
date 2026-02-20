@@ -11,9 +11,12 @@ use Filament\Pages\Page;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Models\Setting;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class ManageColoredPosts extends Page
 {
+    use HasPageAccess;
+
     protected static ?string $navigationIcon = 'heroicon-o-paint-brush';
     protected static ?string $navigationLabel = 'Manage Colored Posts';
     protected static ?string $title = 'Manage Colored Posts';
@@ -87,7 +90,6 @@ class ManageColoredPosts extends Page
         }
     }
 }
-
 
 
 

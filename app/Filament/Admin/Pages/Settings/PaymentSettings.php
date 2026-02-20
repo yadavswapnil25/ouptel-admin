@@ -12,9 +12,12 @@ use Filament\Pages\Page;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Models\Setting;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class PaymentSettings extends Page
 {
+    use HasPageAccess;
+
     protected static ?string $navigationIcon = 'heroicon-o-credit-card';
     protected static ?string $navigationLabel = 'Payment Settings';
     protected static ?string $title = 'Payment Settings';

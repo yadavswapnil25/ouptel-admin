@@ -12,9 +12,12 @@ use Filament\Pages\Page;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Models\Setting;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class PostSettings extends Page
 {
+    use HasPageAccess;
+
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
     protected static ?string $navigationLabel = 'Post Settings';
     protected static ?string $title = 'Post Settings';

@@ -12,9 +12,12 @@ use Filament\Pages\Page;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Models\Setting;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class NodejsSettings extends Page
 {
+    use HasPageAccess;
+
     protected static ?string $navigationIcon = 'heroicon-o-server';
     protected static ?string $navigationLabel = 'NodeJS Settings';
     protected static ?string $title = 'NodeJS Settings';

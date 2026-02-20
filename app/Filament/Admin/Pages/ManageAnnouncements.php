@@ -9,9 +9,12 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class ManageAnnouncements extends Page
 {
+    use HasPageAccess;
+
     protected static ?string $navigationIcon = 'heroicon-o-megaphone';
 
     protected static ?string $navigationLabel = 'Manage Announcements';
@@ -246,4 +249,3 @@ class ManageAnnouncements extends Page
         return floor($time / 31536000) . ' years ago';
     }
 }
-

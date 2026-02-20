@@ -18,9 +18,12 @@ use Filament\Tables\Filters\TernaryFilter;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class ManageReports extends Page implements HasTable
 {
+    use HasPageAccess;
+
     use InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-flag';
@@ -244,4 +247,3 @@ class ManageReports extends Page implements HasTable
         $this->dispatch('$refresh');
     }
 }
-

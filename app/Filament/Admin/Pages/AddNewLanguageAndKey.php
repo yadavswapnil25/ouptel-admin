@@ -17,9 +17,12 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class AddNewLanguageAndKey extends Page implements HasForms
 {
+    use HasPageAccess;
+
     use InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-plus-circle';
@@ -331,5 +334,4 @@ class AddNewLanguageAndKey extends Page implements HasForms
         }
     }
 }
-
 

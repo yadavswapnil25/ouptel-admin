@@ -14,9 +14,12 @@ use Filament\Forms\Contracts\HasForms;
 use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class ManageEmails extends Page implements HasForms
 {
+    use HasPageAccess;
+
     use InteractsWithForms;
 
     protected static ?string $navigationIcon = 'heroicon-o-envelope';

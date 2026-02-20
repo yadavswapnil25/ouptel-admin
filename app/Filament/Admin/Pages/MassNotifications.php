@@ -11,9 +11,12 @@ use Filament\Notifications\Notification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Auth;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class MassNotifications extends Page
 {
+    use HasPageAccess;
+
     protected static ?string $navigationIcon = 'heroicon-o-bell';
 
     protected static ?string $navigationLabel = 'Mass Notifications';
@@ -215,4 +218,3 @@ class MassNotifications extends Page
     }
 
 }
-

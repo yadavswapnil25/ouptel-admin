@@ -13,9 +13,12 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Actions\Action as TableAction;
 use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class ManageTermsPages extends Page implements HasTable
 {
+    use HasPageAccess;
+
     use InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';

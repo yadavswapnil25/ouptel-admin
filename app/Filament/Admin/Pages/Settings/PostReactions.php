@@ -11,9 +11,12 @@ use Filament\Pages\Page;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Models\Setting;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class PostReactions extends Page
 {
+    use HasPageAccess;
+
     protected static ?string $navigationIcon = 'heroicon-o-heart';
     protected static ?string $navigationLabel = 'Post Reactions';
     protected static ?string $title = 'Post Reactions Settings';
@@ -87,7 +90,6 @@ class PostReactions extends Page
         }
     }
 }
-
 
 
 

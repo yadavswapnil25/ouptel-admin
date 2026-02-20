@@ -9,9 +9,12 @@ use Filament\Tables\Contracts\HasTable;
 use Filament\Tables\Columns\TextColumn;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Builder;
+use App\Filament\Admin\Concerns\HasPageAccess;
 
 class ManageGenders extends Page implements HasTable
 {
+    use HasPageAccess;
+
     use InteractsWithTable;
 
     protected static ?string $navigationIcon = 'heroicon-o-users';
