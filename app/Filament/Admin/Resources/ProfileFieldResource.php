@@ -27,6 +27,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ProfileFieldResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-profile-fields';
     protected static ?string $model = ProfileField::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-cog-6-tooth';

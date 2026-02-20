@@ -22,6 +22,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class GroupCategoryResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-group-categories';
     protected static ?string $model = GroupCategory::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';

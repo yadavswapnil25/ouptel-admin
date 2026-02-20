@@ -26,6 +26,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class PostReactionResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-post-reactions';
     protected static ?string $model = PostReaction::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-heart';

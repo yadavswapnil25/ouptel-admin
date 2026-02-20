@@ -23,6 +23,9 @@ use Illuminate\Support\Facades\Schema;
 
 class JobCategoryResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-job-categories';
     protected static ?string $model = JobCategory::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';

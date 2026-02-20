@@ -27,6 +27,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class PageFieldResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-page-fields';
     protected static ?string $model = PageField::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-cog-6-tooth';

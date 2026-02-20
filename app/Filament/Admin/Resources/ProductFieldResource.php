@@ -27,6 +27,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ProductFieldResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-product-fields';
     protected static ?string $model = ProductField::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-cog-6-tooth';

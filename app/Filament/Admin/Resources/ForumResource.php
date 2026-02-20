@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\ForumResource\Pages;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 use App\Models\Forum;
 use App\Models\ForumSection;
 use Filament\Forms;
@@ -14,6 +15,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ForumResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-forums';
     protected static ?string $model = Forum::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-chat-bubble-left-right';

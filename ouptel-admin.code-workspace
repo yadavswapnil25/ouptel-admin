@@ -8,6 +8,9 @@
 		},
 		{
 			"path": "../Ouptel Code Old/api"
+		},
+		{
+			"path": "../ouptel-web"
 		}
 	],
 	"settings": {}

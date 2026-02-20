@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\BlogCategoryResource\Pages;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 use App\Models\BlogCategory;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -22,6 +23,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class BlogCategoryResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-blog-categories';
     protected static ?string $model = BlogCategory::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';

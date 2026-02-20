@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\ForumSectionResource\Pages;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 use App\Models\ForumSection;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -13,6 +14,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ForumSectionResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-forum-sections';
     protected static ?string $model = ForumSection::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-squares-2x2';

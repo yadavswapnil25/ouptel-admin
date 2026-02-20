@@ -41,6 +41,9 @@ use Illuminate\Support\Facades\Auth;
 
 class VerificationRequestsResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-verification-requests';
     protected static ?string $model = VerificationRequest::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-shield-check';

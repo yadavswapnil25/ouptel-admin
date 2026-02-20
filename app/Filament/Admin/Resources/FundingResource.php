@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\FundingResource\Pages;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 use App\Models\Funding;
 use App\Models\User;
 use Filament\Forms;
@@ -14,6 +15,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class FundingResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-funding';
     protected static ?string $model = Funding::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-currency-dollar';

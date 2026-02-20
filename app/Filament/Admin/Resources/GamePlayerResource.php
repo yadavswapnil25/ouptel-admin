@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\GamePlayerResource\Pages;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 use App\Models\GamePlayer;
 use App\Models\User;
 use App\Models\Game;
@@ -25,6 +26,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class GamePlayerResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-game-players';
     protected static ?string $model = GamePlayer::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-users';

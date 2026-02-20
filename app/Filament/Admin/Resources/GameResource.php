@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\GameResource\Pages;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 use App\Models\Game;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -26,6 +27,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class GameResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-games';
     protected static ?string $model = Game::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-play';

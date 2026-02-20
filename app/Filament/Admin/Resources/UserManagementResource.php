@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\UserManagementResource\Pages;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -28,6 +29,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class UserManagementResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-users';
     protected static ?string $model = User::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-users';

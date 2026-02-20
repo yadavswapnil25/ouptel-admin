@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\ArticleResource\Pages;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 use App\Filament\Admin\Resources\ArticleResource\Widgets;
 use App\Models\Article;
 use App\Models\User;
@@ -24,6 +25,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ArticleResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-articles';
     protected static ?string $model = Article::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';

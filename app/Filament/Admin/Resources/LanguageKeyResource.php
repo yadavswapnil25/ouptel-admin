@@ -24,6 +24,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class LanguageKeyResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-language-keys';
     protected static ?string $model = LanguageKey::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-key';

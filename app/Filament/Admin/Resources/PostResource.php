@@ -17,6 +17,9 @@ use Illuminate\Database\Eloquent\SoftDeletingScope;
 
 class PostResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-posts';
     protected static ?string $model = Post::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';

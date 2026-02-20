@@ -27,6 +27,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class GroupFieldResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-group-fields';
     protected static ?string $model = GroupField::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-cog-6-tooth';

@@ -29,6 +29,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class UserStoriesResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-user-stories';
     protected static ?string $model = UserStory::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';

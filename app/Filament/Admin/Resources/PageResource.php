@@ -30,6 +30,9 @@ use Filament\Notifications\Notification;
 
 class PageResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-pages';
     protected static ?string $model = Page::class;
     protected static ?string $navigationIcon = 'heroicon-o-document-duplicate';
     protected static ?string $navigationLabel = 'Manage Pages';

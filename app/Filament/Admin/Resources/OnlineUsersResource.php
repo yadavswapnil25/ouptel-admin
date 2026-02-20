@@ -28,6 +28,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class OnlineUsersResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-online-users';
     protected static ?string $model = User::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-signal';

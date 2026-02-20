@@ -29,6 +29,9 @@ use Carbon\Carbon;
 
 class JobResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-jobs';
     protected static ?string $model = Job::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-briefcase';

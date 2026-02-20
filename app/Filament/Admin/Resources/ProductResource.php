@@ -30,6 +30,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ProductResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-products';
     protected static ?string $model = Product::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-bag';

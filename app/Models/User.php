@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use App\Models\AdminRole;
 
 class User extends Authenticatable
 {
@@ -139,6 +141,37 @@ class User extends Authenticatable
     public function gender()
     {
         return $this->belongsTo(Gender::class, 'gender', 'gender_id');
+    }
+
+    /**
+     * Admin roles assigned to this user.
+     */
+    public function adminRoles(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            AdminRole::class,
+            'admin_user_roles',
+            'user_id', // FK in pivot pointing to Wo_Users.user_id
+            'role_id',
+            'user_id', // local key on Wo_Users
+            'id'       // local key on admin_roles
+        );
+    }
+
+    /**
+     * Check if this user has a specific admin panel permission.
+     * Users with admin == '1' are super admins and always return true.
+     */
+    public function hasAdminPermission(string $key): bool
+    {
+        // Super admins bypass all permission checks
+        if ($this->admin == '1') {
+            return true;
+        }
+
+        // Load roles with their permissions and check
+        return $this->adminRoles
+            ->contains(fn (AdminRole $role) => $role->hasPermission($key));
     }
 
     /**

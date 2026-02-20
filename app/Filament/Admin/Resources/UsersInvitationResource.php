@@ -23,6 +23,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class UsersInvitationResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-invitations';
     protected static ?string $model = AdminInvitation::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-user-plus';

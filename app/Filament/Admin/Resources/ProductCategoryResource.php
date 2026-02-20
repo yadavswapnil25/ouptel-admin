@@ -22,6 +22,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ProductCategoryResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-product-categories';
     protected static ?string $model = ProductCategory::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';

@@ -27,6 +27,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class OrderResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-orders';
     protected static ?string $model = UserOrder::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-shopping-cart';

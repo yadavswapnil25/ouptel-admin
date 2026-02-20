@@ -3,6 +3,7 @@
 namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\EventResource\Pages;
+use App\Filament\Admin\Concerns\HasPanelAccess;
 use App\Models\Event;
 use App\Models\User;
 use Filament\Forms;
@@ -31,6 +32,9 @@ use Carbon\Carbon;
 
 class EventResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-events';
     protected static ?string $model = Event::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-calendar-days';

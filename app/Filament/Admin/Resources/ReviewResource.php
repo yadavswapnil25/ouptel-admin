@@ -28,6 +28,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class ReviewResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-reviews';
     protected static ?string $model = ProductReview::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-star';

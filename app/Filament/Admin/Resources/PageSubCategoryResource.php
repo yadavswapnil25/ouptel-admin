@@ -25,6 +25,9 @@ use Illuminate\Database\Eloquent\Builder;
 
 class PageSubCategoryResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-page-sub-categories';
     protected static ?string $model = PageSubCategory::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-tag';
