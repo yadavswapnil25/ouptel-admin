@@ -212,7 +212,9 @@ class NewFeedController extends Controller
             ->where('active', '1');
             // Note: privacy column doesn't exist in Wo_Posts table
 
-        // Filter by user's community preferences when column exists and user has preferences
+        // Filter by user's community preferences when column exists
+        // - Users WITH preferences: see posts in their preferences + uncategorized (null)
+        // - Users WITHOUT preferences: see ONLY uncategorized posts (not community-tagged)
         if (Schema::hasColumn('Wo_Posts', 'community_preference_id')) {
             $userPreferenceIds = DB::table('user_community_preferences')
                 ->where('user_id', $userId)
@@ -223,6 +225,8 @@ class NewFeedController extends Controller
                     $q->whereIn('community_preference_id', $userPreferenceIds)
                       ->orWhereNull('community_preference_id');
                 });
+            } else {
+                $query->whereNull('community_preference_id');
             }
         }
 
