@@ -284,13 +284,13 @@ class AuthController extends BaseController
 
         try {
             $appName = config('app.name', 'OUPTEL');
-            Mail::raw(
-                "Your {$appName} verification code is: {$code}\n\nThis code expires in 15 minutes. Do not share it with anyone.",
-                function ($message) use ($email) {
-                    $message->to($email)
-                        ->subject(config('app.name', 'OUPTEL') . ' - Email Verification Code');
-                }
-            );
+            $subject = $appName . ' - Email Verification Code';
+            $plainText = "Your {$appName} verification code is: {$code}\n\nThis code expires in 15 minutes. Do not share it with anyone.";
+            Mail::send('emails.signup-verification-code', ['code' => $code, 'appName' => $appName], function ($message) use ($email, $subject, $plainText) {
+                $message->to($email)
+                    ->subject($subject)
+                    ->text($plainText);
+            });
         } catch (\Exception $e) {
             Log::error('Failed to send signup verification email: ' . $e->getMessage());
             return response()->json([
