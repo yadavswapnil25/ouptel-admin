@@ -54,6 +54,7 @@ use App\Http\Controllers\Api\V1\AnnouncementsController;
 use App\Http\Controllers\Api\V1\AccountVerificationController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\HashtagController;
+use App\Http\Controllers\Api\V1\CommunityPreferenceController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -227,6 +228,12 @@ Route::post('/people-follow/follow', [PeopleFollowController::class, 'followUser
 Route::post('/people-follow/{userId}/unfollow', [PeopleFollowController::class, 'unfollowUser']);
 
 Route::get('/feelings', [FeelingsController::class, 'index']); // Get available feelings
+
+// Community preferences (public list; auth required for user endpoints)
+Route::get('/community-preferences', [CommunityPreferenceController::class, 'index']);
+Route::get('/community-preferences/user', [CommunityPreferenceController::class, 'userPreferences']);
+Route::post('/community-preferences/user', [CommunityPreferenceController::class, 'updateUserPreferences']);
+Route::put('/community-preferences/user', [CommunityPreferenceController::class, 'updateUserPreferences']);
 
 // Unified post creation endpoint (optimized - handles all post types via 'type' parameter)
 // Use type: 'regular', 'gif', 'feeling', or 'colored' to optimize request handling

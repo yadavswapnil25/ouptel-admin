@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class AuthController extends BaseController
 {
@@ -95,6 +96,8 @@ class AuthController extends BaseController
             'device_id' => 'nullable|string|max:100',
             'platform' => 'nullable|string|max:20',
             'hash' => 'nullable|string', // For compatibility with WoWonder hash system
+            'community_preference_ids' => 'nullable|array',
+            'community_preference_ids.*' => 'integer',
         ]);
 
         if ($validator->fails()) {
@@ -175,6 +178,13 @@ class AuthController extends BaseController
             // Handle referrer if provided
             if ($request->referrer) {
                 $this->handleReferrer($user->user_id, $request->referrer);
+            }
+
+            // Sync community preferences if provided
+            $preferenceIds = $request->input('community_preference_ids', []);
+            if (is_array($preferenceIds) && !empty($preferenceIds) && Schema::hasTable('user_community_preferences') && Schema::hasTable('community_preferences')) {
+                $validIds = \App\Models\CommunityPreference::whereIn('id', $preferenceIds)->pluck('id')->all();
+                $user->communityPreferences()->sync($validIds);
             }
 
             // Send welcome email (placeholder for now)

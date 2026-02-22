@@ -212,6 +212,20 @@ class NewFeedController extends Controller
             ->where('active', '1');
             // Note: privacy column doesn't exist in Wo_Posts table
 
+        // Filter by user's community preferences when column exists and user has preferences
+        if (Schema::hasColumn('Wo_Posts', 'community_preference_id')) {
+            $userPreferenceIds = DB::table('user_community_preferences')
+                ->where('user_id', $userId)
+                ->pluck('preference_id')
+                ->all();
+            if (!empty($userPreferenceIds)) {
+                $query->where(function ($q) use ($userPreferenceIds) {
+                    $q->whereIn('community_preference_id', $userPreferenceIds)
+                      ->orWhereNull('community_preference_id');
+                });
+            }
+        }
+
         // Exclude posts hidden by this user (Wo_HiddenPosts)
         if (Schema::hasTable('Wo_HiddenPosts')) {
             $hidden = DB::table('Wo_HiddenPosts')

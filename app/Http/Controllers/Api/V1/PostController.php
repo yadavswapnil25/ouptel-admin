@@ -102,6 +102,7 @@ class PostController extends Controller
             'postRecord' => 'nullable|file|mimes:mp3,wav,ogg|max:51200', // 50MB max
             'postSticker' => 'nullable|string|max:500',
             'postGif' => 'nullable|url|max:2000', // GIF URL from Giphy or similar service
+            'community_preference_id' => 'nullable|integer|exists:community_preferences,id',
         ];
 
         $validator = Validator::make($request->all(), $validationRules);
@@ -398,6 +399,9 @@ class PostController extends Controller
                 'agora_sid' => '',
                 'send_notify' => '1',
             ];
+            if (\Illuminate\Support\Facades\Schema::hasColumn('Wo_Posts', 'community_preference_id')) {
+                $postData['community_preference_id'] = $request->input('community_preference_id') ? (int) $request->input('community_preference_id') : null;
+            }
 
             // Create the post
             $post = Post::create($postData);

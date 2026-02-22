@@ -79,6 +79,7 @@ class Post extends Model
         'agora_resource_id',
         'agora_sid',
         'send_notify',
+        'community_preference_id',
     ];
 
     protected $casts = [
@@ -117,6 +118,11 @@ class Post extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
+
+    public function communityPreference(): BelongsTo
+    {
+        return $this->belongsTo(CommunityPreference::class, 'community_preference_id', 'id');
     }
 
     public function page(): BelongsTo

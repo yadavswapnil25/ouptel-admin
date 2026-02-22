@@ -298,7 +298,7 @@ class SettingsController extends Controller
 
         // Validate type parameter
         $validator = Validator::make($request->all(), [
-            'type' => 'required|in:general_settings,password_settings,privacy_settings,online_status,profile_settings,custom_settings',
+            'type' => 'required|in:general_settings,password_settings,privacy_settings,online_status,profile_settings,custom_settings,community_preferences_settings',
             'user_data' => 'required|string', // JSON encoded string
         ]);
 
@@ -366,6 +366,10 @@ class SettingsController extends Controller
                     
                 case 'custom_settings':
                     $errors = $this->updateCustomSettings($user, $userData);
+                    break;
+
+                case 'community_preferences_settings':
+                    $errors = $this->updateCommunityPreferencesSettings($user, $userData);
                     break;
             }
 
@@ -932,6 +936,25 @@ class SettingsController extends Controller
         }
 
         return $errors;
+    }
+
+    /**
+     * Update community preferences settings
+     */
+    private function updateCommunityPreferencesSettings(User $user, array $userData): array
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('user_community_preferences')) {
+            return ['Community preferences feature is not available.'];
+        }
+
+        $ids = $userData['preference_ids'] ?? $userData['community_preference_ids'] ?? [];
+        if (!is_array($ids)) {
+            return ['preference_ids must be an array.'];
+        }
+
+        $validIds = \App\Models\CommunityPreference::whereIn('id', $ids)->pluck('id')->all();
+        $user->communityPreferences()->sync($validIds);
+        return [];
     }
 }
 

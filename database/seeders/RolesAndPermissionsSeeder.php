@@ -32,6 +32,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'manage-posts', 'label' => 'Posts', 'group' => 'Manage Features'],
             ['key' => 'manage-post-reactions', 'label' => 'Post Reactions', 'group' => 'Manage Features'],
             ['key' => 'manage-user-stories', 'label' => 'User Stories', 'group' => 'Manage Features'],
+            ['key' => 'manage-community-preferences', 'label' => 'Community Preferences', 'group' => 'Manage Features'],
 
             // Groups
             ['key' => 'manage-groups', 'label' => 'Groups', 'group' => 'Groups'],

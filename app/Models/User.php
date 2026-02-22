@@ -9,6 +9,7 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\AdminRole;
+use App\Models\CommunityPreference;
 
 class User extends Authenticatable
 {
@@ -156,6 +157,21 @@ class User extends Authenticatable
             'user_id', // local key on Wo_Users
             'id'       // local key on admin_roles
         );
+    }
+
+    /**
+     * Community preferences selected by the user.
+     */
+    public function communityPreferences(): BelongsToMany
+    {
+        return $this->belongsToMany(
+            CommunityPreference::class,
+            'user_community_preferences',
+            'user_id',
+            'preference_id',
+            'user_id',
+            'id'
+        )->withTimestamps();
     }
 
     /**
