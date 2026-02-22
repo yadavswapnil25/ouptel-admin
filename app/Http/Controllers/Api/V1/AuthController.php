@@ -307,6 +307,45 @@ class AuthController extends BaseController
     }
 
     /**
+     * Validate signup verification code (does not consume the code; used for UI feedback)
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function validateSignupCode(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email',
+            'code' => 'required|string|size:6',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Invalid code format',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $email = strtolower($request->email);
+        $cacheKey = 'signup_verify_' . $email;
+        $storedCode = Cache::get($cacheKey);
+
+        if (!$storedCode || $storedCode !== $request->code) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Invalid or expired code. Please request a new code.',
+            ], 422);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Email verified successfully',
+            'data' => ['email' => $email, 'verified' => true],
+        ]);
+    }
+
+    /**
      * Verify email address (for existing users - after signup)
      * 
      * @param Request $request

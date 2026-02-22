@@ -65,6 +65,7 @@ Route::post('/create-album', [AlbumController::class, 'store']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/signup', [AuthController::class, 'signup']);
 Route::post('/send-signup-verification-code', [AuthController::class, 'sendSignupVerificationCode']);
+Route::post('/validate-signup-code', [AuthController::class, 'validateSignupCode']);
 Route::post('/verify-email', [AuthController::class, 'verifyEmail']);
 Route::post('/resend-verification', [AuthController::class, 'resendVerification']);
 Route::post('/check-username', [AuthController::class, 'checkUsername']);
