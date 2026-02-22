@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Schema;
 
 class AuthController extends BaseController
@@ -83,6 +85,7 @@ class AuthController extends BaseController
         $validator = Validator::make($request->all(), [
             'username' => 'required|string|min:3|max:32|regex:/^[a-zA-Z0-9_]+$/|unique:Wo_Users,username',
             'email' => 'required|email|max:100|unique:Wo_Users,email',
+            'verification_code' => 'required|string|size:6',
             'password' => 'required|string|min:6|max:100',
             'confirm_password' => 'required|string|same:password',
             'first_name' => 'nullable|string|max:50',
@@ -125,6 +128,17 @@ class AuthController extends BaseController
                 }
             }
 
+            // Validate verification code before creating user
+            $cacheKey = 'signup_verify_' . strtolower($request->email);
+            $storedCode = Cache::get($cacheKey);
+            if (!$storedCode || $storedCode !== $request->verification_code) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Invalid or expired verification code. Please request a new code.',
+                ], 422);
+            }
+            Cache::forget($cacheKey); // One-time use
+
             // Generate unique user ID
             $userId = $this->generateUserId();
 
@@ -134,7 +148,7 @@ class AuthController extends BaseController
                 'username' => $request->username,
                 'email' => $request->email,
                 'password' => Hash::make($request->password),
-                'verified' => '0', // Email verification required
+                'verified' => '1', // Already verified via code before signup
                 'active' => '1', // Active by default
                 'avatar' => '',
                 'cover' => '',
@@ -230,7 +244,70 @@ class AuthController extends BaseController
     }
 
     /**
-     * Verify email address
+     * Send 6-digit verification code to email during signup (before account creation)
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function sendSignupVerificationCode(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|max:100',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $email = strtolower($request->email);
+
+        if (User::where('email', $email)->exists()) {
+            return response()->json(['ok' => false, 'message' => 'Email is already registered'], 409);
+        }
+
+        $cacheKey = 'signup_verify_' . $email;
+        $lastSent = Cache::get($cacheKey . '_sent_at');
+        if ($lastSent && (time() - $lastSent) < 60) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Please wait 60 seconds before requesting a new code.',
+            ], 429);
+        }
+
+        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        Cache::put($cacheKey, $code, now()->addMinutes(15));
+        Cache::put($cacheKey . '_sent_at', time(), now()->addMinutes(1));
+
+        try {
+            $appName = config('app.name', 'OUPTEL');
+            Mail::raw(
+                "Your {$appName} verification code is: {$code}\n\nThis code expires in 15 minutes. Do not share it with anyone.",
+                function ($message) use ($email) {
+                    $message->to($email)
+                        ->subject(config('app.name', 'OUPTEL') . ' - Email Verification Code');
+                }
+            );
+        } catch (\Exception $e) {
+            Log::error('Failed to send signup verification email: ' . $e->getMessage());
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to send verification email. Please try again.',
+            ], 500);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Verification code sent to your email',
+            'data' => ['email' => $email],
+        ]);
+    }
+
+    /**
+     * Verify email address (for existing users - after signup)
      * 
      * @param Request $request
      * @return JsonResponse
