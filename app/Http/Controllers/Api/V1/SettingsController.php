@@ -496,7 +496,22 @@ class SettingsController extends Controller
                     $updateData['school'] = $school;
                 }
             }
-            
+            if (isset($userData['college'])) {
+                $college = $userData['college'];
+                if (mb_strlen($college) > 255) {
+                    $updateData['college'] = mb_substr($college, 0, 252) . '...';
+                } else {
+                    $updateData['college'] = $college;
+                }
+            }
+            if (isset($userData['university'])) {
+                $university = $userData['university'];
+                if (mb_strlen($university) > 255) {
+                    $updateData['university'] = mb_substr($university, 0, 252) . '...';
+                } else {
+                    $updateData['university'] = $university;
+                }
+            }
             if (isset($userData['working'])) {
                 // Truncate working if too long (typically VARCHAR(100))
                 $working = $userData['working'];
@@ -736,7 +751,22 @@ class SettingsController extends Controller
                 $updateData['school'] = $school;
             }
         }
-        
+        if (isset($userData['college'])) {
+            $college = $userData['college'];
+            if (mb_strlen($college) > 255) {
+                $updateData['college'] = mb_substr($college, 0, 252) . '...';
+            } else {
+                $updateData['college'] = $college;
+            }
+        }
+        if (isset($userData['university'])) {
+            $university = $userData['university'];
+            if (mb_strlen($university) > 255) {
+                $updateData['university'] = mb_substr($university, 0, 252) . '...';
+            } else {
+                $updateData['university'] = $university;
+            }
+        }
         if (isset($userData['working'])) {
             $working = $userData['working'];
             if (mb_strlen($working) > 100) {
@@ -844,7 +874,7 @@ class SettingsController extends Controller
         // Only allow updating safe fields
         $allowedFields = [
             'first_name', 'last_name', 'about', 'website', 'working', 'working_link',
-            'address', 'school', 'country_id', 'city', 'zip', 'language'
+            'address', 'school', 'college', 'university', 'country_id', 'city', 'zip', 'language'
         ];
 
         $updateData = [];
@@ -881,6 +911,12 @@ class SettingsController extends Controller
                 } elseif ($key === 'school' || $key === 'working') {
                     if (mb_strlen($value) > 100) {
                         $updateData[$key] = mb_substr($value, 0, 97) . '...';
+                    } else {
+                        $updateData[$key] = $value;
+                    }
+                } elseif ($key === 'college' || $key === 'university') {
+                    if (mb_strlen($value) > 255) {
+                        $updateData[$key] = mb_substr($value, 0, 252) . '...';
                     } else {
                         $updateData[$key] = $value;
                     }

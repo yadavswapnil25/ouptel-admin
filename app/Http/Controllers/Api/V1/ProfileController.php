@@ -333,12 +333,14 @@ class ProfileController extends Controller
         $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/default-avatar.png');
         $userData['cover_url'] = $user->cover ? asset('storage/' . $user->cover) : asset('images/default-cover.jpg');
 
-        // Explicitly ensure address, working, working_link, and school fields are included
+        // Explicitly ensure address, working, working_link, school, college, university are included
         // These fields might not be in fillable but should be retrieved from database
         $userData['address'] = $user->address ?? '';
         $userData['working'] = $user->working ?? '';
         $userData['working_link'] = $user->working_link ?? '';
         $userData['school'] = $user->school ?? '';
+        $userData['college'] = $user->college ?? '';
+        $userData['university'] = $user->university ?? '';
         $userData['website'] = $user->website ?? '';
 
         return $userData;
