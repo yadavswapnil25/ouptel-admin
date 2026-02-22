@@ -81,39 +81,31 @@ class HashtagController extends Controller
         if ($hashtags->isEmpty()) {
             $hashtags = $this->getTrendingFromPosts($limit);
         } else {
-            // Enrich with actual post counts from Wo_Posts
-            // Use 'tag' column (actual hashtag text), not 'hash' (MD5 hash)
-            $hashtags = $hashtags->map(function($hashtag) {
+            // Build response directly from Wo_Hashtags without per-tag post scans.
+            // We trust trend_use_num / last_trend_time as pre-aggregated metrics.
+            $hashtags = $hashtags->map(function ($hashtag) {
                 $hashtagName = $hashtag->tag ?? '';
                 $hashtagName = trim($hashtagName);
                 $hashtagName = ltrim($hashtagName, '#');
-                
-                if (empty($hashtagName)) {
+
+                if ($hashtagName === '') {
                     return null;
                 }
-                
-                // Count actual posts containing this hashtag
-                $postCount = DB::table('Wo_Posts')
-                    ->where('active', 1)
-                    ->where(function($q) use ($hashtagName) {
-                        $q->where('postText', 'LIKE', '%#' . $hashtagName . '%')
-                          ->orWhere('postText', 'LIKE', '%# ' . $hashtagName . '%')
-                          ->orWhere('postText', 'LIKE', '%#' . $hashtagName . ' %')
-                          ->orWhere('postText', 'LIKE', '%#' . $hashtagName . PHP_EOL . '%');
-                    })
-                    ->count();
+
+                $trendUseNum = (int) ($hashtag->trend_use_num ?? 0);
 
                 return [
-                    'hashtag' => '#' . $hashtagName,
-                    'hashtag_name' => $hashtagName,
-                    'posts_count' => $postCount,
-                    'trend_use_num' => $hashtag->trend_use_num ?? 0,
-                    'last_trend_time' => $hashtag->last_trend_time ?? 0,
+                    'hashtag'        => '#' . $hashtagName,
+                    'hashtag_name'   => $hashtagName,
+                    // Use trend_use_num as posts_count to avoid N expensive COUNT(*) queries
+                    'posts_count'    => $trendUseNum,
+                    'trend_use_num'  => $trendUseNum,
+                    'last_trend_time'=> (int) ($hashtag->last_trend_time ?? 0),
                 ];
             })
-            ->filter(function($hashtag) {
-                // Only include hashtags that have at least 1 post and are not null
-                return $hashtag !== null && $hashtag['posts_count'] > 0;
+            ->filter(function ($row) {
+                // Only include non-empty hashtags that have at least 1 usage
+                return $row !== null && $row['posts_count'] > 0;
             })
             ->sortByDesc('posts_count')
             ->values()
@@ -141,8 +133,12 @@ class HashtagController extends Controller
         // Extract hashtags from postText and count occurrences
         // This is a simplified approach - in production, you might want to use a more efficient method
         
+        // Limit scan to recent posts to avoid full-table scans on large datasets
+        $thirtyDaysAgo = time() - (30 * 24 * 60 * 60);
+
         $posts = DB::table('Wo_Posts')
             ->where('active', 1)
+            ->where('time', '>=', $thirtyDaysAgo)
             ->whereNotNull('postText')
             ->where('postText', '!=', '')
             ->where('postText', 'LIKE', '%#%')
