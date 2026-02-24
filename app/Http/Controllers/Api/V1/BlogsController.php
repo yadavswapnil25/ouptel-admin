@@ -368,10 +368,22 @@ class BlogsController extends BaseController
             'description' => ['required', 'string'],
             'content' => ['required', 'string'],
             'category' => ['required', 'integer'],
-            'thumbnail' => ['nullable', 'string', 'max:255'],
+            'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
             'tags' => ['nullable', 'string'],
             'active' => ['nullable', 'boolean'],
         ]);
+
+        // Handle thumbnail file upload
+        $thumbnailPath = '';
+        if ($request->hasFile('thumbnail')) {
+            $file = $request->file('thumbnail');
+            $year = date('Y');
+            $month = date('m');
+            $dir = "upload/photos/{$year}/{$month}";
+            $filename = uniqid('blog_') . '.' . $file->getClientOriginalExtension();
+            $file->move(public_path($dir), $filename);
+            $thumbnailPath = "{$dir}/{$filename}";
+        }
 
         // Create the article
         $article = new Article();
@@ -380,7 +392,7 @@ class BlogsController extends BaseController
         $article->description = $validated['description'];
         $article->content = $validated['content'];
         $article->category = $validated['category'];
-        $article->thumbnail = $validated['thumbnail'] ?? '';
+        $article->thumbnail = $thumbnailPath;
         $article->tags = $validated['tags'] ?? '';
         $article->posted = time();
         $article->active = $validated['active'] ?? true;
@@ -452,7 +464,7 @@ class BlogsController extends BaseController
             'description' => ['sometimes', 'required', 'string'],
             'content' => ['sometimes', 'required', 'string'],
             'category' => ['sometimes', 'required', 'integer'],
-            'thumbnail' => ['nullable', 'string', 'max:255'],
+            'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
             'tags' => ['nullable', 'string'],
             'active' => ['nullable', 'boolean'],
         ]);
@@ -470,8 +482,14 @@ class BlogsController extends BaseController
         if (isset($validated['category'])) {
             $article->category = $validated['category'];
         }
-        if (isset($validated['thumbnail'])) {
-            $article->thumbnail = $validated['thumbnail'] ?? '';
+        if ($request->hasFile('thumbnail')) {
+            $file = $request->file('thumbnail');
+            $year = date('Y');
+            $month = date('m');
+            $dir = "upload/photos/{$year}/{$month}";
+            $filename = uniqid('blog_') . '.' . $file->getClientOriginalExtension();
+            $file->move(public_path($dir), $filename);
+            $article->thumbnail = "{$dir}/{$filename}";
         }
         if (isset($validated['tags'])) {
             $article->tags = $validated['tags'] ?? '';
