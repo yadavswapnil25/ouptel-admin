@@ -211,14 +211,9 @@ class BlogsController extends BaseController
             }
         }
 
-        // Check if current user has reacted (if authenticated)
+        // Check if current user has reacted (temporarily disabled as we allow all views without auth)
+        $tokenUserId = null;
         $isLiked = false;
-        if ($tokenUserId && \Illuminate\Support\Facades\Schema::hasTable('Wo_Blog_Reaction')) {
-            $isLiked = DB::table('Wo_Blog_Reaction')
-                ->where('blog_id', $id)
-                ->where('user_id', $tokenUserId)
-                ->exists();
-        }
 
         // Format response
         $response = [
