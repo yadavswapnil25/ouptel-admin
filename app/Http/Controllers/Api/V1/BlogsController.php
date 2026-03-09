@@ -196,7 +196,8 @@ class BlogsController extends BaseController
                 'username' => $user->username ?? 'Unknown',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset($user->avatar) : null,
+                // Stored avatars live under storage/, so prefix it here
+                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                 'verified' => (bool) ($user->verified ?? false),
             ];
         } elseif ($rawUserId) {
@@ -208,7 +209,8 @@ class BlogsController extends BaseController
                     'username' => $userFromDb->username ?? 'Unknown',
                     'name' => $userFromDb->name ?? $userFromDb->username ?? 'Unknown User',
                     'avatar' => $userFromDb->avatar ?? '',
-                    'avatar_url' => $userFromDb->avatar ? asset($userFromDb->avatar) : null,
+                    // Same storage/ prefix for direct DB fetch
+                    'avatar_url' => $userFromDb->avatar ? asset('storage/' . $userFromDb->avatar) : null,
                     'verified' => (bool) ($userFromDb->verified ?? false),
                 ];
             }
@@ -505,12 +507,9 @@ class BlogsController extends BaseController
         $user = $comment->user;
         $author = null;
         if ($user instanceof User) {
-            // Return the raw asset URL without a file_exists check so the browser
-            // can attempt to load it. If the file is missing the browser fires
-            // onError and the Avatar component falls back to coloured initials.
-            // Returning null (when avatar is empty) lets Avatar show initials
-            // immediately without any failed image request.
-            $avatarUrl = $user->avatar ? asset($user->avatar) : null;
+            // Comment author avatars are stored under storage/, match the URL
+            // pattern used elsewhere in the app.
+            $avatarUrl = $user->avatar ? asset('storage/' . $user->avatar) : null;
 
             $author = [
                 'user_id' => $user->user_id,
@@ -553,7 +552,7 @@ class BlogsController extends BaseController
         $user = $reply->user;
         $author = null;
         if ($user instanceof User) {
-            $avatarUrl = $user->avatar ? asset($user->avatar) : null;
+            $avatarUrl = $user->avatar ? asset('storage/' . $user->avatar) : null;
 
             $author = [
                 'user_id' => $user->user_id,
