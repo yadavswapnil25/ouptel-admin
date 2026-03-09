@@ -85,10 +85,16 @@ class ArticleResource extends Resource
                         Forms\Components\Select::make('category')
                             ->label('Category')
                             ->options(function () {
-                                // Use the BlogCategory 'name' field so admin matches website labels
+                                // Map category IDs to the same labels used on the website
+                                $labels = self::getBlogCategoryLabels();
+
                                 return BlogCategory::query()
                                     ->orderBy('id')
-                                    ->pluck('name', 'id');
+                                    ->get()
+                                    ->mapWithKeys(function ($category) use ($labels) {
+                                        $label = $labels[$category->id] ?? "Category {$category->id}";
+                                        return [$category->id => $label];
+                                    });
                             })
                             ->searchable()
                             ->required(),
@@ -166,11 +172,12 @@ class ArticleResource extends Resource
                 TextColumn::make('category')
                     ->label('Category')
                     ->formatStateUsing(function ($state) {
-                        $category = BlogCategory::find($state);
-                        if ($category && $category->name) {
-                            return $category->name;
+                        if (!$state) {
+                            return 'No Category';
                         }
-                        return $state ? "Category {$state}" : 'No Category';
+
+                        $labels = self::getBlogCategoryLabels();
+                        return $labels[$state] ?? "Category {$state}";
                     })
                     ->badge()
                     ->color('info'),
@@ -220,9 +227,15 @@ class ArticleResource extends Resource
                 SelectFilter::make('category')
                     ->label('Category')
                     ->options(function () {
+                        $labels = self::getBlogCategoryLabels();
+
                         return BlogCategory::query()
                             ->orderBy('id')
-                            ->pluck('name', 'id');
+                            ->get()
+                            ->mapWithKeys(function ($category) use ($labels) {
+                                $label = $labels[$category->id] ?? "Category {$category->id}";
+                                return [$category->id => $label];
+                            });
                     })
                     ->query(function (Builder $query, array $data): Builder {
                         return $query->when(
@@ -307,6 +320,36 @@ class ArticleResource extends Resource
     {
         return [
             Widgets\ArticlesStatsWidget::class,
+        ];
+    }
+
+    /**
+     * Get blog category labels matching the website (React) mapping.
+     *
+     * These IDs and names mirror `blogCategoryNames` in
+     * `ouptel-web/src/constants/blogCategories.js`.
+     */
+    protected static function getBlogCategoryLabels(): array
+    {
+        return [
+            2 => 'Cars and Vehicles',
+            3 => 'Comedy',
+            4 => 'Economics and Trade',
+            5 => 'Education',
+            6 => 'Entertainment',
+            7 => 'Movies & Animation',
+            8 => 'Gaming',
+            9 => 'History and Facts',
+            10 => 'Live Style',
+            11 => 'Natural',
+            12 => 'News and Politics',
+            13 => 'People and Nations',
+            14 => 'Pets and Animals',
+            15 => 'Places and Regions',
+            16 => 'Science and Technology',
+            17 => 'Sport',
+            18 => 'Travel and Events',
+            19 => 'Other',
         ];
     }
 }
