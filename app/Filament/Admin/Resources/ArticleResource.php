@@ -32,7 +32,7 @@ class ArticleResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-document-text';
 
-    protected static ?string $navigationLabel = 'Articles';
+    protected static ?string $navigationLabel = 'Articles (Blog)';
 
     protected static ?string $modelLabel = 'Article';
 
