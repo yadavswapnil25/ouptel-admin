@@ -147,34 +147,9 @@ class BlogsController extends BaseController
      */
     public function show(Request $request, $id): JsonResponse
     {
-        // Get authentication (optional)
-        $tokenUserId = null;
-        $authHeader = $request->header('Authorization');
-        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
-            $token = substr($authHeader, 7);
-            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-        }
-
-        // Build query similar to index method - show active articles to everyone
-        // If authenticated, also show inactive articles if user is the owner
-        $query = Article::query()->where('id', $id);
-        
-        // If not authenticated, only show active articles (matching index behavior)
-        if (!$tokenUserId) {
-            $query->where('active', 1);
-        } else {
-            // If authenticated, show active articles OR inactive articles owned by user
-            $query->where(function($q) use ($tokenUserId) {
-                $q->where('active', 1)
-                  ->orWhere(function($q2) use ($tokenUserId) {
-                      $q2->where('active', '!=', 1)
-                         ->where('user', (string) $tokenUserId);
-                  });
-            });
-        }
-
-        // Find the article
-        $article = $query->first();
+        // TEMPORARY: allow fetching any article by ID, regardless of active/user
+        // (no authentication or visibility restrictions)
+        $article = Article::query()->where('id', $id)->first();
         
         if (!$article) {
             return response()->json([
