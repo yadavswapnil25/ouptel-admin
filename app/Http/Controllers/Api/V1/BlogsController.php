@@ -57,23 +57,46 @@ class BlogsController extends BaseController
         $paginator = $query->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (Article $article) {
+            $u = $article->user;
+
+            // If the Eloquent relationship didn't load, fetch directly
+            if (!$u) {
+                $raw = DB::table('Wo_Users')
+                    ->where('user_id', DB::table('Wo_Blog')->where('id', $article->id)->value('user'))
+                    ->first();
+                $authorName   = $raw ? (trim(($raw->first_name ?? '') . ' ' . ($raw->last_name ?? '')) ?: ($raw->username ?? null)) : null;
+                $authorAvatar = ($raw && $raw->avatar) ? asset('storage/' . $raw->avatar) : null;
+                $authorUser   = [
+                    'user_id'    => $raw->user_id ?? null,
+                    'username'   => $raw->username ?? null,
+                    'name'       => $authorName,
+                    'avatar_url' => $authorAvatar,
+                ];
+            } else {
+                $fullName = trim(($u->attributes['first_name'] ?? '') . ' ' . ($u->attributes['last_name'] ?? ''));
+                $authorName   = $fullName ?: ($u->attributes['username'] ?? null);
+                $authorAvatar = ($u->avatar ?? null) ? asset('storage/' . $u->avatar) : null;
+                $authorUser   = [
+                    'user_id'    => $u->user_id,
+                    'username'   => $u->attributes['username'] ?? null,
+                    'name'       => $authorName,
+                    'avatar_url' => $authorAvatar,
+                ];
+            }
+
             return [
-                'id' => $article->id,
-                'title' => $article->title,
-                'excerpt' => $article->excerpt,
+                'id'        => $article->id,
+                'title'     => $article->title,
+                'excerpt'   => $article->excerpt,
                 'thumbnail' => $article->thumbnail_url,
-                'category' => $article->category,
+                'category'  => $article->category,
                 'posted_at' => $article->posted_date,
-                'views' => $article->views_count,
-                'shares' => $article->shares_count,
-                'comments' => $article->comments_count,
+                'views'     => $article->views_count,
+                'shares'    => $article->shares_count,
+                'comments'  => $article->comments_count,
                 'reactions' => $article->reactions_count,
-                'url' => $article->url,
-                'user' => [
-                    'user_id' => optional($article->user)->user_id,
-                    'username' => optional($article->user)->username,
-                    'avatar_url' => optional($article->user)->avatar_url,
-                ],
+                'url'       => $article->url,
+                'user'      => $authorUser,
             ];
         });
 
