@@ -6,6 +6,7 @@ use App\Models\Article;
 use App\Models\BlogCategory;
 use App\Models\BlogComment;
 use App\Models\BlogCommentReply;
+use App\Models\BlogReaction;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -216,9 +217,17 @@ class BlogsController extends BaseController
             }
         }
 
-        // Reactions per user are not tracked for now while blog details are public
+        // Optional auth: used only for ownership / reactions
         $tokenUserId = null;
-        $isLiked = false;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        // Build reactions summary (WoWonder-style)
+        $reactionsData = $this->buildBlogReactionsSummary((int) $article->id, $tokenUserId);
+        $isLiked = $reactionsData['user_reaction'] === 'like';
 
         // Format response
         $response = [
@@ -242,10 +251,14 @@ class BlogsController extends BaseController
                 'views' => $article->views_count,
                 'shares' => $article->shares_count,
                 'comments' => $article->comments_count,
-                'reactions' => $article->reactions_count,
+                'reactions' => $reactionsData['summary']['total'],
+                'reactions_breakdown' => $reactionsData['summary'],
+                'user_reaction' => $reactionsData['user_reaction'],
                 'url' => $article->url,
                 'is_liked' => $isLiked,
-                'is_owner' => false,
+                'is_owner' => $tokenUserId
+                    ? ((string) $rawUserId === (string) $tokenUserId)
+                    : false,
                 'author' => $userData,
             ],
         ];
@@ -303,6 +316,186 @@ class BlogsController extends BaseController
                 ],
             ],
         ]);
+    }
+
+    /**
+     * Toggle/set reaction on a blog article (WoWonder-style).
+     * Each user can have at most one reaction per blog.
+     */
+    public function reactToBlog(Request $request, int $blogId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 401,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized',
+                ],
+            ], 401);
+        }
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$userId) {
+            return response()->json([
+                'api_status' => 401,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token',
+                ],
+            ], 401);
+        }
+
+        $article = Article::find($blogId);
+        if (!$article) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'Article not found',
+                ],
+            ], 404);
+        }
+
+        // Allowed reaction types (WoWonder-style)
+        $validReactions = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
+
+        $reaction = strtolower((string) $request->input('reaction', 'like'));
+        if (!in_array($reaction, $validReactions, true)) {
+            return response()->json([
+                'api_status' => 422,
+                'errors' => [
+                    'error_id' => 3,
+                    'error_text' => 'Invalid reaction type',
+                ],
+            ], 422);
+        }
+
+        // Find existing reaction by this user on this blog (not on comments/replies)
+        $existing = BlogReaction::query()
+            ->where('blog_id', $blogId)
+            ->where('user_id', $userId)
+            ->whereNull('comment_id')
+            ->whereNull('reply_id')
+            ->first();
+
+        if ($existing && strtolower((string) $existing->reaction) === $reaction) {
+            // Same reaction clicked again -> remove (toggle off)
+            $existing->delete();
+        } elseif ($existing) {
+            // Switch reaction type
+            $existing->reaction = $reaction;
+            $existing->save();
+        } else {
+            // New reaction
+            BlogReaction::create([
+                'user_id' => $userId,
+                'blog_id' => $blogId,
+                'comment_id' => null,
+                'reply_id' => null,
+                'reaction' => $reaction,
+            ]);
+        }
+
+        $summary = $this->buildBlogReactionsSummary($blogId, (string) $userId);
+
+        return response()->json([
+            'api_status' => 200,
+            'api_text' => 'success',
+            'api_version' => '1.0',
+            'data' => [
+                'blog_id' => $blogId,
+                'summary' => $summary['summary'],
+                'user_reaction' => $summary['user_reaction'],
+            ],
+        ]);
+    }
+
+    /**
+     * Get reactions summary for a blog (public).
+     */
+    public function getBlogReactions(Request $request, int $blogId): JsonResponse
+    {
+        $article = Article::find($blogId);
+        if (!$article) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'Article not found',
+                ],
+            ], 404);
+        }
+
+        $tokenUserId = null;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        $summary = $this->buildBlogReactionsSummary($blogId, $tokenUserId);
+
+        return response()->json([
+            'api_status' => 200,
+            'api_text' => 'success',
+            'api_version' => '1.0',
+            'data' => [
+                'blog_id' => $blogId,
+                'summary' => $summary['summary'],
+                'user_reaction' => $summary['user_reaction'],
+            ],
+        ]);
+    }
+
+    /**
+     * Helper to build reactions summary + current user's reaction.
+     */
+    protected function buildBlogReactionsSummary(int $blogId, ?string $currentUserId): array
+    {
+        $validReactions = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
+
+        $baseCounts = [];
+        foreach ($validReactions as $type) {
+            $baseCounts[$type] = 0;
+        }
+
+        $rows = BlogReaction::query()
+            ->where('blog_id', $blogId)
+            ->whereNull('comment_id')
+            ->whereNull('reply_id')
+            ->select('reaction', DB::raw('COUNT(*) as count'))
+            ->groupBy('reaction')
+            ->get();
+
+        foreach ($rows as $row) {
+            $type = strtolower((string) $row->reaction);
+            if (array_key_exists($type, $baseCounts)) {
+                $baseCounts[$type] = (int) $row->count;
+            }
+        }
+
+        $total = array_sum($baseCounts);
+
+        $userReaction = null;
+        if ($currentUserId) {
+            $userReaction = BlogReaction::query()
+                ->where('blog_id', $blogId)
+                ->where('user_id', $currentUserId)
+                ->whereNull('comment_id')
+                ->whereNull('reply_id')
+                ->value('reaction');
+            $userReaction = $userReaction ? strtolower((string) $userReaction) : null;
+        }
+
+        return [
+            'summary' => [
+                'total' => $total,
+                'counts' => $baseCounts,
+            ],
+            'user_reaction' => $userReaction,
+        ];
     }
 
     /**

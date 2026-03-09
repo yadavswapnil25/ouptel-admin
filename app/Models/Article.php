@@ -127,6 +127,11 @@ class Article extends Model
 
     public function getReactionsCountAttribute()
     {
-        return $this->reactions()->count();
+        // Only count reactions attached directly to the blog article
+        // (ignore reactions on comments/replies).
+        return $this->reactions()
+            ->whereNull('comment_id')
+            ->whereNull('reply_id')
+            ->count();
     }
 }

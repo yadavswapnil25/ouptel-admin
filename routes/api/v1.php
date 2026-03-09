@@ -101,11 +101,13 @@ Route::get('/blogs/meta', [BlogsController::class, 'meta']);
 Route::get('/blogs/categories', [BlogsController::class, 'categories']); // Get blog categories with metadata
 Route::get('/blogs/my-articles', [BlogsController::class, 'getMyArticles']); // 5.1 Get My Articles (old API: ajax_loading.php?link1=my-blogs)
 Route::get('/blogs/{id}', [BlogsController::class, 'show']); // Get blog/article by ID (must be after specific routes)
+Route::get('/blogs/{id}/reactions', [BlogsController::class, 'getBlogReactions']); // Get blog reactions summary
 Route::get('/blogs/{id}/comments', [BlogsController::class, 'getBlogComments']); // Get blog comments
 Route::post('/blogs/{id}/comments', [BlogsController::class, 'addBlogComment']); // Add blog comment
 Route::post('/blogs/comments/{commentId}/replies', [BlogsController::class, 'replyToBlogComment']); // Reply to blog comment
 Route::delete('/blogs/comments/{commentId}', [BlogsController::class, 'deleteBlogComment']); // Delete blog comment
 Route::delete('/blogs/comments/replies/{replyId}', [BlogsController::class, 'deleteBlogReply']); // Delete blog reply
+Route::post('/blogs/{id}/reactions', [BlogsController::class, 'reactToBlog']); // React to blog
 Route::post('/blogs', [BlogsController::class, 'createArticle']); // 5.2 Create Article
 Route::put('/blogs/{id}', [BlogsController::class, 'updateArticle']); // 5.3 Update My Article
 Route::post('/blogs/{id}', [BlogsController::class, 'updateArticle']); // 5.3 Update My Article (POST alternative)
