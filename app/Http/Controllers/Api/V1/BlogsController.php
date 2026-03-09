@@ -4,6 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Models\Article;
 use App\Models\BlogCategory;
+use App\Models\BlogComment;
+use App\Models\BlogCommentReply;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
@@ -211,7 +214,7 @@ class BlogsController extends BaseController
             }
         }
 
-        // Check if current user has reacted (temporarily disabled as we allow all views without auth)
+        // Reactions per user are not tracked for now while blog details are public
         $tokenUserId = null;
         $isLiked = false;
 
@@ -240,12 +243,330 @@ class BlogsController extends BaseController
                 'reactions' => $article->reactions_count,
                 'url' => $article->url,
                 'is_liked' => $isLiked,
-                'is_owner' => $tokenUserId && (string) $rawUserId == (string) $tokenUserId,
+                'is_owner' => false,
                 'author' => $userData,
             ],
         ];
 
         return response()->json($response);
+    }
+
+    /**
+     * Get comments for a blog article (WoWonder-style, with replies preview).
+     */
+    public function getBlogComments(Request $request, int $blogId): JsonResponse
+    {
+        // Comments are public; auth is only needed to mark ownership flags
+        $tokenUserId = null;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        $article = Article::find($blogId);
+        if (!$article) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'Article not found',
+                ],
+            ], 404);
+        }
+
+        $perPage = (int) $request->query('per_page', 20);
+        $perPage = max(1, min($perPage, 50));
+
+        $query = BlogComment::with('user', 'replies.user')
+            ->where('blog_id', $blogId)
+            ->orderBy('time', 'asc');
+
+        $paginator = $query->paginate($perPage);
+
+        $comments = $paginator->getCollection()->map(function (BlogComment $comment) use ($tokenUserId) {
+            return $this->formatBlogComment($comment, $tokenUserId, true);
+        });
+
+        return response()->json([
+            'api_status' => 200,
+            'api_text' => 'success',
+            'data' => [
+                'comments' => $comments,
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                    'last_page' => $paginator->lastPage(),
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * Add a new comment to a blog article.
+     */
+    public function addBlogComment(Request $request, int $blogId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided',
+                ],
+            ], 401);
+        }
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found',
+                ],
+            ], 401);
+        }
+
+        $article = Article::find($blogId);
+        if (!$article) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'Article not found',
+                ],
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'text' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $comment = new BlogComment();
+        $comment->user_id = (int) $tokenUserId;
+        $comment->blog_id = $article->id;
+        $comment->text = trim($validated['text']);
+        $comment->time = time();
+        $comment->save();
+
+        $comment->load('user', 'replies.user');
+
+        return response()->json([
+            'api_status' => 200,
+            'api_text' => 'success',
+            'message' => 'Comment posted successfully',
+            'data' => $this->formatBlogComment($comment, $tokenUserId, true),
+        ], 201);
+    }
+
+    /**
+     * Reply to a blog comment.
+     */
+    public function replyToBlogComment(Request $request, int $commentId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided',
+                ],
+            ], 401);
+        }
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found',
+                ],
+            ], 401);
+        }
+
+        $parentComment = BlogComment::with('article')->find($commentId);
+        if (!$parentComment || !$parentComment->article) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 4,
+                    'error_text' => 'Comment not found',
+                ],
+            ], 404);
+        }
+
+        $validated = $request->validate([
+            'text' => ['required', 'string', 'max:2000'],
+        ]);
+
+        $reply = new BlogCommentReply();
+        $reply->user_id = (int) $tokenUserId;
+        $reply->blog_id = $parentComment->blog_id;
+        $reply->comm_id = $parentComment->id;
+        $reply->text = trim($validated['text']);
+        $reply->time = time();
+        $reply->save();
+
+        $reply->load('user');
+
+        return response()->json([
+            'api_status' => 200,
+            'api_text' => 'success',
+            'message' => 'Reply posted successfully',
+            'data' => $this->formatBlogReply($reply, $tokenUserId),
+        ], 201);
+    }
+
+    /**
+     * Delete a blog comment (owner or article owner).
+     */
+    public function deleteBlogComment(Request $request, int $commentId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        $comment = BlogComment::with('article')->find($commentId);
+        if (!$comment || !$comment->article) {
+            return response()->json(['ok' => false, 'message' => 'Comment not found'], 404);
+        }
+
+        $isCommentOwner = (string) $comment->user_id === (string) $tokenUserId;
+        $isArticleOwner = (string) $comment->article->user === (string) $tokenUserId;
+
+        if (!$isCommentOwner && !$isArticleOwner) {
+            return response()->json(['ok' => false, 'message' => 'Access denied'], 403);
+        }
+
+        // Delete replies first
+        BlogCommentReply::where('comm_id', $comment->id)->delete();
+        $comment->delete();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Comment deleted successfully',
+        ]);
+    }
+
+    /**
+     * Delete a blog comment reply (owner or article/comment owner).
+     */
+    public function deleteBlogReply(Request $request, int $replyId): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized - No Bearer token provided'], 401);
+        }
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token - Session not found'], 401);
+        }
+
+        $reply = BlogCommentReply::with('comment.article')->find($replyId);
+        if (!$reply || !$reply->comment || !$reply->article) {
+            return response()->json(['ok' => false, 'message' => 'Reply not found'], 404);
+        }
+
+        $isReplyOwner = (string) $reply->user_id === (string) $tokenUserId;
+        $isCommentOwner = (string) $reply->comment->user_id === (string) $tokenUserId;
+        $isArticleOwner = (string) $reply->article->user === (string) $tokenUserId;
+
+        if (!$isReplyOwner && !$isCommentOwner && !$isArticleOwner) {
+            return response()->json(['ok' => false, 'message' => 'Access denied'], 403);
+        }
+
+        $reply->delete();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Reply deleted successfully',
+        ]);
+    }
+
+    /**
+     * Helper: format a blog comment with replies.
+     */
+    protected function formatBlogComment(BlogComment $comment, ?string $currentUserId, bool $includeReplies = true): array
+    {
+        $user = $comment->user;
+        $author = null;
+        if ($user instanceof User) {
+            $author = [
+                'user_id' => $user->user_id,
+                'username' => $user->username ?? 'Unknown',
+                'name' => $user->name ?? $user->username ?? 'Unknown User',
+                'avatar' => $user->avatar ?? '',
+                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+            ];
+        }
+
+        $replies = [];
+        if ($includeReplies) {
+            $replies = $comment->replies
+                ->sortBy('time')
+                ->map(function (BlogCommentReply $reply) use ($currentUserId) {
+                    return $this->formatBlogReply($reply, $currentUserId);
+                })
+                ->values()
+                ->all();
+        }
+
+        return [
+            'id' => $comment->id,
+            'blog_id' => $comment->blog_id,
+            'text' => $comment->text,
+            'created_at' => date('c', $comment->time),
+            'created_at_human' => $comment->posted_date,
+            'is_owner' => $currentUserId ? ((string) $comment->user_id === (string) $currentUserId) : false,
+            'author' => $author,
+            'replies_count' => $comment->replies->count(),
+            'replies' => $replies,
+        ];
+    }
+
+    /**
+     * Helper: format a blog reply.
+     */
+    protected function formatBlogReply(BlogCommentReply $reply, ?string $currentUserId): array
+    {
+        $user = $reply->user;
+        $author = null;
+        if ($user instanceof User) {
+            $author = [
+                'user_id' => $user->user_id,
+                'username' => $user->username ?? 'Unknown',
+                'name' => $user->name ?? $user->username ?? 'Unknown User',
+                'avatar' => $user->avatar ?? '',
+                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+            ];
+        }
+
+        return [
+            'id' => $reply->id,
+            'blog_id' => $reply->blog_id,
+            'comment_id' => $reply->comm_id,
+            'text' => $reply->text,
+            'created_at' => date('c', $reply->time),
+            'created_at_human' => $reply->posted_date,
+            'is_owner' => $currentUserId ? ((string) $reply->user_id === (string) $currentUserId) : false,
+            'author' => $author,
+        ];
     }
 
     // 5.1 Get My Articles
