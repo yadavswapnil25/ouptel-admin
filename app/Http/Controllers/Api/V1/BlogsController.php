@@ -403,7 +403,7 @@ class BlogsController extends BaseController
             'api_status' => 200,
             'api_text' => 'success',
             'api_version' => '1.0',
-            'message' => 'Article created successfully',
+            'message' => 'Your blog is under review and will be published after admin approval.',
             'data' => [
                 'id' => $article->id,
                 'title' => $article->title,

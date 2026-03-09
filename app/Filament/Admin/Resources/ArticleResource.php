@@ -85,38 +85,10 @@ class ArticleResource extends Resource
                         Forms\Components\Select::make('category')
                             ->label('Category')
                             ->options(function () {
-                                return BlogCategory::select('id', 'lang_key')
-                                    ->limit(50)
-                                    ->get()
-                                    ->mapWithKeys(function ($category) {
-                                        $categoryNames = [
-                                            '1580' => 'Technology',
-                                            '1581' => 'Healthcare',
-                                            '1582' => 'Finance',
-                                            '1583' => 'Education',
-                                            '1584' => 'Marketing',
-                                            '1585' => 'Design',
-                                            '1586' => 'Engineering',
-                                            '1587' => 'Sales',
-                                            '1588' => 'Customer Service',
-                                            '1589' => 'Human Resources',
-                                            '1590' => 'Operations',
-                                            '1591' => 'Legal',
-                                            '1592' => 'Consulting',
-                                            '1593' => 'Real Estate',
-                                            '1594' => 'Media',
-                                            '1595' => 'Entertainment',
-                                            '1596' => 'Sports',
-                                            '1597' => 'Travel',
-                                            '1598' => 'Food & Beverage',
-                                            '1599' => 'Retail',
-                                            '1600' => 'Manufacturing',
-                                            '1601' => 'Transportation',
-                                            '1602' => 'Energy',
-                                            '1603' => 'Other',
-                                        ];
-                                        return [$category->id => $categoryNames[$category->lang_key] ?? "Category {$category->id}"];
-                                    });
+                                // Use the BlogCategory 'name' field so admin matches website labels
+                                return BlogCategory::query()
+                                    ->orderBy('id')
+                                    ->pluck('name', 'id');
                             })
                             ->searchable()
                             ->required(),
@@ -195,36 +167,10 @@ class ArticleResource extends Resource
                     ->label('Category')
                     ->formatStateUsing(function ($state) {
                         $category = BlogCategory::find($state);
-                        if ($category) {
-                            $categoryNames = [
-                                '1580' => 'Technology',
-                                '1581' => 'Healthcare',
-                                '1582' => 'Finance',
-                                '1583' => 'Education',
-                                '1584' => 'Marketing',
-                                '1585' => 'Design',
-                                '1586' => 'Engineering',
-                                '1587' => 'Sales',
-                                '1588' => 'Customer Service',
-                                '1589' => 'Human Resources',
-                                '1590' => 'Operations',
-                                '1591' => 'Legal',
-                                '1592' => 'Consulting',
-                                '1593' => 'Real Estate',
-                                '1594' => 'Media',
-                                '1595' => 'Entertainment',
-                                '1596' => 'Sports',
-                                '1597' => 'Travel',
-                                '1598' => 'Food & Beverage',
-                                '1599' => 'Retail',
-                                '1600' => 'Manufacturing',
-                                '1601' => 'Transportation',
-                                '1602' => 'Energy',
-                                '1603' => 'Other',
-                            ];
-                            return $categoryNames[$category->lang_key] ?? "Category {$category->lang_key}";
+                        if ($category && $category->name) {
+                            return $category->name;
                         }
-                        return 'No Category';
+                        return $state ? "Category {$state}" : 'No Category';
                     })
                     ->badge()
                     ->color('info'),
@@ -274,38 +220,9 @@ class ArticleResource extends Resource
                 SelectFilter::make('category')
                     ->label('Category')
                     ->options(function () {
-                        return BlogCategory::select('id', 'lang_key')
-                            ->limit(50)
-                            ->get()
-                            ->mapWithKeys(function ($category) {
-                                $categoryNames = [
-                                    '1580' => 'Technology',
-                                    '1581' => 'Healthcare',
-                                    '1582' => 'Finance',
-                                    '1583' => 'Education',
-                                    '1584' => 'Marketing',
-                                    '1585' => 'Design',
-                                    '1586' => 'Engineering',
-                                    '1587' => 'Sales',
-                                    '1588' => 'Customer Service',
-                                    '1589' => 'Human Resources',
-                                    '1590' => 'Operations',
-                                    '1591' => 'Legal',
-                                    '1592' => 'Consulting',
-                                    '1593' => 'Real Estate',
-                                    '1594' => 'Media',
-                                    '1595' => 'Entertainment',
-                                    '1596' => 'Sports',
-                                    '1597' => 'Travel',
-                                    '1598' => 'Food & Beverage',
-                                    '1599' => 'Retail',
-                                    '1600' => 'Manufacturing',
-                                    '1601' => 'Transportation',
-                                    '1602' => 'Energy',
-                                    '1603' => 'Other',
-                                ];
-                                return [$category->id => $categoryNames[$category->lang_key] ?? "Category {$category->id}"];
-                            });
+                        return BlogCategory::query()
+                            ->orderBy('id')
+                            ->pluck('name', 'id');
                     })
                     ->query(function (Builder $query, array $data): Builder {
                         return $query->when(

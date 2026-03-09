@@ -89,7 +89,10 @@ class Article extends Model
 
     public function getUrlAttribute()
     {
-        return url("/blog/{$this->id}");
+        // Use frontend URL so "View" in admin opens the public blog page
+        $frontendBase = env('FRONTEND_URL', config('app.url'));
+        $frontendBase = rtrim($frontendBase, '/');
+        return "{$frontendBase}/blog/{$this->id}";
     }
 
     public function getExcerptAttribute()
