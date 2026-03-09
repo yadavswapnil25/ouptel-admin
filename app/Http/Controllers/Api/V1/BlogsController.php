@@ -510,7 +510,8 @@ class BlogsController extends BaseController
                 'username' => $user->username ?? 'Unknown',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                // Use accessor so URLs match everywhere (same as website)
+                'avatar_url' => $user->avatar_url,
             ];
         }
 
@@ -551,7 +552,7 @@ class BlogsController extends BaseController
                 'username' => $user->username ?? 'Unknown',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar_url,
             ];
         }
 
