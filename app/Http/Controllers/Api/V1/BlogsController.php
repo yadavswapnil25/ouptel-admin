@@ -373,11 +373,13 @@ class BlogsController extends BaseController
         }
 
         // Find existing reaction by this user on this blog (not on comments/replies)
+        // In WoWonder schema, comment_id / reply_id are NOT NULL and use 0 for
+        // pure post/blog reactions, so we match that convention here.
         $existing = BlogReaction::query()
             ->where('blog_id', $blogId)
             ->where('user_id', $userId)
-            ->whereNull('comment_id')
-            ->whereNull('reply_id')
+            ->where('comment_id', 0)
+            ->where('reply_id', 0)
             ->first();
 
         if ($existing && strtolower((string) $existing->reaction) === $reaction) {
@@ -392,8 +394,8 @@ class BlogsController extends BaseController
             BlogReaction::create([
                 'user_id' => $userId,
                 'blog_id' => $blogId,
-                'comment_id' => null,
-                'reply_id' => null,
+                'comment_id' => 0,
+                'reply_id' => 0,
                 'reaction' => $reaction,
             ]);
         }
@@ -463,8 +465,8 @@ class BlogsController extends BaseController
 
         $rows = BlogReaction::query()
             ->where('blog_id', $blogId)
-            ->whereNull('comment_id')
-            ->whereNull('reply_id')
+            ->where('comment_id', 0)
+            ->where('reply_id', 0)
             ->select('reaction', DB::raw('COUNT(*) as count'))
             ->groupBy('reaction')
             ->get();
@@ -483,8 +485,8 @@ class BlogsController extends BaseController
             $userReaction = BlogReaction::query()
                 ->where('blog_id', $blogId)
                 ->where('user_id', $currentUserId)
-                ->whereNull('comment_id')
-                ->whereNull('reply_id')
+                ->where('comment_id', 0)
+                ->where('reply_id', 0)
                 ->value('reaction');
             $userReaction = $userReaction ? strtolower((string) $userReaction) : null;
         }

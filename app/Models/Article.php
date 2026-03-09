@@ -130,8 +130,8 @@ class Article extends Model
         // Only count reactions attached directly to the blog article
         // (ignore reactions on comments/replies).
         return $this->reactions()
-            ->whereNull('comment_id')
-            ->whereNull('reply_id')
+            ->where('comment_id', 0)
+            ->where('reply_id', 0)
             ->count();
     }
 }
