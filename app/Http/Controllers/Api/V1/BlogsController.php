@@ -19,11 +19,11 @@ class BlogsController extends BaseController
         $perPage = max(1, min($perPage, 50));
 
         $query = Article::query()
-            ->where('active', 1)
+            ->where('active', '1')
             ->orderByDesc('id');
 
         if ($request->filled('category')) {
-            $query->where('category', (int) $request->query('category'));
+            $query->where('category', $request->query('category'));
         }
 
         // Text search by term (title, description, content, tags)
@@ -50,7 +50,6 @@ class BlogsController extends BaseController
             }
             $query->where('user', $userId);
         }
-
         $paginator = $query->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (Article $article) {
