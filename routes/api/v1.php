@@ -104,6 +104,7 @@ Route::get('/blogs/{id}', [BlogsController::class, 'show']); // Get blog/article
 Route::get('/blogs/{id}/reactions', [BlogsController::class, 'getBlogReactions']); // Get blog reactions summary
 Route::get('/blogs/{id}/comments', [BlogsController::class, 'getBlogComments']); // Get blog comments
 Route::post('/blogs/{id}/comments', [BlogsController::class, 'addBlogComment']); // Add blog comment
+Route::post('/blogs/comments/{commentId}/reactions', [BlogsController::class, 'reactToComment']); // React to blog comment
 Route::post('/blogs/comments/{commentId}/replies', [BlogsController::class, 'replyToBlogComment']); // Reply to blog comment
 Route::delete('/blogs/comments/{commentId}', [BlogsController::class, 'deleteBlogComment']); // Delete blog comment
 Route::delete('/blogs/comments/replies/{replyId}', [BlogsController::class, 'deleteBlogReply']); // Delete blog reply

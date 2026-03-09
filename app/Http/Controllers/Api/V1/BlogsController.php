@@ -560,6 +560,104 @@ class BlogsController extends BaseController
     }
 
     /**
+     * Toggle/set a reaction on a blog comment (WoWonder-style).
+     */
+    public function reactToComment(Request $request, int $commentId): JsonResponse
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 401,
+                'errors' => ['error_id' => 1, 'error_text' => 'Unauthorized'],
+            ], 401);
+        }
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$userId) {
+            return response()->json([
+                'api_status' => 401,
+                'errors' => ['error_id' => 2, 'error_text' => 'Invalid token'],
+            ], 401);
+        }
+
+        $comment = BlogComment::find($commentId);
+        if (!$comment) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_id' => 4, 'error_text' => 'Comment not found'],
+            ], 404);
+        }
+
+        $validReactions = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
+        $reaction = strtolower((string) $request->input('reaction', 'like'));
+        if (!in_array($reaction, $validReactions, true)) {
+            return response()->json([
+                'api_status' => 422,
+                'errors' => ['error_id' => 3, 'error_text' => 'Invalid reaction type'],
+            ], 422);
+        }
+
+        // comment_id = commentId, reply_id = 0 for pure comment reactions
+        $existing = BlogReaction::query()
+            ->where('blog_id', $comment->blog_id)
+            ->where('comment_id', $commentId)
+            ->where('reply_id', 0)
+            ->where('user_id', $userId)
+            ->first();
+
+        if ($existing && strtolower((string) $existing->reaction) === $reaction) {
+            $existing->delete();
+        } elseif ($existing) {
+            $existing->reaction = $reaction;
+            $existing->save();
+        } else {
+            BlogReaction::create([
+                'user_id' => $userId,
+                'blog_id' => $comment->blog_id,
+                'comment_id' => $commentId,
+                'reply_id' => 0,
+                'reaction' => $reaction,
+            ]);
+        }
+
+        // Rebuild summary for this comment
+        $counts = [];
+        foreach ($validReactions as $type) {
+            $counts[$type] = 0;
+        }
+        $rows = BlogReaction::query()
+            ->where('comment_id', $commentId)
+            ->where('reply_id', 0)
+            ->select('reaction', DB::raw('COUNT(*) as count'))
+            ->groupBy('reaction')
+            ->get();
+        foreach ($rows as $row) {
+            $t = strtolower((string) $row->reaction);
+            if (isset($counts[$t])) {
+                $counts[$t] = (int) $row->count;
+            }
+        }
+        $total = array_sum($counts);
+
+        $userReaction = BlogReaction::query()
+            ->where('comment_id', $commentId)
+            ->where('reply_id', 0)
+            ->where('user_id', $userId)
+            ->value('reaction');
+        $userReaction = $userReaction ? strtolower((string) $userReaction) : null;
+
+        return response()->json([
+            'api_status' => 200,
+            'api_text' => 'success',
+            'data' => [
+                'comment_id' => $commentId,
+                'summary' => ['total' => $total, 'counts' => $counts],
+                'user_reaction' => $userReaction,
+            ],
+        ]);
+    }
+
+    /**
      * Reply to a blog comment.
      */
     public function replyToBlogComment(Request $request, int $commentId): JsonResponse
@@ -726,6 +824,33 @@ class BlogsController extends BaseController
                 ->all();
         }
 
+        // Build per-comment reaction summary
+        $validReactions = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
+        $commentReactionCounts = array_fill_keys($validReactions, 0);
+        $commentReactionRows = BlogReaction::query()
+            ->where('comment_id', $comment->id)
+            ->where('reply_id', 0)
+            ->select('reaction', DB::raw('COUNT(*) as count'))
+            ->groupBy('reaction')
+            ->get();
+        foreach ($commentReactionRows as $row) {
+            $t = strtolower((string) $row->reaction);
+            if (isset($commentReactionCounts[$t])) {
+                $commentReactionCounts[$t] = (int) $row->count;
+            }
+        }
+        $commentReactionTotal = array_sum($commentReactionCounts);
+
+        $commentUserReaction = null;
+        if ($currentUserId) {
+            $r = BlogReaction::query()
+                ->where('comment_id', $comment->id)
+                ->where('reply_id', 0)
+                ->where('user_id', $currentUserId)
+                ->value('reaction');
+            $commentUserReaction = $r ? strtolower((string) $r) : null;
+        }
+
         return [
             'id' => $comment->id,
             'blog_id' => $comment->blog_id,
@@ -736,6 +861,11 @@ class BlogsController extends BaseController
             'author' => $author,
             'replies_count' => $comment->replies->count(),
             'replies' => $replies,
+            'reactions' => [
+                'total' => $commentReactionTotal,
+                'counts' => $commentReactionCounts,
+            ],
+            'user_reaction' => $commentUserReaction,
         ];
     }
 
