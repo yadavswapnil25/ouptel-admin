@@ -57,28 +57,25 @@ class BlogsController extends BaseController
         $paginator = $query->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (Article $article) {
-            $u = $article->user;
+            // $article->user can return the raw int column value due to naming
+            // collision between the "user" column and the user() relationship.
+            // Always resolve via the DB to avoid that ambiguity.
+            $rawUserId = (int) ($article->getAttributes()['user'] ?? 0);
+            $raw = $rawUserId
+                ? DB::table('Wo_Users')->where('user_id', $rawUserId)->first()
+                : null;
 
-            // If the Eloquent relationship didn't load, fetch directly
-            if (!$u) {
-                $raw = DB::table('Wo_Users')
-                    ->where('user_id', DB::table('Wo_Blog')->where('id', $article->id)->value('user'))
-                    ->first();
-                $authorName   = $raw ? (trim(($raw->first_name ?? '') . ' ' . ($raw->last_name ?? '')) ?: ($raw->username ?? null)) : null;
-                $authorAvatar = ($raw && $raw->avatar) ? asset('storage/' . $raw->avatar) : null;
+            $authorName   = null;
+            $authorAvatar = null;
+            $authorUser   = ['user_id' => null, 'username' => null, 'name' => null, 'avatar_url' => null];
+
+            if ($raw) {
+                $fullName     = trim(($raw->first_name ?? '') . ' ' . ($raw->last_name ?? ''));
+                $authorName   = $fullName ?: ($raw->username ?? null);
+                $authorAvatar = ($raw->avatar ?? null) ? asset('storage/' . $raw->avatar) : null;
                 $authorUser   = [
-                    'user_id'    => $raw->user_id ?? null,
+                    'user_id'    => $raw->user_id,
                     'username'   => $raw->username ?? null,
-                    'name'       => $authorName,
-                    'avatar_url' => $authorAvatar,
-                ];
-            } else {
-                $fullName = trim(($u->attributes['first_name'] ?? '') . ' ' . ($u->attributes['last_name'] ?? ''));
-                $authorName   = $fullName ?: ($u->attributes['username'] ?? null);
-                $authorAvatar = ($u->avatar ?? null) ? asset('storage/' . $u->avatar) : null;
-                $authorUser   = [
-                    'user_id'    => $u->user_id,
-                    'username'   => $u->attributes['username'] ?? null,
                     'name'       => $authorName,
                     'avatar_url' => $authorAvatar,
                 ];
