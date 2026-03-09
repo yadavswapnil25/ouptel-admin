@@ -952,6 +952,18 @@ class BlogsController extends BaseController
             $query->where('category', (int) $request->query('category'));
         }
 
+        // Full-text search
+        $term = $request->query('term', $request->query('q'));
+        if (!empty($term)) {
+            $like = '%' . str_replace('%', '\\%', $term) . '%';
+            $query->where(function ($q) use ($like) {
+                $q->where('title', 'like', $like)
+                  ->orWhere('description', 'like', $like)
+                  ->orWhere('content', 'like', $like)
+                  ->orWhere('tags', 'like', $like);
+            });
+        }
+
         $paginator = $query->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (Article $article) {
