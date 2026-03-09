@@ -19,11 +19,6 @@ class BlogComment extends Model
         'user_id',
         'blog_id',
         'text',
-        'time',
-    ];
-
-    protected $casts = [
-        'time' => 'integer',
     ];
 
     public function user(): BelongsTo
@@ -44,11 +39,6 @@ class BlogComment extends Model
     public function reactions(): HasMany
     {
         return $this->hasMany(BlogReaction::class, 'comment_id', 'id');
-    }
-
-    public function getPostedDateAttribute()
-    {
-        return date('Y-m-d H:i:s', $this->time);
     }
 }
 

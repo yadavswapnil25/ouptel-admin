@@ -280,7 +280,7 @@ class BlogsController extends BaseController
 
         $query = BlogComment::with('user', 'replies.user')
             ->where('blog_id', $blogId)
-            ->orderBy('time', 'asc');
+            ->orderBy('id', 'asc');
 
         $paginator = $query->paginate($perPage);
 
@@ -350,7 +350,6 @@ class BlogsController extends BaseController
         $comment->user_id = (int) $tokenUserId;
         $comment->blog_id = $article->id;
         $comment->text = trim($validated['text']);
-        $comment->time = time();
         $comment->save();
 
         $comment->load('user', 'replies.user');
@@ -411,7 +410,6 @@ class BlogsController extends BaseController
         $reply->blog_id = $parentComment->blog_id;
         $reply->comm_id = $parentComment->id;
         $reply->text = trim($validated['text']);
-        $reply->time = time();
         $reply->save();
 
         $reply->load('user');
@@ -531,8 +529,8 @@ class BlogsController extends BaseController
             'id' => $comment->id,
             'blog_id' => $comment->blog_id,
             'text' => $comment->text,
-            'created_at' => date('c', $comment->time),
-            'created_at_human' => $comment->posted_date,
+            'created_at' => now()->toIso8601String(),
+            'created_at_human' => now()->format('Y-m-d H:i:s'),
             'is_owner' => $currentUserId ? ((string) $comment->user_id === (string) $currentUserId) : false,
             'author' => $author,
             'replies_count' => $comment->replies->count(),
@@ -562,8 +560,8 @@ class BlogsController extends BaseController
             'blog_id' => $reply->blog_id,
             'comment_id' => $reply->comm_id,
             'text' => $reply->text,
-            'created_at' => date('c', $reply->time),
-            'created_at_human' => $reply->posted_date,
+            'created_at' => now()->toIso8601String(),
+            'created_at_human' => now()->format('Y-m-d H:i:s'),
             'is_owner' => $currentUserId ? ((string) $reply->user_id === (string) $currentUserId) : false,
             'author' => $author,
         ];
