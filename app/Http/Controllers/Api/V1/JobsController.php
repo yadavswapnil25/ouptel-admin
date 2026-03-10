@@ -719,6 +719,14 @@ class JobsController extends Controller
         $expEndRaw = $request->input('experience_end_date', '');
         $expEnd = $expEndRaw === null || $expEndRaw === '' ? $expStart : $expEndRaw;
 
+        // Ensure question answers are never null (some DB schemas use NOT NULL)
+        $q1 = $request->input('question_one_answer');
+        $q2 = $request->input('question_two_answer');
+        $q3 = $request->input('question_three_answer');
+        $q1 = $q1 === null ? '' : $q1;
+        $q2 = $q2 === null ? '' : $q2;
+        $q3 = $q3 === null ? '' : $q3;
+
         $insertData = [
             'user_id' => $userId,
             'job_id' => (int) $id,
@@ -732,9 +740,9 @@ class JobsController extends Controller
             'experience_description' => $request->input('experience_description', ''),
             'experience_start_date' => $expStart,
             'experience_end_date' => $expEnd,
-            'question_one_answer' => $request->input('question_one_answer', ''),
-            'question_two_answer' => $request->input('question_two_answer', ''),
-            'question_three_answer' => $request->input('question_three_answer', ''),
+            'question_one_answer' => $q1,
+            'question_two_answer' => $q2,
+            'question_three_answer' => $q3,
             'time' => (string) time(),
         ];
 
