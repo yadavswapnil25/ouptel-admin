@@ -488,6 +488,7 @@ class JobsController extends Controller
                     'is_applied' => $isApplied,
                     'is_owner' => $isOwner,
                     'owner' => $owner,
+                    'questions' => $this->extractJobQuestions($job),
                     'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
                 ],
                 'applications' => $applicationsData,
@@ -560,26 +561,57 @@ class JobsController extends Controller
             return response()->json(['ok' => false, 'message' => 'Job not found'], 404);
         }
 
-        $validated = $request->validate([
-            // Note: cover_letter and resume_url columns don't exist in Wo_Job_Apply table
+        $alreadyApplied = DB::table('Wo_Job_Apply')
+            ->where('job_id', $id)
+            ->where('user_id', $userId)
+            ->exists();
+        if ($alreadyApplied) {
+            return response()->json(['ok' => false, 'message' => 'You have already applied to this job'], 400);
+        }
+
+        $request->validate([
+            'user_name' => 'required|string|max:100',
+            'phone_number' => 'nullable|string|max:50',
+            'location' => 'nullable|string|max:50',
+            'email' => 'required|email|max:100',
+            'position' => 'nullable|string|max:100',
+            'where_did_you_work' => 'nullable|string|max:100',
+            'experience_description' => 'nullable|string|max:300',
+            'experience_start_date' => 'nullable|string|max:50',
+            'experience_end_date' => 'nullable|string|max:50',
+            'question_one_answer' => 'nullable|string|max:200',
+            'question_two_answer' => 'nullable|string|max:200',
+            'question_three_answer' => 'nullable|string|max:200',
         ]);
 
-        $application = new JobApplication();
-        $application->job_id = (string) $id;
-        $application->user_id = (string) $userId;
-        // Note: cover_letter, resume_url, and status columns don't exist in Wo_Job_Apply table
-        $application->time = (string) time();
-        $application->save();
+        $pageId = $job->attributes['page_id'] ?? 0;
+
+        $insertData = [
+            'user_id' => $userId,
+            'job_id' => (int) $id,
+            'page_id' => (int) $pageId,
+            'user_name' => $request->input('user_name', ''),
+            'phone_number' => $request->input('phone_number', ''),
+            'location' => $request->input('location', ''),
+            'email' => $request->input('email', ''),
+            'position' => $request->input('position', ''),
+            'where_did_you_work' => $request->input('where_did_you_work', ''),
+            'experience_description' => $request->input('experience_description', ''),
+            'experience_start_date' => $request->input('experience_start_date', ''),
+            'experience_end_date' => $request->input('experience_end_date', ''),
+            'question_one_answer' => $request->input('question_one_answer', ''),
+            'question_two_answer' => $request->input('question_two_answer', ''),
+            'question_three_answer' => $request->input('question_three_answer', ''),
+            'time' => (string) time(),
+        ];
+
+        $appId = DB::table('Wo_Job_Apply')->insertGetId($insertData);
 
         return response()->json([
             'ok' => true,
             'message' => 'Application submitted successfully',
             'data' => [
-                'id' => $application->id,
-                'cover_letter' => '', // Default value since column doesn't exist
-                'resume_url' => '', // Default value since column doesn't exist
-                'status' => 'pending', // Default value since column doesn't exist
-                'created_at' => $application->time ? date('c', $application->time_as_timestamp) : null,
+                'id' => $appId,
             ],
         ], 201);
     }
@@ -727,6 +759,35 @@ class JobsController extends Controller
                 'job_types' => $jobTypes,
             ],
         ]);
+    }
+
+    private function extractJobQuestions(Job $job): array
+    {
+        $questions = [];
+        $attrs = $job->getAttributes();
+
+        for ($i = 1; $i <= 3; $i++) {
+            $numWord = ['one', 'two', 'three'][$i - 1];
+            $text = $attrs["question_{$numWord}"] ?? '';
+            if (empty($text)) {
+                continue;
+            }
+            $type = $attrs["question_{$numWord}_type"] ?? 'free_text_question';
+            $answers = $attrs["question_{$numWord}_answers"] ?? '';
+            $options = [];
+            if ($type === 'multiple_choice_question' && !empty($answers)) {
+                $decoded = json_decode($answers, true);
+                $options = is_array($decoded) ? $decoded : explode(',', $answers);
+            }
+            $questions[] = [
+                'number' => $i,
+                'text' => $text,
+                'type' => $type,
+                'options' => $options,
+            ];
+        }
+
+        return $questions;
     }
 
     /**
