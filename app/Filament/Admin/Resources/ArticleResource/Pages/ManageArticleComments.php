@@ -90,7 +90,7 @@ class ManageArticleComments extends Page implements Tables\Contracts\HasTable
         ];
     }
 
-    protected function getTitle(): string
+    public function getTitle(): string
     {
         return "Comments for: {$this->record->title}";
     }
