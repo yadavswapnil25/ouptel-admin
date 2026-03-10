@@ -194,22 +194,26 @@ class JobsController extends Controller
                     static $categoriesById = null;
 
                     if ($categoriesById === null) {
-                        // Prefer resolving via Wo_Langs.english if schema supports it
+                        // Prefer resolving via Wo_Langs.english if schema supports it,
+                        // but always fall back to JobCategory.name when english is empty.
                         if (
                             Schema::hasTable('Wo_Langs') &&
                             Schema::hasColumn('Wo_Job_Categories', 'lang_id') &&
+                            Schema::hasColumn('Wo_Job_Categories', 'name') &&
                             Schema::hasColumn('Wo_Langs', 'id') &&
                             Schema::hasColumn('Wo_Langs', 'english')
                         ) {
                             $categoriesById = DB::table('Wo_Job_Categories as jc')
                                 ->leftJoin('Wo_Langs as l', 'jc.lang_id', '=', 'l.id')
-                                ->select('jc.id', 'l.english')
+                                ->select('jc.id', 'jc.name', 'l.english')
                                 ->get()
                                 ->mapWithKeys(function ($row) {
-                                    return [$row->id => $row->english];
+                                    // Use english if available, otherwise fallback to name
+                                    $label = $row->english ?: $row->name;
+                                    return [$row->id => $label];
                                 });
                         } else {
-                            // Fallback to JobCategory.name if Wo_Langs mapping is not available
+                            // Fallback: just use JobCategory.name
                             $categoriesById = JobCategory::query()
                                 ->select('id', 'name')
                                 ->get()
