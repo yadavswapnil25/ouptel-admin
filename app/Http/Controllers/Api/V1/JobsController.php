@@ -184,7 +184,7 @@ class JobsController extends Controller
                 $jobType = (string) ($job->attributes['job_type'] ?? 'full_time');
             }
 
-            // Resolve category name from the same hardcoded map used in meta()
+            // Wo_Job.category → Wo_Job_Categories.lang_id → Wo_Langs.english
             $categoryId = isset($job->attributes['category']) ? (int) $job->attributes['category'] : null;
             $categoryName = $categoryId ? ($this->categoryMap()[$categoryId] ?? null) : null;
 
@@ -678,11 +678,11 @@ class JobsController extends Controller
 
     public function meta(): JsonResponse
     {
-        $categories = array_map(
-            fn($id, $name) => ['id' => $id, 'name' => $name],
-            array_keys($this->categoryMap()),
-            array_values($this->categoryMap())
-        );
+        $catMap = $this->categoryMap();
+        $categories = [];
+        foreach ($catMap as $id => $name) {
+            $categories[] = ['id' => $id, 'name' => $name];
+        }
 
         $jobTypes = [
             ['value' => 'full-time', 'label' => 'Full Time'],
@@ -702,12 +702,15 @@ class JobsController extends Controller
 
     private function categoryMap(): array
     {
-        return [
-            1 => 'Technology',
-            2 => 'Marketing',
-            3 => 'Design',
-            4 => 'Sales',
-            5 => 'Finance',
-        ];
+        static $map = null;
+
+        if ($map === null) {
+            $map = DB::table('Wo_Job_Categories as jc')
+                ->join('Wo_Langs as l', 'jc.lang_id', '=', 'l.id')
+                ->pluck('l.english', 'jc.id')
+                ->toArray();
+        }
+
+        return $map;
     }
 }
