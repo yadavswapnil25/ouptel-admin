@@ -91,6 +91,16 @@ class JobsController extends Controller
             $query->where('page_id', (int) $request->query('page_id'));
         }
 
+        // Filter by job_type if column exists
+        if ($request->filled('job_type') && Schema::hasColumn('Wo_Job', 'job_type')) {
+            $query->where('job_type', $request->query('job_type'));
+        }
+
+        // Filter by category if column exists
+        if ($request->filled('category_id') && Schema::hasColumn('Wo_Job', 'category')) {
+            $query->where('category', (int) $request->query('category_id'));
+        }
+
         // Note: category column might not exist in Wo_Jobs table
         // if ($request->filled('category')) {
         //     $query->where('category_id', $request->query('category'));
@@ -159,15 +169,60 @@ class JobsController extends Controller
                     : asset('storage/' . $job->image);
             }
 
+            // Salary information from minimum/maximum/salary_date/currency columns (if they exist)
+            $minSalary = 0;
+            $maxSalary = 0;
+            $salaryPeriod = null;
+            $currency = null;
+
+            if (Schema::hasColumn('Wo_Job', 'minimum')) {
+                $minSalary = (float) ($job->attributes['minimum'] ?? 0);
+            }
+            if (Schema::hasColumn('Wo_Job', 'maximum')) {
+                $maxSalary = (float) ($job->attributes['maximum'] ?? 0);
+            }
+            if (Schema::hasColumn('Wo_Job', 'salary_date')) {
+                $salaryPeriod = $job->attributes['salary_date'] ?? null;
+            }
+            if (Schema::hasColumn('Wo_Job', 'currency')) {
+                $currency = $job->attributes['currency'] ?? null;
+            }
+
+            // Job type from job_type column if it exists
+            $jobType = 'full_time';
+            if (Schema::hasColumn('Wo_Job', 'job_type')) {
+                $jobType = (string) ($job->attributes['job_type'] ?? 'full_time');
+            }
+
+            // Category info
+            $categoryId = null;
+            $categoryName = null;
+            if (Schema::hasColumn('Wo_Job', 'category')) {
+                $categoryId = $job->attributes['category'] ?? null;
+                if ($categoryId && Schema::hasTable('Wo_Job_Categories')) {
+                    static $categoriesById = null;
+                    if ($categoriesById === null) {
+                        $categoriesById = JobCategory::query()->get()->keyBy('id');
+                    }
+                    if (isset($categoriesById[$categoryId])) {
+                        $categoryName = $categoriesById[$categoryId]->name ?? null;
+                    }
+                }
+            }
+
             return [
                 'id' => $job->id,
                 'title' => $job->title,
                 'description' => $job->description,
                 'image' => $image,
-                'company' => 'Unknown Company', // Default value since column doesn't exist
                 'location' => $job->location,
-                'salary' => 0, // Default value since column doesn't exist
-                'type' => 'full-time', // Default value since column doesn't exist
+                'min_salary' => $minSalary,
+                'max_salary' => $maxSalary,
+                'salary_period' => $salaryPeriod,
+                'currency' => $currency,
+                'job_type' => $jobType,
+                'category_id' => $categoryId,
+                'category_name' => $categoryName,
                 'status' => $job->status,
                 'applications_count' => $job->applications_count,
                 'is_applied' => $job->is_applied,
