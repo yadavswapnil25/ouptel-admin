@@ -185,18 +185,42 @@ class JobsController extends Controller
                 $jobType = (string) ($job->attributes['job_type'] ?? 'full_time');
             }
 
-            // Category info
+            // Category info: Wo_Job.category -> Wo_Job_Categories.lang_id -> Wo_Langs.english
             $categoryId = null;
             $categoryName = null;
             if (Schema::hasColumn('Wo_Job', 'category')) {
                 $categoryId = $job->attributes['category'] ?? null;
                 if ($categoryId && Schema::hasTable('Wo_Job_Categories')) {
                     static $categoriesById = null;
+
                     if ($categoriesById === null) {
-                        $categoriesById = JobCategory::query()->get()->keyBy('id');
+                        // Prefer resolving via Wo_Langs.english if schema supports it
+                        if (
+                            Schema::hasTable('Wo_Langs') &&
+                            Schema::hasColumn('Wo_Job_Categories', 'lang_id') &&
+                            Schema::hasColumn('Wo_Langs', 'id') &&
+                            Schema::hasColumn('Wo_Langs', 'english')
+                        ) {
+                            $categoriesById = DB::table('Wo_Job_Categories as jc')
+                                ->leftJoin('Wo_Langs as l', 'jc.lang_id', '=', 'l.id')
+                                ->select('jc.id', 'l.english')
+                                ->get()
+                                ->mapWithKeys(function ($row) {
+                                    return [$row->id => $row->english];
+                                });
+                        } else {
+                            // Fallback to JobCategory.name if Wo_Langs mapping is not available
+                            $categoriesById = JobCategory::query()
+                                ->select('id', 'name')
+                                ->get()
+                                ->mapWithKeys(function ($row) {
+                                    return [$row->id => $row->name];
+                                });
+                        }
                     }
+
                     if (isset($categoriesById[$categoryId])) {
-                        $categoryName = $categoriesById[$categoryId]->name ?? null;
+                        $categoryName = $categoriesById[$categoryId];
                     }
                 }
             }
@@ -212,7 +236,7 @@ class JobsController extends Controller
                 'salary_period' => $salaryPeriod,
                 'currency' => $currency,
                 'job_type' => $jobType,
-                'category_id' => $categoryId,
+                'category_id' => $job->category ?? null,
                 'category_name' => $categoryName,
                 'status' => $job->status,
                 'applications_count' => $job->applications_count,
