@@ -700,15 +700,29 @@ class JobsController extends Controller
         ]);
     }
 
+    /**
+     * Resolve job category IDs to their English labels using the WoWonder schema:
+     * Wo_Job.category (id) -> Wo_Job_Categories.id -> Wo_Job_Categories.lang_key -> Wo_Langs.id -> Wo_Langs.english
+     */
     private function categoryMap(): array
     {
         static $map = null;
 
         if ($map === null) {
-            $map = DB::table('Wo_Job_Categories as jc')
-                ->join('Wo_Langs as l', 'jc.lang_id', '=', 'l.id')
-                ->pluck('l.english', 'jc.id')
-                ->toArray();
+            $map = [];
+
+            if (
+                Schema::hasTable('Wo_Job_Categories') &&
+                Schema::hasTable('Wo_Langs') &&
+                Schema::hasColumn('Wo_Job_Categories', 'lang_key') &&
+                Schema::hasColumn('Wo_Langs', 'id') &&
+                Schema::hasColumn('Wo_Langs', 'english')
+            ) {
+                $map = DB::table('Wo_Job_Categories as jc')
+                    ->join('Wo_Langs as l', 'jc.lang_key', '=', 'l.id')
+                    ->pluck('l.english', 'jc.id')
+                    ->toArray();
+            }
         }
 
         return $map;
