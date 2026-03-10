@@ -6,7 +6,6 @@ use App\Models\Article;
 use App\Models\BlogCategory;
 use App\Models\BlogComment;
 use App\Models\BlogCommentReply;
-use App\Models\BlogReaction;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -57,43 +56,23 @@ class BlogsController extends BaseController
         $paginator = $query->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (Article $article) {
-            // $article->user can return the raw int column value due to naming
-            // collision between the "user" column and the user() relationship.
-            // Always resolve via the DB to avoid that ambiguity.
-            $rawUserId = (int) ($article->getAttributes()['user'] ?? 0);
-            $raw = $rawUserId
-                ? DB::table('Wo_Users')->where('user_id', $rawUserId)->first()
-                : null;
-
-            $authorName   = null;
-            $authorAvatar = null;
-            $authorUser   = ['user_id' => null, 'username' => null, 'name' => null, 'avatar_url' => null];
-
-            if ($raw) {
-                $fullName     = trim(($raw->first_name ?? '') . ' ' . ($raw->last_name ?? ''));
-                $authorName   = $fullName ?: ($raw->username ?? null);
-                $authorAvatar = ($raw->avatar ?? null) ? asset('storage/' . $raw->avatar) : null;
-                $authorUser   = [
-                    'user_id'    => $raw->user_id,
-                    'username'   => $raw->username ?? null,
-                    'name'       => $authorName,
-                    'avatar_url' => $authorAvatar,
-                ];
-            }
-
             return [
-                'id'        => $article->id,
-                'title'     => $article->title,
-                'excerpt'   => $article->excerpt,
+                'id' => $article->id,
+                'title' => $article->title,
+                'excerpt' => $article->excerpt,
                 'thumbnail' => $article->thumbnail_url,
-                'category'  => $article->category,
+                'category' => $article->category,
                 'posted_at' => $article->posted_date,
-                'views'     => $article->views_count,
-                'shares'    => $article->shares_count,
-                'comments'  => $article->comments_count,
+                'views' => $article->views_count,
+                'shares' => $article->shares_count,
+                'comments' => $article->comments_count,
                 'reactions' => $article->reactions_count,
-                'url'       => $article->url,
-                'user'      => $authorUser,
+                'url' => $article->url,
+                'user' => [
+                    'user_id' => optional($article->user)->user_id,
+                    'username' => optional($article->user)->username,
+                    'avatar_url' => optional($article->user)->avatar_url,
+                ],
             ];
         });
 
@@ -217,8 +196,7 @@ class BlogsController extends BaseController
                 'username' => $user->username ?? 'Unknown',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
                 'avatar' => $user->avatar ?? '',
-                // Stored avatars live under storage/, so prefix it here
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar ? asset($user->avatar) : null,
                 'verified' => (bool) ($user->verified ?? false),
             ];
         } elseif ($rawUserId) {
@@ -230,24 +208,15 @@ class BlogsController extends BaseController
                     'username' => $userFromDb->username ?? 'Unknown',
                     'name' => $userFromDb->name ?? $userFromDb->username ?? 'Unknown User',
                     'avatar' => $userFromDb->avatar ?? '',
-                    // Same storage/ prefix for direct DB fetch
-                    'avatar_url' => $userFromDb->avatar ? asset('storage/' . $userFromDb->avatar) : null,
+                    'avatar_url' => $userFromDb->avatar ? asset($userFromDb->avatar) : null,
                     'verified' => (bool) ($userFromDb->verified ?? false),
                 ];
             }
         }
 
-        // Optional auth: used only for ownership / reactions
+        // Reactions per user are not tracked for now while blog details are public
         $tokenUserId = null;
-        $authHeader = $request->header('Authorization');
-        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
-            $token = substr($authHeader, 7);
-            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-        }
-
-        // Build reactions summary (WoWonder-style)
-        $reactionsData = $this->buildBlogReactionsSummary((int) $article->id, $tokenUserId);
-        $isLiked = $reactionsData['user_reaction'] === 'like';
+        $isLiked = false;
 
         // Format response
         $response = [
@@ -271,14 +240,10 @@ class BlogsController extends BaseController
                 'views' => $article->views_count,
                 'shares' => $article->shares_count,
                 'comments' => $article->comments_count,
-                'reactions' => $reactionsData['summary']['total'],
-                'reactions_breakdown' => $reactionsData['summary'],
-                'user_reaction' => $reactionsData['user_reaction'],
+                'reactions' => $article->reactions_count,
                 'url' => $article->url,
                 'is_liked' => $isLiked,
-                'is_owner' => $tokenUserId
-                    ? ((string) $rawUserId === (string) $tokenUserId)
-                    : false,
+                'is_owner' => false,
                 'author' => $userData,
             ],
         ];
@@ -339,188 +304,6 @@ class BlogsController extends BaseController
     }
 
     /**
-     * Toggle/set reaction on a blog article (WoWonder-style).
-     * Each user can have at most one reaction per blog.
-     */
-    public function reactToBlog(Request $request, int $blogId): JsonResponse
-    {
-        // Auth via Wo_AppsSessions
-        $authHeader = $request->header('Authorization');
-        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json([
-                'api_status' => 401,
-                'errors' => [
-                    'error_id' => 1,
-                    'error_text' => 'Unauthorized',
-                ],
-            ], 401);
-        }
-        $token = substr($authHeader, 7);
-        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-        if (!$userId) {
-            return response()->json([
-                'api_status' => 401,
-                'errors' => [
-                    'error_id' => 2,
-                    'error_text' => 'Invalid token',
-                ],
-            ], 401);
-        }
-
-        $article = Article::find($blogId);
-        if (!$article) {
-            return response()->json([
-                'api_status' => 400,
-                'errors' => [
-                    'error_id' => 4,
-                    'error_text' => 'Article not found',
-                ],
-            ], 404);
-        }
-
-        // Allowed reaction types (WoWonder-style)
-        $validReactions = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
-
-        $reaction = strtolower((string) $request->input('reaction', 'like'));
-        if (!in_array($reaction, $validReactions, true)) {
-            return response()->json([
-                'api_status' => 422,
-                'errors' => [
-                    'error_id' => 3,
-                    'error_text' => 'Invalid reaction type',
-                ],
-            ], 422);
-        }
-
-        // Find existing reaction by this user on this blog (not on comments/replies)
-        // In WoWonder schema, comment_id / reply_id are NOT NULL and use 0 for
-        // pure post/blog reactions, so we match that convention here.
-        $existing = BlogReaction::query()
-            ->where('blog_id', $blogId)
-            ->where('user_id', $userId)
-            ->where('comment_id', 0)
-            ->where('reply_id', 0)
-            ->first();
-
-        if ($existing && strtolower((string) $existing->reaction) === $reaction) {
-            // Same reaction clicked again -> remove (toggle off)
-            $existing->delete();
-        } elseif ($existing) {
-            // Switch reaction type
-            $existing->reaction = $reaction;
-            $existing->save();
-        } else {
-            // New reaction
-            BlogReaction::create([
-                'user_id' => $userId,
-                'blog_id' => $blogId,
-                'comment_id' => 0,
-                'reply_id' => 0,
-                'reaction' => $reaction,
-            ]);
-        }
-
-        $summary = $this->buildBlogReactionsSummary($blogId, (string) $userId);
-
-        return response()->json([
-            'api_status' => 200,
-            'api_text' => 'success',
-            'api_version' => '1.0',
-            'data' => [
-                'blog_id' => $blogId,
-                'summary' => $summary['summary'],
-                'user_reaction' => $summary['user_reaction'],
-            ],
-        ]);
-    }
-
-    /**
-     * Get reactions summary for a blog (public).
-     */
-    public function getBlogReactions(Request $request, int $blogId): JsonResponse
-    {
-        $article = Article::find($blogId);
-        if (!$article) {
-            return response()->json([
-                'api_status' => 400,
-                'errors' => [
-                    'error_id' => 4,
-                    'error_text' => 'Article not found',
-                ],
-            ], 404);
-        }
-
-        $tokenUserId = null;
-        $authHeader = $request->header('Authorization');
-        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
-            $token = substr($authHeader, 7);
-            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-        }
-
-        $summary = $this->buildBlogReactionsSummary($blogId, $tokenUserId);
-
-        return response()->json([
-            'api_status' => 200,
-            'api_text' => 'success',
-            'api_version' => '1.0',
-            'data' => [
-                'blog_id' => $blogId,
-                'summary' => $summary['summary'],
-                'user_reaction' => $summary['user_reaction'],
-            ],
-        ]);
-    }
-
-    /**
-     * Helper to build reactions summary + current user's reaction.
-     */
-    protected function buildBlogReactionsSummary(int $blogId, ?string $currentUserId): array
-    {
-        $validReactions = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
-
-        $baseCounts = [];
-        foreach ($validReactions as $type) {
-            $baseCounts[$type] = 0;
-        }
-
-        $rows = BlogReaction::query()
-            ->where('blog_id', $blogId)
-            ->where('comment_id', 0)
-            ->where('reply_id', 0)
-            ->select('reaction', DB::raw('COUNT(*) as count'))
-            ->groupBy('reaction')
-            ->get();
-
-        foreach ($rows as $row) {
-            $type = strtolower((string) $row->reaction);
-            if (array_key_exists($type, $baseCounts)) {
-                $baseCounts[$type] = (int) $row->count;
-            }
-        }
-
-        $total = array_sum($baseCounts);
-
-        $userReaction = null;
-        if ($currentUserId) {
-            $userReaction = BlogReaction::query()
-                ->where('blog_id', $blogId)
-                ->where('user_id', $currentUserId)
-                ->where('comment_id', 0)
-                ->where('reply_id', 0)
-                ->value('reaction');
-            $userReaction = $userReaction ? strtolower((string) $userReaction) : null;
-        }
-
-        return [
-            'summary' => [
-                'total' => $total,
-                'counts' => $baseCounts,
-            ],
-            'user_reaction' => $userReaction,
-        ];
-    }
-
-    /**
      * Add a new comment to a blog article.
      */
     public function addBlogComment(Request $request, int $blogId): JsonResponse
@@ -577,104 +360,6 @@ class BlogsController extends BaseController
             'message' => 'Comment posted successfully',
             'data' => $this->formatBlogComment($comment, $tokenUserId, true),
         ], 201);
-    }
-
-    /**
-     * Toggle/set a reaction on a blog comment (WoWonder-style).
-     */
-    public function reactToComment(Request $request, int $commentId): JsonResponse
-    {
-        $authHeader = $request->header('Authorization');
-        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-            return response()->json([
-                'api_status' => 401,
-                'errors' => ['error_id' => 1, 'error_text' => 'Unauthorized'],
-            ], 401);
-        }
-        $token = substr($authHeader, 7);
-        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-        if (!$userId) {
-            return response()->json([
-                'api_status' => 401,
-                'errors' => ['error_id' => 2, 'error_text' => 'Invalid token'],
-            ], 401);
-        }
-
-        $comment = BlogComment::find($commentId);
-        if (!$comment) {
-            return response()->json([
-                'api_status' => 400,
-                'errors' => ['error_id' => 4, 'error_text' => 'Comment not found'],
-            ], 404);
-        }
-
-        $validReactions = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
-        $reaction = strtolower((string) $request->input('reaction', 'like'));
-        if (!in_array($reaction, $validReactions, true)) {
-            return response()->json([
-                'api_status' => 422,
-                'errors' => ['error_id' => 3, 'error_text' => 'Invalid reaction type'],
-            ], 422);
-        }
-
-        // comment_id = commentId, reply_id = 0 for pure comment reactions
-        $existing = BlogReaction::query()
-            ->where('blog_id', $comment->blog_id)
-            ->where('comment_id', $commentId)
-            ->where('reply_id', 0)
-            ->where('user_id', $userId)
-            ->first();
-
-        if ($existing && strtolower((string) $existing->reaction) === $reaction) {
-            $existing->delete();
-        } elseif ($existing) {
-            $existing->reaction = $reaction;
-            $existing->save();
-        } else {
-            BlogReaction::create([
-                'user_id' => $userId,
-                'blog_id' => $comment->blog_id,
-                'comment_id' => $commentId,
-                'reply_id' => 0,
-                'reaction' => $reaction,
-            ]);
-        }
-
-        // Rebuild summary for this comment
-        $counts = [];
-        foreach ($validReactions as $type) {
-            $counts[$type] = 0;
-        }
-        $rows = BlogReaction::query()
-            ->where('comment_id', $commentId)
-            ->where('reply_id', 0)
-            ->select('reaction', DB::raw('COUNT(*) as count'))
-            ->groupBy('reaction')
-            ->get();
-        foreach ($rows as $row) {
-            $t = strtolower((string) $row->reaction);
-            if (isset($counts[$t])) {
-                $counts[$t] = (int) $row->count;
-            }
-        }
-        $total = array_sum($counts);
-
-        $userReaction = BlogReaction::query()
-            ->where('comment_id', $commentId)
-            ->where('reply_id', 0)
-            ->where('user_id', $userId)
-            ->value('reaction');
-        $userReaction = $userReaction ? strtolower((string) $userReaction) : null;
-
-        return response()->json([
-            'api_status' => 200,
-            'api_text' => 'success',
-            'data' => [
-                'comment_id' => $commentId,
-                'summary' => ['total' => $total, 'counts' => $counts],
-                'user_reaction' => $userReaction,
-            ],
-        ]);
     }
 
     /**
@@ -820,9 +505,12 @@ class BlogsController extends BaseController
         $user = $comment->user;
         $author = null;
         if ($user instanceof User) {
-            // Comment author avatars are stored under storage/, match the URL
-            // pattern used elsewhere in the app.
-            $avatarUrl = $user->avatar ? asset('storage/' . $user->avatar) : null;
+            // Return the raw asset URL without a file_exists check so the browser
+            // can attempt to load it. If the file is missing the browser fires
+            // onError and the Avatar component falls back to coloured initials.
+            // Returning null (when avatar is empty) lets Avatar show initials
+            // immediately without any failed image request.
+            $avatarUrl = $user->avatar ? asset($user->avatar) : null;
 
             $author = [
                 'user_id' => $user->user_id,
@@ -844,33 +532,6 @@ class BlogsController extends BaseController
                 ->all();
         }
 
-        // Build per-comment reaction summary
-        $validReactions = ['like', 'love', 'haha', 'wow', 'sad', 'angry'];
-        $commentReactionCounts = array_fill_keys($validReactions, 0);
-        $commentReactionRows = BlogReaction::query()
-            ->where('comment_id', $comment->id)
-            ->where('reply_id', 0)
-            ->select('reaction', DB::raw('COUNT(*) as count'))
-            ->groupBy('reaction')
-            ->get();
-        foreach ($commentReactionRows as $row) {
-            $t = strtolower((string) $row->reaction);
-            if (isset($commentReactionCounts[$t])) {
-                $commentReactionCounts[$t] = (int) $row->count;
-            }
-        }
-        $commentReactionTotal = array_sum($commentReactionCounts);
-
-        $commentUserReaction = null;
-        if ($currentUserId) {
-            $r = BlogReaction::query()
-                ->where('comment_id', $comment->id)
-                ->where('reply_id', 0)
-                ->where('user_id', $currentUserId)
-                ->value('reaction');
-            $commentUserReaction = $r ? strtolower((string) $r) : null;
-        }
-
         return [
             'id' => $comment->id,
             'blog_id' => $comment->blog_id,
@@ -881,11 +542,6 @@ class BlogsController extends BaseController
             'author' => $author,
             'replies_count' => $comment->replies->count(),
             'replies' => $replies,
-            'reactions' => [
-                'total' => $commentReactionTotal,
-                'counts' => $commentReactionCounts,
-            ],
-            'user_reaction' => $commentUserReaction,
         ];
     }
 
@@ -897,7 +553,7 @@ class BlogsController extends BaseController
         $user = $reply->user;
         $author = null;
         if ($user instanceof User) {
-            $avatarUrl = $user->avatar ? asset('storage/' . $user->avatar) : null;
+            $avatarUrl = $user->avatar ? asset($user->avatar) : null;
 
             $author = [
                 'user_id' => $user->user_id,
@@ -950,18 +606,6 @@ class BlogsController extends BaseController
         // Filter by category if provided
         if ($request->filled('category')) {
             $query->where('category', (int) $request->query('category'));
-        }
-
-        // Full-text search
-        $term = $request->query('term', $request->query('q'));
-        if (!empty($term)) {
-            $like = '%' . str_replace('%', '\\%', $term) . '%';
-            $query->where(function ($q) use ($like) {
-                $q->where('title', 'like', $like)
-                  ->orWhere('description', 'like', $like)
-                  ->orWhere('content', 'like', $like)
-                  ->orWhere('tags', 'like', $like);
-            });
         }
 
         $paginator = $query->paginate($perPage);
