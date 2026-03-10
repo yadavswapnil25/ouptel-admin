@@ -184,9 +184,19 @@ class JobsController extends Controller
                 $jobType = (string) ($job->attributes['job_type'] ?? 'full_time');
             }
 
-            // Wo_Job.category → Wo_Job_Categories.lang_id → Wo_Langs.english
-            $categoryId = isset($job->attributes['category']) ? (int) $job->attributes['category'] : null;
-            $categoryName = $categoryId ? ($this->categoryMap()[$categoryId] ?? null) : null;
+            // Wo_Job.category may store either the job category ID or the lang_key;
+            // resolve to the English label via Wo_Job_Categories + Wo_Langs.
+            $rawCategory = $job->attributes['category'] ?? null;
+            $categoryId = $rawCategory !== null && $rawCategory !== '' ? (int) $rawCategory : null;
+            $categoryName = null;
+            if ($rawCategory !== null && $rawCategory !== '') {
+                $categoryMaps = $this->categoryMap();
+                if ($categoryId && isset($categoryMaps['by_id'][$categoryId])) {
+                    $categoryName = $categoryMaps['by_id'][$categoryId];
+                } elseif (isset($categoryMaps['by_lang_key'][(string) $rawCategory])) {
+                    $categoryName = $categoryMaps['by_lang_key'][(string) $rawCategory];
+                }
+            }
 
             return [
                 'id' => $job->id,
@@ -439,8 +449,17 @@ class JobsController extends Controller
             }
         }
 
-        $showCategoryId = isset($job->attributes['category']) ? (int) $job->attributes['category'] : null;
-        $showCategoryName = $showCategoryId ? ($this->categoryMap()[$showCategoryId] ?? null) : null;
+        $showRawCategory = $job->attributes['category'] ?? null;
+        $showCategoryId = $showRawCategory !== null && $showRawCategory !== '' ? (int) $showRawCategory : null;
+        $showCategoryName = null;
+        if ($showRawCategory !== null && $showRawCategory !== '') {
+            $categoryMaps = $this->categoryMap();
+            if ($showCategoryId && isset($categoryMaps['by_id'][$showCategoryId])) {
+                $showCategoryName = $categoryMaps['by_id'][$showCategoryId];
+            } elseif (isset($categoryMaps['by_lang_key'][(string) $showRawCategory])) {
+                $showCategoryName = $categoryMaps['by_lang_key'][(string) $showRawCategory];
+            }
+        }
 
         $showImage = null;
         if (!empty($job->attributes['image'])) {
@@ -594,7 +613,17 @@ class JobsController extends Controller
                     $img = $job->attributes['image'];
                     $image = str_starts_with($img, 'http') ? $img : asset('storage/' . $img);
                 }
-                $catId = isset($job->attributes['category']) ? (int) $job->attributes['category'] : null;
+                $rawCategory = $job->attributes['category'] ?? null;
+                $catId = $rawCategory !== null && $rawCategory !== '' ? (int) $rawCategory : null;
+                $catName = null;
+                if ($rawCategory !== null && $rawCategory !== '') {
+                    $categoryMaps = $this->categoryMap();
+                    if ($catId && isset($categoryMaps['by_id'][$catId])) {
+                        $catName = $categoryMaps['by_id'][$catId];
+                    } elseif (isset($categoryMaps['by_lang_key'][(string) $rawCategory])) {
+                        $catName = $categoryMaps['by_lang_key'][(string) $rawCategory];
+                    }
+                }
 
                 return [
                     'id' => $job->id,
@@ -607,7 +636,7 @@ class JobsController extends Controller
                     'currency' => $job->attributes['currency'] ?? '₹',
                     'job_type' => $job->attributes['job_type'] ?? 'full-time',
                     'category_id' => $catId,
-                    'category_name' => $catId ? ($this->categoryMap()[$catId] ?? null) : null,
+                    'category_name' => $catName,
                     'result_type' => 'job',
                     'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
                 ];
@@ -678,9 +707,9 @@ class JobsController extends Controller
 
     public function meta(): JsonResponse
     {
-        $catMap = $this->categoryMap();
+        $catMaps = $this->categoryMap();
         $categories = [];
-        foreach ($catMap as $id => $name) {
+        foreach ($catMaps['by_id'] as $id => $name) {
             $categories[] = ['id' => $id, 'name' => $name];
         }
 
@@ -706,10 +735,20 @@ class JobsController extends Controller
      */
     private function categoryMap(): array
     {
-        static $map = null;
+        /**
+         * Returns:
+         * [
+         *   'by_id' => [ job_category_id => english_label, ... ],
+         *   'by_lang_key' => [ lang_key => english_label, ... ],
+         * ]
+         */
+        static $maps = null;
 
-        if ($map === null) {
-            $map = [];
+        if ($maps === null) {
+            $maps = [
+                'by_id' => [],
+                'by_lang_key' => [],
+            ];
 
             if (
                 Schema::hasTable('Wo_Job_Categories') &&
@@ -718,13 +757,20 @@ class JobsController extends Controller
                 Schema::hasColumn('Wo_Langs', 'id') &&
                 Schema::hasColumn('Wo_Langs', 'english')
             ) {
-                $map = DB::table('Wo_Job_Categories as jc')
+                $rows = DB::table('Wo_Job_Categories as jc')
                     ->join('Wo_Langs as l', 'jc.lang_key', '=', 'l.id')
-                    ->pluck('l.english', 'jc.id')
-                    ->toArray();
+                    ->select('jc.id', 'jc.lang_key', 'l.english')
+                    ->get();
+
+                foreach ($rows as $row) {
+                    $maps['by_id'][(int) $row->id] = $row->english;
+                    if (!empty($row->lang_key)) {
+                        $maps['by_lang_key'][(string) $row->lang_key] = $row->english;
+                    }
+                }
             }
         }
 
-        return $map;
+        return $maps;
     }
 }
