@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Job;
 use App\Models\JobCategory;
+use App\Models\Page;
 use App\Models\JobApplication;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -85,6 +86,11 @@ class JobsController extends Controller
             // Return all jobs
         }
 
+        // Filter by page_id if provided
+        if ($request->filled('page_id') && Schema::hasColumn('Wo_Job', 'page_id')) {
+            $query->where('page_id', (int) $request->query('page_id'));
+        }
+
         // Note: category column might not exist in Wo_Jobs table
         // if ($request->filled('category')) {
         //     $query->where('category_id', $request->query('category'));
@@ -146,10 +152,18 @@ class JobsController extends Controller
                 }
             }
             
+            $image = null;
+            if (Schema::hasColumn('Wo_Job', 'image') && $job->image) {
+                $image = (str_starts_with($job->image, 'http://') || str_starts_with($job->image, 'https://'))
+                    ? $job->image
+                    : asset('storage/' . $job->image);
+            }
+
             return [
                 'id' => $job->id,
                 'title' => $job->title,
                 'description' => $job->description,
+                'image' => $image,
                 'company' => 'Unknown Company', // Default value since column doesn't exist
                 'location' => $job->location,
                 'salary' => 0, // Default value since column doesn't exist
@@ -188,11 +202,27 @@ class JobsController extends Controller
         }
 
         $validated = $request->validate([
+            'page_id' => ['required', 'integer'],
             'title' => ['required', 'string', 'max:200'],
             'description' => ['required', 'string', 'max:2000'],
             'location' => ['required', 'string', 'max:100'],
+            'image' => ['nullable', 'image', 'max:5120'], // up to 5MB
             // Note: company, type, and salary columns don't exist in Wo_Job table
         ]);
+
+        // Ensure page exists and belongs to user, and is verified
+        $page = Page::where('page_id', $validated['page_id'])->first();
+        if (!$page) {
+            return response()->json(['ok' => false, 'message' => 'Page not found'], 404);
+        }
+
+        if ((string) $page->user_id !== (string) $userId) {
+            return response()->json(['ok' => false, 'message' => 'You are not the owner of this page'], 403);
+        }
+
+        if (!$page->verified) {
+            return response()->json(['ok' => false, 'message' => 'Only verified pages can post jobs'], 400);
+        }
 
         // Check if job title already exists
         $existingJob = Job::where('title', $validated['title'])->first();
@@ -205,9 +235,22 @@ class JobsController extends Controller
         $job->description = $validated['description'];
         // Note: company column doesn't exist in Wo_Job table
         $job->location = $validated['location'];
+        // Optional image upload if image column exists
+        if ($request->hasFile('image') && Schema::hasColumn('Wo_Job', 'image')) {
+            try {
+                $path = $request->file('image')->store('jobs', 'public');
+                $job->image = $path;
+            } catch (\Exception $e) {
+                // fail silently, job will still be created
+            }
+        }
         // Note: salary column doesn't exist in Wo_Job table
         // Note: type column doesn't exist in Wo_Job table
         $job->status = '1'; // Active
+        // Attach page_id if column exists
+        if (Schema::hasColumn('Wo_Job', 'page_id')) {
+            $job->setAttribute('page_id', (int) $validated['page_id']);
+        }
         // Save user_id if column exists
         if (Schema::hasColumn('Wo_Job', 'user_id')) {
             $job->user_id = (string) $userId;
@@ -217,6 +260,13 @@ class JobsController extends Controller
         $job->time = (string) time();
         $job->save();
 
+        $image = null;
+        if (Schema::hasColumn('Wo_Job', 'image') && $job->image) {
+            $image = (str_starts_with($job->image, 'http://') || str_starts_with($job->image, 'https://'))
+                ? $job->image
+                : asset('storage/' . $job->image);
+        }
+
         return response()->json([
             'ok' => true,
             'message' => 'Job created successfully',
@@ -224,6 +274,7 @@ class JobsController extends Controller
                 'id' => $job->id,
                 'title' => $job->title,
                 'description' => $job->description,
+                'image' => $image,
                 'company' => 'Unknown Company', // Default value since column doesn't exist
                 'location' => $job->location,
                 'salary' => 0, // Default value since column doesn't exist
@@ -463,9 +514,18 @@ class JobsController extends Controller
             ->limit(10)
             ->get()
             ->map(function (Job $job) {
+                $image = null;
+                if (Schema::hasColumn('Wo_Job', 'image') && $job->image) {
+                    $image = (str_starts_with($job->image, 'http://') || str_starts_with($job->image, 'https://'))
+                        ? $job->image
+                        : asset('storage/' . $job->image);
+                }
+
                 return [
                     'id' => $job->id,
                     'title' => $job->title,
+                    'image' => $image,
+                    'image' => Schema::hasColumn('Wo_Job', 'image') ? $job->image : null,
                     'company' => 'Unknown Company', // Default value since column doesn't exist
                     'location' => $job->location,
                     'type' => 'full-time', // Default value since column doesn't exist
