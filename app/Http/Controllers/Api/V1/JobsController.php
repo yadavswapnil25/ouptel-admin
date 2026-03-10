@@ -170,17 +170,8 @@ class JobsController extends Controller
             }
 
             // Salary information from minimum/maximum/salary_date/currency columns (if they exist)
-            $minSalary = 0;
-            $maxSalary = 0;
             $salaryPeriod = null;
             $currency = null;
-
-            if (Schema::hasColumn('Wo_Job', 'minimum')) {
-                $minSalary = (float) ($job->attributes['minimum'] ?? 0);
-            }
-            if (Schema::hasColumn('Wo_Job', 'maximum')) {
-                $maxSalary = (float) ($job->attributes['maximum'] ?? 0);
-            }
             if (Schema::hasColumn('Wo_Job', 'salary_date')) {
                 $salaryPeriod = $job->attributes['salary_date'] ?? null;
             }
@@ -216,8 +207,8 @@ class JobsController extends Controller
                 'description' => $job->description,
                 'image' => $image,
                 'location' => $job->location,
-                'min_salary' => $minSalary,
-                'max_salary' => $maxSalary,
+                'min_salary' => $job->minimum ?? 0,
+                'max_salary' => $job->maximum ?? 0,
                 'salary_period' => $salaryPeriod,
                 'currency' => $currency,
                 'job_type' => $jobType,
@@ -261,6 +252,12 @@ class JobsController extends Controller
             'title' => ['required', 'string', 'max:200'],
             'description' => ['required', 'string', 'max:2000'],
             'location' => ['required', 'string', 'max:100'],
+            'minimum' => ['nullable', 'numeric', 'min:0'],
+            'maximum' => ['nullable', 'numeric', 'min:0'],
+            'salary_date' => ['nullable', 'string', 'max:50'],
+            'currency' => ['nullable', 'string', 'max:10'],
+            'job_type' => ['nullable', 'string', 'max:50'],
+            'category' => ['nullable', 'integer'],
             'image' => ['nullable', 'image', 'max:5120'], // up to 5MB
             // Note: company, type, and salary columns don't exist in Wo_Job table
         ]);
@@ -290,6 +287,19 @@ class JobsController extends Controller
         $job->description = $validated['description'];
         // Note: company column doesn't exist in Wo_Job table
         $job->location = $validated['location'];
+        // Optional salary fields if columns exist
+        if (!is_null($validated['minimum']) && Schema::hasColumn('Wo_Job', 'minimum')) {
+            $job->setAttribute('minimum', (float) $validated['minimum']);
+        }
+        if (!is_null($validated['maximum']) && Schema::hasColumn('Wo_Job', 'maximum')) {
+            $job->setAttribute('maximum', (float) $validated['maximum']);
+        }
+        if (!empty($validated['salary_date']) && Schema::hasColumn('Wo_Job', 'salary_date')) {
+            $job->setAttribute('salary_date', $validated['salary_date']);
+        }
+        if (!empty($validated['currency']) && Schema::hasColumn('Wo_Job', 'currency')) {
+            $job->setAttribute('currency', $validated['currency']);
+        }
         // Optional image upload if image column exists
         if ($request->hasFile('image') && Schema::hasColumn('Wo_Job', 'image')) {
             try {
@@ -305,6 +315,15 @@ class JobsController extends Controller
         // Attach page_id if column exists
         if (Schema::hasColumn('Wo_Job', 'page_id')) {
             $job->setAttribute('page_id', (int) $validated['page_id']);
+        }
+        // Attach category if column exists
+        if (!is_null($validated['category']) && Schema::hasColumn('Wo_Job', 'category')) {
+            $job->setAttribute('category', (int) $validated['category']);
+        }
+        // Attach job_type if column exists
+        $jobType = $validated['job_type'] ?? $request->input('type');
+        if (!empty($jobType) && Schema::hasColumn('Wo_Job', 'job_type')) {
+            $job->setAttribute('job_type', (string) $jobType);
         }
         // Save user_id if column exists
         if (Schema::hasColumn('Wo_Job', 'user_id')) {
