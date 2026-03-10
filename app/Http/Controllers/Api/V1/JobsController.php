@@ -607,6 +607,11 @@ class JobsController extends Controller
 
         $pageId = $job->attributes['page_id'] ?? 0;
 
+        // Normalize experience dates to avoid null constraint issues
+        $expStart = $request->input('experience_start_date', '');
+        $expEndRaw = $request->input('experience_end_date', '');
+        $expEnd = $expEndRaw === null || $expEndRaw === '' ? $expStart : $expEndRaw;
+
         $insertData = [
             'user_id' => $userId,
             'job_id' => (int) $id,
@@ -618,8 +623,8 @@ class JobsController extends Controller
             'position' => $request->input('position', ''),
             'where_did_you_work' => $request->input('where_did_you_work', ''),
             'experience_description' => $request->input('experience_description', ''),
-            'experience_start_date' => $request->input('experience_start_date', ''),
-            'experience_end_date' => $request->input('experience_end_date', ''),
+            'experience_start_date' => $expStart,
+            'experience_end_date' => $expEnd,
             'question_one_answer' => $request->input('question_one_answer', ''),
             'question_two_answer' => $request->input('question_two_answer', ''),
             'question_three_answer' => $request->input('question_three_answer', ''),
