@@ -632,7 +632,7 @@ class JobsController extends Controller
             'question_three_answer' => 'nullable|string|max:200',
         ]);
 
-        $pageId = $job->attributes['page_id'] ?? 0;
+        $pageId = $job->page_id ?? 0;
 
         // Normalize experience dates to avoid null constraint issues
         $expStart = $request->input('experience_start_date', '');
