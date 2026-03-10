@@ -136,7 +136,7 @@ class JobsController extends Controller
 
         $data = $paginator->getCollection()->map(function (Job $job) use ($tokenUserId) {
             // Get owner user_id from job attributes
-            $ownerUserId = $job->attributes['user_id'] ?? $job->attributes['user'] ?? null;
+            $ownerUserId = $job->user_id ?? $job->user ?? null;
             $isOwner = $ownerUserId && (string) $ownerUserId === (string) $tokenUserId;
             
             // Get owner details if user_id exists
