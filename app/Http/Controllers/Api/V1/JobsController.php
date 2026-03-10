@@ -436,18 +436,62 @@ class JobsController extends Controller
 
         $applications = $applicationsQuery->paginate($perPage);
 
-        $applicationsData = $applications->getCollection()->map(function (JobApplication $application) {
+        // Build applications data with full WoWonder-style fields
+        $jobQuestions = $this->extractJobQuestions($job);
+        $questionMap = [];
+        foreach ($jobQuestions as $q) {
+            if (!empty($q['number'])) {
+                $questionMap[$q['number']] = $q;
+            }
+        }
+
+        $applicationsData = $applications->getCollection()->map(function (JobApplication $application) use ($questionMap) {
+            $attrs = $application->getAttributes();
+
+            // Map dynamic questions + answers (e.g. notice period, etc.)
+            $qa = [];
+            $q1Answer = $attrs['question_one_answer'] ?? '';
+            $q2Answer = $attrs['question_two_answer'] ?? '';
+            $q3Answer = $attrs['question_three_answer'] ?? '';
+
+            if (!empty($q1Answer) && isset($questionMap[1])) {
+                $qa[] = [
+                    'label' => $questionMap[1]['text'],
+                    'answer' => $q1Answer,
+                ];
+            }
+            if (!empty($q2Answer) && isset($questionMap[2])) {
+                $qa[] = [
+                    'label' => $questionMap[2]['text'],
+                    'answer' => $q2Answer,
+                ];
+            }
+            if (!empty($q3Answer) && isset($questionMap[3])) {
+                $qa[] = [
+                    'label' => $questionMap[3]['text'],
+                    'answer' => $q3Answer,
+                ];
+            }
+
+            // Basic applicant info stored directly on Wo_Job_Apply
+            $userName = $attrs['user_name'] ?? '';
+            $location = $attrs['location'] ?? '';
+            $phone = $attrs['phone_number'] ?? '';
+            $email = $attrs['email'] ?? '';
+
             return [
                 'id' => $application->id,
-                'cover_letter' => '', // Default value since column doesn't exist
-                'resume_url' => '', // Default value since column doesn't exist
-                'status' => 'pending', // Default value since column doesn't exist
+                'user_name' => $userName,
+                'location' => $location,
+                'phone_number' => $phone,
+                'email' => $email,
+                'position' => $attrs['position'] ?? '',
+                'where_did_you_work' => $attrs['where_did_you_work'] ?? '',
+                'experience_description' => $attrs['experience_description'] ?? '',
+                'experience_start_date' => $attrs['experience_start_date'] ?? '',
+                'experience_end_date' => $attrs['experience_end_date'] ?? '',
+                'questions' => $qa,
                 'created_at' => $application->time ? date('c', $application->time_as_timestamp) : null,
-                'applicant' => [
-                    'user_id' => $application->user_id,
-                    'username' => 'Unknown', // Since we can't get user details
-                    'avatar_url' => null,
-                ],
             ];
         });
         
