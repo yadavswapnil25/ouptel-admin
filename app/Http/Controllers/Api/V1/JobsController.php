@@ -186,7 +186,7 @@ class JobsController extends Controller
 
             // Wo_Job.category may store either the job category ID or the lang_key;
             // resolve to the English label via Wo_Job_Categories + Wo_Langs.
-            $rawCategory = $job->attributes['category'] ?? null;
+            $rawCategory = $job->category ?? null;
             $categoryId = $rawCategory !== null && $rawCategory !== '' ? (int) $rawCategory : null;
             $categoryName = null;
             if ($rawCategory !== null && $rawCategory !== '') {
@@ -449,7 +449,7 @@ class JobsController extends Controller
             }
         }
 
-        $showRawCategory = $job->attributes['category'] ?? null;
+        $showRawCategory = $job->category ?? null;
         $showCategoryId = $showRawCategory !== null && $showRawCategory !== '' ? (int) $showRawCategory : null;
         $showCategoryName = null;
         if ($showRawCategory !== null && $showRawCategory !== '') {
@@ -613,7 +613,7 @@ class JobsController extends Controller
                     $img = $job->attributes['image'];
                     $image = str_starts_with($img, 'http') ? $img : asset('storage/' . $img);
                 }
-                $rawCategory = $job->attributes['category'] ?? null;
+                $rawCategory = $job->category ?? null;
                 $catId = $rawCategory !== null && $rawCategory !== '' ? (int) $rawCategory : null;
                 $catName = null;
                 if ($rawCategory !== null && $rawCategory !== '') {
