@@ -410,7 +410,7 @@ class JobsController extends Controller
         }
         
         // Check if user is the owner
-        $ownerUserId = $job->attributes['user_id'] ?? $job->attributes['user'] ?? null;
+        $ownerUserId = $job->user_id ?? $job->user ?? null;
         $isOwner = $ownerUserId && (string) $ownerUserId === (string) $tokenUserId;
         
         // Get owner details
