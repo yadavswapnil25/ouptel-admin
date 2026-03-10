@@ -479,8 +479,29 @@ class JobsController extends Controller
             $phone = $attrs['phone_number'] ?? '';
             $email = $attrs['email'] ?? '';
 
+            // Extra profile info from Wo_Users (for profile URL / username)
+            $userId = $attrs['user_id'] ?? null;
+            $username = null;
+            $profilePath = null;
+            if ($userId && Schema::hasTable('Wo_Users')) {
+                try {
+                    $userRow = DB::table('Wo_Users')->where('user_id', $userId)->first();
+                    if ($userRow) {
+                        $username = $userRow->username ?? null;
+                    }
+                } catch (\Exception $e) {
+                    // ignore, keep nulls
+                }
+            }
+            if ($userId) {
+                $profilePath = '/profile/' . $userId;
+            }
+
             return [
                 'id' => $application->id,
+                'user_id' => $userId,
+                'username' => $username,
+                'profile_path' => $profilePath,
                 'user_name' => $userName,
                 'location' => $location,
                 'phone_number' => $phone,
