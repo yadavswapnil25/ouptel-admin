@@ -160,6 +160,33 @@ class JobsController extends Controller
                     // Keep default values
                 }
             }
+
+            // Determine if current authenticated user has applied to this job
+            $isApplied = false;
+            if ($tokenUserId) {
+                // Check both possible application table/column names (WoWonder compatibility)
+                if (Schema::hasTable('Wo_Job_Apply')) {
+                    $applyTable = 'Wo_Job_Apply';
+                } elseif (Schema::hasTable('Wo_JobApplications')) {
+                    $applyTable = 'Wo_JobApplications';
+                } else {
+                    $applyTable = null;
+                }
+
+                if ($applyTable) {
+                    $jobIdColumn = Schema::hasColumn($applyTable, 'job_id') ? 'job_id' : 'job';
+                    $userIdColumn = Schema::hasColumn($applyTable, 'user_id') ? 'user_id' : 'user';
+
+                    $userIdStr = (string) $tokenUserId;
+                    $isApplied = DB::table($applyTable)
+                        ->where($jobIdColumn, $job->id)
+                        ->where(function ($query) use ($userIdColumn, $userIdStr) {
+                            $query->where($userIdColumn, $userIdStr)
+                                  ->orWhere($userIdColumn, (int) $userIdStr);
+                        })
+                        ->exists();
+                }
+            }
             
             $image = null;
             if (Schema::hasColumn('Wo_Job', 'image') && $job->image) {
@@ -213,7 +240,7 @@ class JobsController extends Controller
                 'category_name' => $categoryName,
                 'status' => $job->status,
                 'applications_count' => $job->applications_count,
-                'is_applied' => $job->is_applied,
+                'is_applied' => $isApplied,
                 'is_owner' => $isOwner,
                 'owner' => $owner,
                 'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
