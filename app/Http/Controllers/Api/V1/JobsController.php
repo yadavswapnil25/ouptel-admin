@@ -255,8 +255,16 @@ class JobsController extends Controller
             'currency' => ['nullable', 'string', 'max:10'],
             'job_type' => ['nullable', 'string', 'max:50'],
             'category' => ['nullable', 'integer'],
-            'image' => ['nullable', 'image', 'max:5120'], // up to 5MB
-            // Note: company, type, and salary columns don't exist in Wo_Job table
+            'image' => ['nullable', 'image', 'max:5120'],
+            'question_one' => ['nullable', 'string', 'max:200'],
+            'question_one_type' => ['nullable', 'string', 'max:100'],
+            'question_one_answers' => ['nullable', 'string'],
+            'question_two' => ['nullable', 'string', 'max:200'],
+            'question_two_type' => ['nullable', 'string', 'max:100'],
+            'question_two_answers' => ['nullable', 'string'],
+            'question_three' => ['nullable', 'string', 'max:200'],
+            'question_three_type' => ['nullable', 'string', 'max:100'],
+            'question_three_answers' => ['nullable', 'string'],
         ]);
 
         // Ensure page exists and belongs to user, and is verified
@@ -322,6 +330,19 @@ class JobsController extends Controller
         if (!empty($jobType) && Schema::hasColumn('Wo_Job', 'job_type')) {
             $job->setAttribute('job_type', (string) $jobType);
         }
+        // Store questions if columns exist
+        $questionFields = [
+            'question_one', 'question_one_type', 'question_one_answers',
+            'question_two', 'question_two_type', 'question_two_answers',
+            'question_three', 'question_three_type', 'question_three_answers',
+        ];
+        foreach ($questionFields as $field) {
+            $value = $request->input($field, '');
+            if ($value !== '' && Schema::hasColumn('Wo_Job', $field)) {
+                $job->setAttribute($field, $value);
+            }
+        }
+
         // Save user_id if column exists
         if (Schema::hasColumn('Wo_Job', 'user_id')) {
             $job->user_id = (string) $userId;
