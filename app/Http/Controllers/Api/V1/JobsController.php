@@ -181,7 +181,7 @@ class JobsController extends Controller
             // Job type from job_type column if it exists
             $jobType = 'full_time';
             if (Schema::hasColumn('Wo_Job', 'job_type')) {
-                $jobType = (string) ($job->attributes['job_type'] ?? 'full_time');
+                $jobType = (string) ($job->job_type ?? 'full_time');
             }
 
             // Wo_Job.category may store either the job category ID or the lang_key;
