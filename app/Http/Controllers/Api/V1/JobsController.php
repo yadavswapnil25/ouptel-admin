@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Job;
-use App\Models\JobCategory;
 use App\Models\Page;
 use App\Models\JobApplication;
 use Illuminate\Http\JsonResponse;
@@ -185,49 +184,9 @@ class JobsController extends Controller
                 $jobType = (string) ($job->attributes['job_type'] ?? 'full_time');
             }
 
-            // Category info: Wo_Job.category -> Wo_Job_Categories.lang_id -> Wo_Langs.english
-            $categoryId = null;
-            $categoryName = null;
-            if (Schema::hasColumn('Wo_Job', 'category')) {
-                $categoryId = $job->attributes['category'] ?? null;
-                if ($categoryId && Schema::hasTable('Wo_Job_Categories')) {
-                    static $categoriesById = null;
-
-                    if ($categoriesById === null) {
-                        // Prefer resolving via Wo_Langs.english if schema supports it,
-                        // but always fall back to JobCategory.name when english is empty.
-                        if (
-                            Schema::hasTable('Wo_Langs') &&
-                            Schema::hasColumn('Wo_Job_Categories', 'lang_id') &&
-                            Schema::hasColumn('Wo_Job_Categories', 'name') &&
-                            Schema::hasColumn('Wo_Langs', 'id') &&
-                            Schema::hasColumn('Wo_Langs', 'english')
-                        ) {
-                            $categoriesById = DB::table('Wo_Job_Categories as jc')
-                                ->leftJoin('Wo_Langs as l', 'jc.lang_id', '=', 'l.id')
-                                ->select('jc.id', 'jc.name', 'l.english')
-                                ->get()
-                                ->mapWithKeys(function ($row) {
-                                    // Use english if available, otherwise fallback to name
-                                    $label = $row->english ?: $row->name;
-                                    return [$row->id => $label];
-                                });
-                        } else {
-                            // Fallback: just use JobCategory.name
-                            $categoriesById = JobCategory::query()
-                                ->select('id', 'name')
-                                ->get()
-                                ->mapWithKeys(function ($row) {
-                                    return [$row->id => $row->name];
-                                });
-                        }
-                    }
-
-                    if (isset($categoriesById[$categoryId])) {
-                        $categoryName = $categoriesById[$categoryId];
-                    }
-                }
-            }
+            // Resolve category name from the same hardcoded map used in meta()
+            $categoryId = isset($job->attributes['category']) ? (int) $job->attributes['category'] : null;
+            $categoryName = $categoryId ? ($this->categoryMap()[$categoryId] ?? null) : null;
 
             return [
                 'id' => $job->id,
@@ -480,6 +439,15 @@ class JobsController extends Controller
             }
         }
 
+        $showCategoryId = isset($job->attributes['category']) ? (int) $job->attributes['category'] : null;
+        $showCategoryName = $showCategoryId ? ($this->categoryMap()[$showCategoryId] ?? null) : null;
+
+        $showImage = null;
+        if (!empty($job->attributes['image'])) {
+            $img = $job->attributes['image'];
+            $showImage = str_starts_with($img, 'http') ? $img : asset('storage/' . $img);
+        }
+
         return response()->json([
             'ok' => true,
             'data' => [
@@ -487,13 +455,18 @@ class JobsController extends Controller
                     'id' => $job->id,
                     'title' => $job->title,
                     'description' => $job->description,
-                    'company' => 'Unknown Company', // Default value since column doesn't exist
+                    'image' => $showImage,
                     'location' => $job->location,
-                    'salary' => 0, // Default value since column doesn't exist
-                    'type' => 'full-time', // Default value since column doesn't exist
+                    'min_salary' => $job->minimum ?? 0,
+                    'max_salary' => $job->maximum ?? 0,
+                    'salary_period' => $job->attributes['salary_date'] ?? 'per_month',
+                    'currency' => $job->attributes['currency'] ?? '₹',
+                    'job_type' => $job->attributes['job_type'] ?? 'full-time',
+                    'category_id' => $showCategoryId,
+                    'category_name' => $showCategoryName,
                     'status' => $job->status,
                     'applications_count' => $applicationsCount,
-                    'is_applied' => $isApplied, // Now correctly checks if authenticated user has applied
+                    'is_applied' => $isApplied,
                     'is_owner' => $isOwner,
                     'owner' => $owner,
                     'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
@@ -617,22 +590,25 @@ class JobsController extends Controller
             ->get()
             ->map(function (Job $job) {
                 $image = null;
-                if (Schema::hasColumn('Wo_Job', 'image') && $job->image) {
-                    $image = (str_starts_with($job->image, 'http://') || str_starts_with($job->image, 'https://'))
-                        ? $job->image
-                        : asset('storage/' . $job->image);
+                if (!empty($job->attributes['image'])) {
+                    $img = $job->attributes['image'];
+                    $image = str_starts_with($img, 'http') ? $img : asset('storage/' . $img);
                 }
+                $catId = isset($job->attributes['category']) ? (int) $job->attributes['category'] : null;
 
                 return [
                     'id' => $job->id,
                     'title' => $job->title,
                     'image' => $image,
-                    'image' => Schema::hasColumn('Wo_Job', 'image') ? $job->image : null,
-                    'company' => 'Unknown Company', // Default value since column doesn't exist
                     'location' => $job->location,
-                    'type' => 'full-time', // Default value since column doesn't exist
-                    'salary' => 0, // Default value since column doesn't exist
-                    'type' => 'job',
+                    'min_salary' => $job->minimum ?? 0,
+                    'max_salary' => $job->maximum ?? 0,
+                    'salary_period' => $job->attributes['salary_date'] ?? 'per_month',
+                    'currency' => $job->attributes['currency'] ?? '₹',
+                    'job_type' => $job->attributes['job_type'] ?? 'full-time',
+                    'category_id' => $catId,
+                    'category_name' => $catId ? ($this->categoryMap()[$catId] ?? null) : null,
+                    'result_type' => 'job',
                     'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
                 ];
             });
@@ -702,35 +678,11 @@ class JobsController extends Controller
 
     public function meta(): JsonResponse
     {
-        // Note: Wo_JobCategory table might not exist
-        // Return hardcoded categories
-        $categories = [
-            [
-                'id' => 1,
-                'name' => 'Technology',
-                'description' => 'Software development, IT, and tech jobs',
-            ],
-            [
-                'id' => 2,
-                'name' => 'Marketing',
-                'description' => 'Digital marketing, advertising, and PR jobs',
-            ],
-            [
-                'id' => 3,
-                'name' => 'Design',
-                'description' => 'Graphic design, UI/UX, and creative jobs',
-            ],
-            [
-                'id' => 4,
-                'name' => 'Sales',
-                'description' => 'Sales, business development, and account management',
-            ],
-            [
-                'id' => 5,
-                'name' => 'Finance',
-                'description' => 'Accounting, banking, and financial services',
-            ],
-        ];
+        $categories = array_map(
+            fn($id, $name) => ['id' => $id, 'name' => $name],
+            array_keys($this->categoryMap()),
+            array_values($this->categoryMap())
+        );
 
         $jobTypes = [
             ['value' => 'full-time', 'label' => 'Full Time'],
@@ -746,5 +698,16 @@ class JobsController extends Controller
                 'job_types' => $jobTypes,
             ],
         ]);
+    }
+
+    private function categoryMap(): array
+    {
+        return [
+            1 => 'Technology',
+            2 => 'Marketing',
+            3 => 'Design',
+            4 => 'Sales',
+            5 => 'Finance',
+        ];
     }
 }
