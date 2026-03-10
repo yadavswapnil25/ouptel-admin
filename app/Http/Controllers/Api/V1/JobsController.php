@@ -484,6 +484,7 @@ class JobsController extends Controller
             $username = null;
             $avatarUrl = null;
             $profilePath = null;
+            $baseUrl = config('app.url', 'https://ouptel.com');
             if ($userId && Schema::hasTable('Wo_Users')) {
                 try {
                     $userRow = DB::table('Wo_Users')->where('user_id', $userId)->first();
@@ -499,7 +500,8 @@ class JobsController extends Controller
                 }
             }
             if ($userId) {
-                $profilePath = '/profile/' . $userId;
+                // Full URL to profile page, not just path
+                $profilePath = rtrim($baseUrl, '/') . '/profile/' . $userId;
             }
 
             return [
