@@ -25,23 +25,20 @@ class Job extends Model
         'time' => 'string',
     ];
 
-    // Note: user_id column might not exist in Wo_Jobs table
-    // public function user(): BelongsTo
-    // {
-    //     return $this->belongsTo(User::class, 'user_id', 'user_id');
-    // }
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
 
-    // Note: Wo_JobApplications table might not exist
-    // public function applications(): HasMany
-    // {
-    //     return $this->hasMany(JobApplication::class, 'job_id', 'id');
-    // }
+    public function applications(): HasMany
+    {
+        return $this->hasMany(JobApplication::class, 'job_id', 'id');
+    }
 
-    // Note: Wo_JobCategories table might not exist
-    // public function category(): BelongsTo
-    // {
-    //     return $this->belongsTo(JobCategory::class, 'category_id', 'id');
-    // }
+    public function jobCategory(): BelongsTo
+    {
+        return $this->belongsTo(JobCategory::class, 'category', 'id');
+    }
 
     // Mutators to prevent null values for optional fields
     public function setDescriptionAttribute($value)
@@ -124,8 +121,13 @@ class Job extends Model
 
     public function getApplicationsCountAttribute(): int
     {
-        // Simplified since Wo_JobApplications table might not exist
-        return 0;
+        try {
+            return \Illuminate\Support\Facades\DB::table('Wo_Job_Apply')
+                ->where('job_id', $this->id)
+                ->count();
+        } catch (\Exception $e) {
+            return 0;
+        }
     }
 
     public function getIsAppliedAttribute(): bool
@@ -164,15 +166,13 @@ class Job extends Model
         $userIdColumn = \Illuminate\Support\Facades\Schema::hasColumn($applyTable, 'user_id') ? 'user_id' : 'user';
         
         // Check if application exists (handle both string and integer user_id)
-        $exists = \Illuminate\Support\Facades\DB::table($applyTable)
+        return \Illuminate\Support\Facades\DB::table($applyTable)
             ->where($jobIdColumn, $jobId)
-            ->where(function($query) use ($userIdColumn, $userIdStr) {
+            ->where(function ($query) use ($userIdColumn, $userIdStr) {
                 $query->where($userIdColumn, $userIdStr)
                       ->orWhere($userIdColumn, (int) $userIdStr);
             })
             ->exists();
-        
-        return $exists;
     }
 
     /**

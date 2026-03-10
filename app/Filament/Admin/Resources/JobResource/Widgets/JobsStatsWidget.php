@@ -23,7 +23,9 @@ class JobsStatsWidget extends BaseWidget
             $totalApplications = JobApplication::count();
 
             // Jobs with Applications
-            $jobsWithApplications = Job::whereHas('applications')->count();
+            $jobsWithApplications = DB::table('Wo_Job')
+                ->whereIn('id', DB::table('Wo_Job_Apply')->distinct()->pluck('job_id'))
+                ->count();
 
             return [
                 Stat::make('Total Jobs', $totalJobs)

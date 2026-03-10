@@ -4,6 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Models\Job;
+use App\Models\User;
 
 class JobApplication extends Model
 {
@@ -23,17 +25,15 @@ class JobApplication extends Model
         'time' => 'string',
     ];
 
-    // Note: Wo_Jobs table might not exist
-    // public function job(): BelongsTo
-    // {
-    //     return $this->belongsTo(Job::class, 'job_id', 'id');
-    // }
+    public function job(): BelongsTo
+    {
+        return $this->belongsTo(Job::class, 'job_id', 'id');
+    }
 
-    // Note: User relationship might not exist
-    // public function user(): BelongsTo
-    // {
-    //     return $this->belongsTo(User::class, 'user_id', 'user_id');
-    // }
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id', 'user_id');
+    }
 
     // Mutators
     public function setJobIdAttribute($value)

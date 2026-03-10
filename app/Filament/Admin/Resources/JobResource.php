@@ -222,9 +222,15 @@ class JobResource extends Resource
                             ->prefix('$')
                             ->step(0.01),
 
-                        Forms\Components\TextInput::make('salary_date')
-                            ->label('Salary Date')
-                            ->maxLength(50),
+                        Forms\Components\Select::make('salary_date')
+                            ->label('Salary Period')
+                            ->options([
+                                'per_hour'  => 'Per Hour',
+                                'per_day'   => 'Per Day',
+                                'per_week'  => 'Per Week',
+                                'per_month' => 'Per Month',
+                                'per_year'  => 'Per Year',
+                            ]),
 
                         Forms\Components\Select::make('currency')
                             ->label('Currency')
@@ -438,12 +444,6 @@ class JobResource extends Resource
                         return null;
                     }),
 
-                TextColumn::make('actions')
-                    ->label('Action')
-                    ->formatStateUsing(function ($record) {
-                        return view('filament.admin.resources.job-resource.actions', compact('record'));
-                    })
-                    ->html(),
             ])
             ->filters([
                 // Date Range Filter (matching old admin panel)
