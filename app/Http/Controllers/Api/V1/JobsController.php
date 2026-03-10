@@ -762,19 +762,6 @@ class JobsController extends Controller
 
                 // Only send notification if we have a valid recipient and it's not the same as applicant
                 if ($pageOwnerId && (string) $pageOwnerId !== (string) $userId) {
-                    // Get applicant username for profile link
-                    $applicantUsername = null;
-                    try {
-                        if (Schema::hasTable('Wo_Users')) {
-                            $applicantRow = DB::table('Wo_Users')->where('user_id', $userId)->first();
-                            if ($applicantRow && !empty($applicantRow->username)) {
-                                $applicantUsername = $applicantRow->username;
-                            }
-                        }
-                    } catch (\Exception $e) {
-                        // ignore username lookup failure
-                    }
-
                     $notificationData = [
                         'notifier_id' => (string) $userId,
                         'recipient_id' => $pageOwnerId,
@@ -783,13 +770,9 @@ class JobsController extends Controller
                     ];
 
                     if (Schema::hasColumn('Wo_Notifications', 'url')) {
-                        // Link to applicant profile (timeline) just like follow notifications
-                        if ($applicantUsername) {
-                            $notificationData['url'] = 'index.php?link1=timeline&u=' . $applicantUsername;
-                        } else {
-                            // Fallback: link to job page
-                            $notificationData['url'] = "index.php?link1=job&id={$job->id}";
-                        }
+                        // Link to SPA jobs detail page: /jobs/{id}
+                        // Frontend converts this by replacing "index.php?link1=" with "/"
+                        $notificationData['url'] = "index.php?link1=jobs/{$job->id}";
                     }
 
                     if (Schema::hasColumn('Wo_Notifications', 'seen')) {
