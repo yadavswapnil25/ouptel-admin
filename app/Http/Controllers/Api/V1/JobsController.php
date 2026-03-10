@@ -492,7 +492,12 @@ class JobsController extends Controller
                         $username = $userRow->username ?? null;
                         $avatar = $userRow->avatar ?? '';
                         if (!empty($avatar)) {
-                            $avatarUrl = asset('storage/' . ltrim($avatar, '/'));
+                            // If avatar already full URL, use as-is; otherwise prefix storage path
+                            if (str_starts_with($avatar, 'http://') || str_starts_with($avatar, 'https://')) {
+                                $avatarUrl = $avatar;
+                            } else {
+                                $avatarUrl = asset('storage/' . ltrim($avatar, '/'));
+                            }
                         }
                     }
                 } catch (\Exception $e) {
