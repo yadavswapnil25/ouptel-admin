@@ -482,12 +482,17 @@ class JobsController extends Controller
             // Extra profile info from Wo_Users (for profile URL / username)
             $userId = $attrs['user_id'] ?? null;
             $username = null;
+            $avatarUrl = null;
             $profilePath = null;
             if ($userId && Schema::hasTable('Wo_Users')) {
                 try {
                     $userRow = DB::table('Wo_Users')->where('user_id', $userId)->first();
                     if ($userRow) {
                         $username = $userRow->username ?? null;
+                        $avatar = $userRow->avatar ?? '';
+                        if (!empty($avatar)) {
+                            $avatarUrl = asset('storage/' . ltrim($avatar, '/'));
+                        }
                     }
                 } catch (\Exception $e) {
                     // ignore, keep nulls
@@ -501,6 +506,9 @@ class JobsController extends Controller
                 'id' => $application->id,
                 'user_id' => $userId,
                 'username' => $username,
+                // Full URL to profile image stored in /storage
+                'profile_url' => $avatarUrl,
+                // Frontend route path to profile page
                 'profile_path' => $profilePath,
                 'user_name' => $userName,
                 'location' => $location,
