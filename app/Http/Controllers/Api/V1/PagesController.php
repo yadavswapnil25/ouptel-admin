@@ -117,12 +117,41 @@ class PagesController extends BaseController
             ];
 
             // Get posts count
-            $postsCount = DB::table('Wo_Posts')
-                ->where('page_id', $page->page_id)
-                ->where('active', '1')
-                ->count();
-            
+            $postsCount = 0;
+            if (DB::getSchemaBuilder()->hasTable('Wo_Posts')) {
+                $postsCount = DB::table('Wo_Posts')
+                    ->where('page_id', $page->page_id)
+                    ->where('active', '1')
+                    ->count();
+            }
             $pageData['posts_count'] = $postsCount;
+
+            // Get likes count (total page likes)
+            $likesCount = 0;
+            if (DB::getSchemaBuilder()->hasTable('Wo_Pages_Likes')) {
+                $likesCount = DB::table('Wo_Pages_Likes')
+                    ->where('page_id', $page->page_id)
+                    ->count();
+            }
+            $pageData['likes_count'] = $likesCount;
+
+            // Get comments count (total comments on page posts)
+            $commentsCount = 0;
+            if (
+                DB::getSchemaBuilder()->hasTable('Wo_Posts')
+                && DB::getSchemaBuilder()->hasTable('Wo_Comments')
+            ) {
+                $postIds = DB::table('Wo_Posts')
+                    ->where('page_id', $page->page_id)
+                    ->pluck('id');
+
+                if ($postIds->count() > 0) {
+                    $commentsCount = DB::table('Wo_Comments')
+                        ->whereIn('post_id', $postIds)
+                        ->count();
+                }
+            }
+            $pageData['comments_count'] = $commentsCount;
 
             // Include recent posts if requested
             if ($includePosts && $postsLimit > 0) {
