@@ -196,7 +196,7 @@ class BlogsController extends BaseController
                 'username' => $user->username ?? 'Unknown',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset($user->avatar) : null,
+                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                 'verified' => (bool) ($user->verified ?? false),
             ];
         } elseif ($rawUserId) {
@@ -208,7 +208,7 @@ class BlogsController extends BaseController
                     'username' => $userFromDb->username ?? 'Unknown',
                     'name' => $userFromDb->name ?? $userFromDb->username ?? 'Unknown User',
                     'avatar' => $userFromDb->avatar ?? '',
-                    'avatar_url' => $userFromDb->avatar ? asset($userFromDb->avatar) : null,
+                    'avatar_url' => $userFromDb->avatar ? asset('storage/' . $userFromDb->avatar) : null,
                     'verified' => (bool) ($userFromDb->verified ?? false),
                 ];
             }
@@ -510,7 +510,7 @@ class BlogsController extends BaseController
             // onError and the Avatar component falls back to coloured initials.
             // Returning null (when avatar is empty) lets Avatar show initials
             // immediately without any failed image request.
-            $avatarUrl = $user->avatar ? asset($user->avatar) : null;
+            $avatarUrl = $user->avatar ? asset('storage/' . $user->avatar) : null;
 
             $author = [
                 'user_id' => $user->user_id,
@@ -553,7 +553,7 @@ class BlogsController extends BaseController
         $user = $reply->user;
         $author = null;
         if ($user instanceof User) {
-            $avatarUrl = $user->avatar ? asset($user->avatar) : null;
+            $avatarUrl = $user->avatar ? asset('storage/' . $user->avatar) : null;
 
             $author = [
                 'user_id' => $user->user_id,
