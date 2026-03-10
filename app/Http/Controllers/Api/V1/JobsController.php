@@ -740,6 +740,51 @@ class JobsController extends Controller
 
         $appId = DB::table('Wo_Job_Apply')->insertGetId($insertData);
 
+        // Notify page owner about new application
+        try {
+            if (Schema::hasTable('Wo_Notifications') && Schema::hasTable('Wo_Pages')) {
+                // Resolve page owner from Wo_Pages
+                $pageOwnerId = null;
+                if ($pageId) {
+                    $pageRow = DB::table('Wo_Pages')->where('page_id', $pageId)->first();
+                    if ($pageRow && isset($pageRow->user_id)) {
+                        $pageOwnerId = (string) $pageRow->user_id;
+                    }
+                }
+
+                // Fall back to job owner if page owner not found
+                if (!$pageOwnerId) {
+                    $jobOwnerId = $job->user_id ?? $job->user ?? null;
+                    if ($jobOwnerId) {
+                        $pageOwnerId = (string) $jobOwnerId;
+                    }
+                }
+
+                // Only send notification if we have a valid recipient and it's not the same as applicant
+                if ($pageOwnerId && (string) $pageOwnerId !== (string) $userId) {
+                    $notificationData = [
+                        'notifier_id' => (string) $userId,
+                        'recipient_id' => $pageOwnerId,
+                        'type' => 'applied_to_job',
+                        'time' => time(),
+                    ];
+
+                    if (Schema::hasColumn('Wo_Notifications', 'url')) {
+                        // Link to job detail page
+                        $notificationData['url'] = "index.php?link1=job&id={$job->id}";
+                    }
+
+                    if (Schema::hasColumn('Wo_Notifications', 'seen')) {
+                        $notificationData['seen'] = 0;
+                    }
+
+                    DB::table('Wo_Notifications')->insert($notificationData);
+                }
+            }
+        } catch (\Exception $e) {
+            // Do not break application flow if notification fails
+        }
+
         return response()->json([
             'ok' => true,
             'message' => 'Application submitted successfully',
