@@ -31,11 +31,26 @@ class ImageHelper
      */
     public static function getImageUrl(?string $imagePath, string $type = 'default'): string
     {
-        if ($imagePath && file_exists(public_path($imagePath))) {
-            return asset($imagePath);
+        $resolved = null;
+
+        if ($imagePath) {
+            $normalized = ltrim($imagePath, '/');
+
+            // Direct public path (e.g. images/..., upload/...)
+            if (file_exists(public_path($normalized))) {
+                $resolved = asset($normalized);
+            }
+            // Storage symlink path (e.g. blog/... saved on public disk → public/storage/blog/...)
+            elseif (file_exists(public_path('storage/' . $normalized))) {
+                $resolved = asset('storage/' . $normalized);
+            }
+            // If already a full URL, just return it
+            elseif (filter_var($imagePath, FILTER_VALIDATE_URL)) {
+                $resolved = $imagePath;
+            }
         }
 
-        return self::getPlaceholder($type);
+        return $resolved ?? self::getPlaceholder($type);
     }
 
     /**
