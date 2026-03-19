@@ -2750,34 +2750,64 @@ class PostController extends Controller
             $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         }
 
-        // Check if colored posts table exists
-        if (!Schema::hasTable('Wo_Colored_Posts')) {
-            return response()->json([
-                'ok' => true,
-                'data' => [
-                    'colored_posts' => [],
-                    'message' => 'Colored posts feature is not available'
-                ]
-            ]);
-        }
-
         try {
-            // Get all available colored posts
-            $coloredPosts = DB::table('Wo_Colored_Posts')
-                ->orderBy('id')
-                ->get()
-                ->map(function ($coloredPost) {
-                    return [
-                        'id' => $coloredPost->id,
-                        'color_id' => $coloredPost->id, // Alias for clarity - use this in POST /api/v1/posts?type=colored
-                        'color_1' => $coloredPost->color_1 ?? '',
-                        'color_2' => $coloredPost->color_2 ?? '',
-                        'text_color' => $coloredPost->text_color ?? '',
-                        'image' => $coloredPost->image ?? '',
-                        'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
-                        'time' => $coloredPost->time ?? '',
-                    ];
-                });
+            $coloredPosts = collect();
+
+            // Get all available colored posts from DB when table exists
+            if (Schema::hasTable('Wo_Colored_Posts')) {
+                $coloredPosts = DB::table('Wo_Colored_Posts')
+                    ->orderBy('id')
+                    ->get()
+                    ->map(function ($coloredPost) {
+                        return [
+                            'id' => $coloredPost->id,
+                            'color_id' => $coloredPost->id, // Alias for clarity - use this in POST /api/v1/posts?type=colored
+                            'color_1' => $coloredPost->color_1 ?? '',
+                            'color_2' => $coloredPost->color_2 ?? '',
+                            'text_color' => $coloredPost->text_color ?? '',
+                            'image' => $coloredPost->image ?? '',
+                            'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+                            'time' => $coloredPost->time ?? '',
+                        ];
+                    });
+            }
+
+            // If no records in DB, provide a few sample color presets
+            if ($coloredPosts->isEmpty()) {
+                $now = time();
+                $coloredPosts = collect([
+                    [
+                        'id' => 1,
+                        'color_id' => 1,
+                        'color_1' => '#26ACE2',
+                        'color_2' => '#0B7CBD',
+                        'text_color' => '#FFFFFF',
+                        'image' => '',
+                        'image_url' => null,
+                        'time' => $now,
+                    ],
+                    [
+                        'id' => 2,
+                        'color_id' => 2,
+                        'color_1' => '#FF6B6B',
+                        'color_2' => '#F06595',
+                        'text_color' => '#FFFFFF',
+                        'image' => '',
+                        'image_url' => null,
+                        'time' => $now,
+                    ],
+                    [
+                        'id' => 3,
+                        'color_id' => 3,
+                        'color_1' => '#FFE66D',
+                        'color_2' => '#FFA41B',
+                        'text_color' => '#333333',
+                        'image' => '',
+                        'image_url' => null,
+                        'time' => $now,
+                    ],
+                ]);
+            }
 
             return response()->json([
                 'ok' => true,
