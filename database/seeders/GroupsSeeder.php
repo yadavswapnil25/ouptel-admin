@@ -64,9 +64,19 @@ class GroupsSeeder extends Seeder
                     $subCategoryId = $sub?->id;
                 }
 
+                // Build a safe slug for group_name (letters/numbers/underscore, max 50 chars)
+                $baseSlug = strtolower($data['name']);
+                $baseSlug = preg_replace('/[^a-z0-9_]+/i', '_', $baseSlug);
+                $baseSlug = trim($baseSlug, '_');
+                $baseSlug = substr($baseSlug, 0, 50);
+
+                if ($baseSlug === '') {
+                    $baseSlug = 'group_' . $category->id . '_' . ($index + 1);
+                }
+
                 Group::query()->updateOrCreate(
                     [
-                        'group_name' => substr(strtolower(str_replace(' ', '_', $data['name'])), 0, 55),
+                        'group_name' => $baseSlug,
                         'user_id' => $ownerId,
                     ],
                     [
