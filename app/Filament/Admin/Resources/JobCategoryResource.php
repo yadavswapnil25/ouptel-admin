@@ -119,6 +119,13 @@ class JobCategoryResource extends Resource
 
                 TextColumn::make('name')
                     ->label('Category Name')
+                    ->getStateUsing(fn (JobCategory $record): string => $record->resolved_name)
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $q) use ($search) {
+                            $q->where('name', 'like', "%{$search}%")
+                              ->orWhere('lang_key', 'like', "%{$search}%");
+                        });
+                    })
                     ->weight('bold'),
             ])
             ->filters([
