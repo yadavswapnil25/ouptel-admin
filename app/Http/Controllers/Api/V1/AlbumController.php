@@ -101,21 +101,14 @@ class AlbumController extends BaseController
             ->where('multi_image_post', 1)
             ->where('active', 1)
             ->orderByDesc('id');
-        // Keep listing behavior predictable: do not auto-filter by token user.
-        // If client needs only current user's albums, pass ?mine=1 explicitly.
-        if ((string) $request->query('mine', '0') === '1') {
-            $authHeader = $request->header('Authorization');
-            if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
-                return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
-            }
-
+        // Authenticate via bearer token stored in Wo_Sessions
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
             $token = substr($authHeader, 7);
             $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-            if (!$userId) {
-                return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+            if ($userId) {
+                $query->where('user_id', $userId);
             }
-
-            $query->where('user_id', (int) $userId);
         }
 
         $paginator = $query->paginate($perPage);
