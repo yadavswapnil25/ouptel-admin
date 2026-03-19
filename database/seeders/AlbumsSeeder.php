@@ -6,6 +6,7 @@ use App\Models\AlbumMedia;
 use App\Models\Post;
 use App\Models\User;
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\DB;
 
 class AlbumsSeeder extends Seeder
 {
@@ -39,6 +40,7 @@ class AlbumsSeeder extends Seeder
             foreach (array_slice($albumTemplates, 0, 2) as $aIndex => $template) {
                 $albumName = $template['name'] . ' - User ' . $user->user_id;
                 $albumTime = $baseTime - (($uIndex * 2 + $aIndex) * 900);
+                $nextPostId = $this->generateNextPostId();
 
                 $post = Post::query()->updateOrCreate(
                     [
@@ -53,15 +55,9 @@ class AlbumsSeeder extends Seeder
                         'multi_image_post' => 1,
                         'time' => $albumTime,
                         'registered' => date('Y-m-d H:i:s', $albumTime),
-                        'post_id' => null, // set below after save
+                        'post_id' => $nextPostId,
                     ]
                 );
-
-                // Keep post_id synced to id (common WoWonder pattern)
-                if (empty($post->post_id)) {
-                    $post->post_id = $post->id;
-                    $post->save();
-                }
 
                 // Seed 3 images per album
                 $images = [
@@ -88,6 +84,12 @@ class AlbumsSeeder extends Seeder
         }
 
         $this->command->info("Albums seeded successfully: {$seededAlbums} album posts.");
+    }
+
+    private function generateNextPostId(): int
+    {
+        $maxPostId = (int) DB::table('Wo_Posts')->max('post_id');
+        return $maxPostId > 0 ? $maxPostId + 1 : 1;
     }
 }
 
