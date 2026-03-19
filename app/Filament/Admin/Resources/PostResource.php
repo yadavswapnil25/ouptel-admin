@@ -108,6 +108,19 @@ class PostResource extends Resource
                         Forms\Components\TextInput::make('postRecord')
                             ->label('Audio URL')
                             ->dehydrateStateUsing(fn ($state) => $state ?? ''),
+
+                        Forms\Components\FileUpload::make('album_images')
+                            ->label('Album Images (Multiple)')
+                            ->image()
+                            ->multiple()
+                            ->reorderable()
+                            ->appendFiles()
+                            ->disk('public')
+                            ->directory('posts/albums')
+                            ->visibility('public')
+                            ->imageEditor()
+                            ->dehydrated(false)
+                            ->helperText('Upload multiple images for album-style posts.'),
                     ])
                     ->columns(2),
                 
