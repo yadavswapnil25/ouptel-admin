@@ -74,7 +74,7 @@ class ArticleResource extends Resource
                                     ->pluck('username', 'user_id');
                             })
                             ->searchable()
-                            ->getSearchResultsUsing(fn (string $search): array => 
+                            ->getSearchResultsUsing(fn (string $search): array =>
                                 User::where('username', 'like', "%{$search}%")
                                     ->limit(20)
                                     ->pluck('username', 'user_id')
@@ -158,7 +158,9 @@ class ArticleResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->limit(50)
-                    ->weight('bold'),
+                    ->weight('bold')
+                    ->url(fn (Article $record): string => $record->url)
+                    ->openUrlInNewTab(),
 
                 TextColumn::make('user')
                     ->label('Author')
