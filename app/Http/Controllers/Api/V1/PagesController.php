@@ -282,20 +282,9 @@ class PagesController extends BaseController
                 $errors[] = 'Page name already exists';
             }
 
-            // Check reserved site pages (common reserved routes)
-            $reservedPages = ['home', 'index', 'login', 'register', 'logout', 'settings', 'profile', 'admin', 'api', 'search', 'explore', 'messages', 'notifications', 'friends', 'pages', 'groups', 'events', 'jobs', 'market', 'blog', 'forum'];
-            if (in_array(strtolower($pageName), $reservedPages)) {
-                $errors[] = 'Page name contains invalid characters';
-            }
-
             // Validate page_name length (5-32 characters)
             if (strlen($pageName) < 5 || strlen($pageName) > 32) {
                 $errors[] = 'Page name must be between 5 and 32 characters';
-            }
-
-            // Validate page_name format (only word characters: letters, numbers, underscore)
-            if (!preg_match('/^[\w]+$/', $pageName)) {
-                $errors[] = 'Page name contains invalid characters';
             }
         }
 
