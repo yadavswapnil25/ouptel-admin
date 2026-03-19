@@ -158,9 +158,7 @@ class ArticleResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->limit(50)
-                    ->weight('bold')
-                    ->url(fn (Article $record): string => $record->url)
-                    ->openUrlInNewTab(),
+                    ->weight('bold'),
 
                 TextColumn::make('user')
                     ->label('Author')
