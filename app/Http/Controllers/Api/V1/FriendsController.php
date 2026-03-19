@@ -1528,6 +1528,11 @@ class FriendsController extends Controller
         // Get suggested users (prioritize users with mutual friends or recent activity)
         $suggested = DB::table('Wo_Users')
             ->where('active', '1')
+            // Exclude admin users from friend suggestions
+            ->where(function ($q) {
+                $q->where('admin', '!=', '1')
+                  ->orWhereNull('admin');
+            })
             ->where('user_id', '!=', $userId);
 
         if (!empty($excludeIds)) {
@@ -1570,6 +1575,11 @@ class FriendsController extends Controller
             // Find users with matching phone number
             $userQuery = DB::table('Wo_Users')
                 ->where('active', '1')
+                // Exclude admin users from contacts suggestions
+                ->where(function ($q) {
+                    $q->where('admin', '!=', '1')
+                      ->orWhereNull('admin');
+                })
                 ->where('phone_number', 'like', '%' . $phoneNumber . '%')
                 ->where('user_id', '!=', $userId);
 

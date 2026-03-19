@@ -133,9 +133,36 @@ class UserManagementResource extends Resource
                     ->sortable()
                     ->searchable(),
 
-                ImageColumn::make('avatar_url')
+                ImageColumn::make('avatar')
                     ->label('Avatar')
                     ->circular()
+                    ->getStateUsing(function ($record): string {
+                        $avatar = trim((string) ($record->avatar ?? ''));
+                        $resolved = \App\Helpers\ImageHelper::getPlaceholder('user');
+
+                        if ($avatar !== '') {
+                            // Full URL already stored in DB
+                            if (filter_var($avatar, FILTER_VALIDATE_URL)) {
+                                $resolved = $avatar;
+                            } else {
+                                $avatar = ltrim($avatar, '/');
+
+                                // Public path in project root (e.g. images/..., upload/...)
+                                if (file_exists(public_path($avatar))) {
+                                    $resolved = asset($avatar);
+                                }
+                                // Storage-served path (e.g. upload/photos/... under storage/app/public)
+                                elseif (file_exists(public_path('storage/' . $avatar))) {
+                                    $resolved = asset('storage/' . $avatar);
+                                } else {
+                                    // Last resort: still try rendering as public asset path
+                                    $resolved = asset($avatar);
+                                }
+                            }
+                        }
+
+                        return $resolved;
+                    })
                     ->defaultImageUrl(fn ($record) => \App\Helpers\ImageHelper::getPlaceholder('user')),
 
                 TextColumn::make('username')

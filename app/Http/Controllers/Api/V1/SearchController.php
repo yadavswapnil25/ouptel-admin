@@ -258,7 +258,13 @@ class SearchController extends Controller
 
         try {
             // Users search
-            $usersQuery = DB::table('Wo_Users')->where('active', '1');
+            $usersQuery = DB::table('Wo_Users')
+                ->where('active', '1')
+                // Exclude admin users from explore people results
+                ->where(function ($q) {
+                    $q->where('admin', '!=', '1')
+                      ->orWhereNull('admin');
+                });
 
             if ($queryString !== '') {
                 $usersQuery->where(function ($q) use ($queryString) {
@@ -463,7 +469,13 @@ class SearchController extends Controller
      */
     private function searchUsers(string $tokenUserId, string $searchKey, string $gender, string $status, string $image, string $country, string $verified, string $filterByAge, int $ageFrom, int $ageTo, int $limit, int $offset): array
     {
-        $query = DB::table('Wo_Users')->where('active', '1');
+        $query = DB::table('Wo_Users')
+            ->where('active', '1')
+            // Exclude admin users from search people results
+            ->where(function ($q) {
+                $q->where('admin', '!=', '1')
+                  ->orWhereNull('admin');
+            });
 
         if (!empty($searchKey)) {
             $like = '%' . $searchKey . '%';
