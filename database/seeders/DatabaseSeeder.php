@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             GroupsSeeder::class,
             PagesSeeder::class,
             AlbumsSeeder::class,
+            EventsSeeder::class,
             SettingsSeeder::class,
             RolesAndPermissionsSeeder::class,
         ]);
