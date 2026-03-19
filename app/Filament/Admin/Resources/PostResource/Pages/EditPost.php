@@ -14,8 +14,13 @@ class EditPost extends EditRecord
 
     protected function mutateFormDataBeforeFill(array $data): array
     {
+        $candidateIds = array_values(array_unique(array_filter([
+            (string) $this->record->id,
+            isset($this->record->post_id) ? (string) $this->record->post_id : null,
+        ], fn ($v) => $v !== null && $v !== '')));
+
         $data['album_images'] = DB::table('Wo_Albums_Media')
-            ->where('post_id', $this->record->id)
+            ->whereIn('post_id', $candidateIds)
             ->orderBy('id')
             ->pluck('image')
             ->toArray();
@@ -25,8 +30,9 @@ class EditPost extends EditRecord
 
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $state = $this->form->getState();
-        $this->albumImages = array_values(array_filter($state['album_images'] ?? []));
+        // album_images is intentionally dehydrated(false), so read from raw Livewire state.
+        $rawAlbumImages = $this->data['album_images'] ?? [];
+        $this->albumImages = array_values(array_filter($rawAlbumImages));
 
         if (!empty($this->albumImages)) {
             $data['multi_image_post'] = 1;
@@ -46,7 +52,12 @@ class EditPost extends EditRecord
             return;
         }
 
-        DB::table('Wo_Albums_Media')->where('post_id', $this->record->id)->delete();
+        $candidateIds = array_values(array_unique(array_filter([
+            (string) $this->record->id,
+            isset($this->record->post_id) ? (string) $this->record->post_id : null,
+        ], fn ($v) => $v !== null && $v !== '')));
+
+        DB::table('Wo_Albums_Media')->whereIn('post_id', $candidateIds)->delete();
 
         foreach ($this->albumImages as $imagePath) {
             DB::table('Wo_Albums_Media')->insert([

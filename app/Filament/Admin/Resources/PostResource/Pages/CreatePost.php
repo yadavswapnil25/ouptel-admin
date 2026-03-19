@@ -14,8 +14,9 @@ class CreatePost extends CreateRecord
 
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $state = $this->form->getState();
-        $this->albumImages = array_values(array_filter($state['album_images'] ?? []));
+        // album_images is intentionally dehydrated(false), so read from raw Livewire state.
+        $rawAlbumImages = $this->data['album_images'] ?? [];
+        $this->albumImages = array_values(array_filter($rawAlbumImages));
 
         if (!empty($this->albumImages)) {
             $data['multi_image_post'] = 1;
