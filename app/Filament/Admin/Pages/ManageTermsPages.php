@@ -34,7 +34,7 @@ class ManageTermsPages extends Page implements HasTable
     public function table(Table $table): Table
     {
         return $table
-            ->query(TermsPage::getTermsPages()->toQuery())
+            ->query(TermsPage::getTermsPages())
             ->columns([
                 TextColumn::make('display_name')
                     ->label('Page Name')

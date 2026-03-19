@@ -27,16 +27,18 @@ class TermsPage extends Model
     const REFUND_TERMS = 'refund_terms_page';
 
     /**
-     * Get all terms pages
+     * Get base query for all terms pages.
+     * Returns a Builder so callers can always create a query safely
+     * even when no matching rows exist yet.
      */
     public static function getTermsPages()
     {
-        return static::whereIn('lang_key', [
+        return static::query()->whereIn('lang_key', [
             self::TERMS_OF_USE,
             self::PRIVACY_POLICY,
             self::ABOUT,
             self::REFUND_TERMS,
-        ])->get();
+        ]);
     }
 
     /**
