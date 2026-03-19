@@ -23,6 +23,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Toggle;
+use Filament\Forms\Components\FileUpload;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Illuminate\Database\Eloquent\Builder;
@@ -80,6 +81,16 @@ class UserManagementResource extends Resource
 
                         TextInput::make('phone_number')
                             ->maxLength(32),
+
+                        FileUpload::make('avatar')
+                            ->label('Profile Photo')
+                            ->image()
+                            ->disk('public')
+                            ->directory('upload/photos')
+                            ->visibility('public')
+                            ->imageEditor()
+                            ->helperText('Upload a profile photo (jpg, png, webp).')
+                            ->columnSpanFull(),
 
                         Select::make('gender')
                             ->options(function () {
