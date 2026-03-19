@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
             GroupCategoriesSeeder::class,
             BlogCategoriesSeeder::class,
             BlogsSeeder::class,
+            GroupsSeeder::class,
             PagesSeeder::class,
             SettingsSeeder::class,
             RolesAndPermissionsSeeder::class,
