@@ -21,6 +21,7 @@ class DatabaseSeeder extends Seeder
             BlogsSeeder::class,
             GroupsSeeder::class,
             PagesSeeder::class,
+            JobsSeeder::class,
             AlbumsSeeder::class,
             EventsSeeder::class,
             SettingsSeeder::class,
