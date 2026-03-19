@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Helpers\ImageHelper;
 use App\Models\Post;
 use App\Models\Comment;
 use App\Models\User;
@@ -83,7 +84,7 @@ class AlbumController extends BaseController
                 'multi_image_post' => (bool) $post->multi_image_post,
                 'images_count' => count($imagePaths),
                 'image_urls' => array_map(function($path) {
-                    return asset('storage/' . $path);
+                    return ImageHelper::getImageUrl($path, 'post');
                 }, $imagePaths),
                 'created_at' => optional($post->time)->toIso8601String(),
             ],
@@ -123,7 +124,7 @@ class AlbumController extends BaseController
             // Get album images from AlbumMedia table
             $albumImages = \App\Models\AlbumMedia::where('post_id', $post->id)->get();
             $imageUrls = $albumImages->map(function($albumImage) {
-                return asset('storage/' . $albumImage->image);
+                return ImageHelper::getImageUrl($albumImage->image, 'post');
             })->toArray();
 
             return [
@@ -178,7 +179,7 @@ class AlbumController extends BaseController
         $imageUrls = $albumImages->map(function($albumImage) {
             return [
                 'id' => $albumImage->id,
-                'image_url' => asset('storage/' . $albumImage->image),
+                'image_url' => ImageHelper::getImageUrl($albumImage->image, 'post'),
             ];
         })->toArray();
 
