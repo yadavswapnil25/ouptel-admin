@@ -78,25 +78,36 @@ class PostResource extends Resource
                 
                 Forms\Components\Section::make('Media & Links')
                     ->schema([
-                        Forms\Components\TextInput::make('postPhoto')
-                            ->label('Photo URL')
-                            ->url(),
+                        Forms\Components\FileUpload::make('postPhoto')
+                            ->label('Photo')
+                            ->image()
+                            ->disk('public')
+                            ->directory('posts')
+                            ->visibility('public')
+                            ->imageEditor()
+                            ->dehydrateStateUsing(fn ($state) => $state ?: '')
+                            ->helperText('Upload a post image (jpg, png, webp).'),
                         
                         Forms\Components\TextInput::make('postYoutube')
-                            ->label('YouTube URL'),
+                            ->label('YouTube URL')
+                            ->dehydrateStateUsing(fn ($state) => $state ?? ''),
                         
                         Forms\Components\TextInput::make('postFile')
-                            ->label('File URL'),
+                            ->label('File URL')
+                            ->dehydrateStateUsing(fn ($state) => $state ?? ''),
                         
                         Forms\Components\TextInput::make('postLink')
                             ->label('Link URL')
-                            ->url(),
+                            ->url()
+                            ->dehydrateStateUsing(fn ($state) => $state ?? ''),
                         
                         Forms\Components\TextInput::make('postLinkTitle')
-                            ->label('Link Title'),
+                            ->label('Link Title')
+                            ->dehydrateStateUsing(fn ($state) => $state ?? ''),
                         
                         Forms\Components\TextInput::make('postRecord')
-                            ->label('Audio URL'),
+                            ->label('Audio URL')
+                            ->dehydrateStateUsing(fn ($state) => $state ?? ''),
                     ])
                     ->columns(2),
                 
