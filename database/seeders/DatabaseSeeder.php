@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
             UsersGenderSeeder::class,
             PageCategoriesSeeder::class,
             GroupCategoriesSeeder::class,
+            JobCategoriesSeeder::class,
             BlogCategoriesSeeder::class,
             BlogsSeeder::class,
             GroupsSeeder::class,
