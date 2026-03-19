@@ -140,6 +140,11 @@ class UserManagementResource extends Resource
                         $avatar = trim((string) ($record->avatar ?? ''));
                         $resolved = \App\Helpers\ImageHelper::getPlaceholder('user');
 
+                        // Legacy default avatar in DB should use app-level user placeholder.
+                        if ($avatar === 'upload/photos/d-avatar.jpg') {
+                            return asset('user.png');
+                        }
+
                         if ($avatar !== '') {
                             // Full URL already stored in DB
                             if (filter_var($avatar, FILTER_VALIDATE_URL)) {
