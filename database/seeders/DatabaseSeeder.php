@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             BlogsSeeder::class,
             GroupsSeeder::class,
             PagesSeeder::class,
+            AlbumsSeeder::class,
             SettingsSeeder::class,
             RolesAndPermissionsSeeder::class,
         ]);
