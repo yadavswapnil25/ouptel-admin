@@ -1288,6 +1288,8 @@ class FriendsController extends Controller
             $users[] = [
                 'user_id' => $user->user_id,
                 'username' => $user->username ?? 'Unknown',
+                'first_name' => $user->first_name ?? '',
+                'last_name' => $user->last_name ?? '',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
                 'email' => $user->email ?? '',
                 'avatar' => $user->avatar ?? '',
@@ -1323,6 +1325,8 @@ class FriendsController extends Controller
                     $contactsFormatted[] = [
                         'user_id' => $user->user_id,
                         'username' => $user->username ?? 'Unknown',
+                        'first_name' => $user->first_name ?? '',
+                        'last_name' => $user->last_name ?? '',
                         'name' => $user->name ?? $user->username ?? 'Unknown User',
                         'email' => $user->email ?? '',
                         'avatar' => $user->avatar ?? '',
@@ -1390,6 +1394,8 @@ class FriendsController extends Controller
             $users[] = [
                 'user_id' => $user->user_id,
                 'username' => $user->username ?? 'Unknown',
+                'first_name' => $user->first_name ?? '',
+                'last_name' => $user->last_name ?? '',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
                 'email' => $user->email ?? '',
                 'avatar' => $user->avatar ?? '',
@@ -1425,6 +1431,8 @@ class FriendsController extends Controller
                     $contactsFormatted[] = [
                         'user_id' => $user->user_id,
                         'username' => $user->username ?? 'Unknown',
+                        'first_name' => $user->first_name ?? '',
+                        'last_name' => $user->last_name ?? '',
                         'name' => $user->name ?? $user->username ?? 'Unknown User',
                         'email' => $user->email ?? '',
                         'avatar' => $user->avatar ?? '',
