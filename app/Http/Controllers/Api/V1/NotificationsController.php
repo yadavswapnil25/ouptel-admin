@@ -374,6 +374,8 @@ class NotificationsController extends Controller
                 'notifier' => $notifier ? [
                     'user_id' => $notifier->user_id,
                     'username' => $notifier->username ?? 'Unknown',
+                    'first_name' => $notifier->first_name ?? '',
+                    'last_name' => $notifier->last_name ?? '',
                     'name' => $notifier->name ?? $notifier->username ?? 'Unknown User',
                     'avatar' => $notifier->avatar ?? '',
                     'avatar_url' => $notifier->avatar ? asset('storage/' . $notifier->avatar) : null,
