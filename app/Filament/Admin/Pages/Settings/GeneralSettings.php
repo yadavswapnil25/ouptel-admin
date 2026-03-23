@@ -56,6 +56,14 @@ class GeneralSettings extends Page
             'sidebar_ad_image' => Setting::get('sidebar_ad_image', ''),
             'sidebar_ad_image_upload' => Setting::get('sidebar_ad_image_upload', ''),
             'sidebar_ad_url' => Setting::get('sidebar_ad_url', ''),
+            'sponsored_1_name' => Setting::get('sponsored_1_name', ''),
+            'sponsored_1_url' => Setting::get('sponsored_1_url', ''),
+            'sponsored_1_image' => Setting::get('sponsored_1_image', ''),
+            'sponsored_1_image_upload' => Setting::get('sponsored_1_image_upload', ''),
+            'sponsored_2_name' => Setting::get('sponsored_2_name', ''),
+            'sponsored_2_url' => Setting::get('sponsored_2_url', ''),
+            'sponsored_2_image' => Setting::get('sponsored_2_image', ''),
+            'sponsored_2_image_upload' => Setting::get('sponsored_2_image_upload', ''),
         ]);
     }
 
@@ -220,6 +228,46 @@ class GeneralSettings extends Page
                             ->helperText('Link opened when users click the sidebar ad.'),
                     ])
                     ->columns(1),
+
+                Section::make('Sponsored Section')
+                    ->schema([
+                        TextInput::make('sponsored_1_name')
+                            ->label('Sponsored Item 1 Name')
+                            ->placeholder('IQ Options Broker'),
+                        TextInput::make('sponsored_1_url')
+                            ->label('Sponsored Item 1 URL')
+                            ->url()
+                            ->placeholder('https://example.com'),
+                        FileUpload::make('sponsored_1_image_upload')
+                            ->label('Sponsored Item 1 Image Upload')
+                            ->image()
+                            ->disk('public')
+                            ->directory('ads/sponsored')
+                            ->visibility('public'),
+                        TextInput::make('sponsored_1_image')
+                            ->label('Sponsored Item 1 Image URL')
+                            ->placeholder('https://example.com/sponsor-1.jpg')
+                            ->helperText('Optional URL fallback if upload is not used.'),
+
+                        TextInput::make('sponsored_2_name')
+                            ->label('Sponsored Item 2 Name')
+                            ->placeholder('BM Fashion Designer'),
+                        TextInput::make('sponsored_2_url')
+                            ->label('Sponsored Item 2 URL')
+                            ->url()
+                            ->placeholder('https://example.com'),
+                        FileUpload::make('sponsored_2_image_upload')
+                            ->label('Sponsored Item 2 Image Upload')
+                            ->image()
+                            ->disk('public')
+                            ->directory('ads/sponsored')
+                            ->visibility('public'),
+                        TextInput::make('sponsored_2_image')
+                            ->label('Sponsored Item 2 Image URL')
+                            ->placeholder('https://example.com/sponsor-2.jpg')
+                            ->helperText('Optional URL fallback if upload is not used.'),
+                    ])
+                    ->columns(2),
             ])
             ->statePath('data');
     }

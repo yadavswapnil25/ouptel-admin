@@ -77,6 +77,35 @@ class AdsController extends Controller
     }
 
     /**
+     * Return sponsored section items for sidebar widgets.
+     */
+    public function sponsored(): JsonResponse
+    {
+        try {
+            $item1 = $this->buildSponsoredItem(1);
+            $item2 = $this->buildSponsoredItem(2);
+            $items = array_values(array_filter([$item1, $item2], fn ($item) => !empty($item)));
+
+            return response()->json([
+                'api_status' => '200',
+                'api_text' => 'success',
+                'api_version' => '1.0',
+                'data' => $items,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'api_status' => '500',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => 'sponsored_500',
+                    'error_text' => 'Failed to load sponsored items.',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
      * @param \Illuminate\Support\Collection|array $config
      */
     private function firstNonEmpty($config, array $keys, string $fallback = ''): string
@@ -103,6 +132,27 @@ class AdsController extends Controller
         }
 
         return Storage::disk('public')->url($value);
+    }
+
+    private function buildSponsoredItem(int $index): array
+    {
+        $name = trim((string) Setting::get("sponsored_{$index}_name", ''));
+        $url = trim((string) Setting::get("sponsored_{$index}_url", ''));
+        $imageUpload = trim((string) Setting::get("sponsored_{$index}_image_upload", ''));
+        $image = trim((string) Setting::get("sponsored_{$index}_image", ''));
+
+        $imageUrl = $imageUpload !== '' ? $imageUpload : $image;
+        $imageUrl = $this->toPublicUrl($imageUrl);
+
+        if ($name === '' && $url === '' && $imageUrl === '') {
+            return [];
+        }
+
+        return [
+            'name' => $name !== '' ? $name : 'Sponsored',
+            'url' => $url !== '' ? $url : '#',
+            'image_url' => $imageUrl,
+        ];
     }
 }
 
