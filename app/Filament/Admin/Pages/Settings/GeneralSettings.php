@@ -51,6 +51,8 @@ class GeneralSettings extends Page
             'cache_sidebar' => Setting::get('cache_sidebar', '1'),
             'update_user_profile' => Setting::get('update_user_profile', '30'),
             'exchangerate_key' => Setting::get('exchangerate_key', ''),
+            'sidebar_ad_image' => Setting::get('sidebar_ad_image', ''),
+            'sidebar_ad_url' => Setting::get('sidebar_ad_url', ''),
         ]);
     }
 
@@ -192,6 +194,21 @@ class GeneralSettings extends Page
                         TextInput::make('exchangerate_key')
                             ->label('Exchangerate API Key')
                             ->helperText('Your Exchangerate API Key from exchangerate-api.com'),
+                    ])
+                    ->columns(1),
+
+                Section::make('Sidebar Advertisement')
+                    ->schema([
+                        TextInput::make('sidebar_ad_image')
+                            ->label('Sidebar Ad Image URL')
+                            ->url()
+                            ->placeholder('https://example.com/banner.jpg')
+                            ->helperText('Image URL shown in the left sidebar advertisement widget.'),
+                        TextInput::make('sidebar_ad_url')
+                            ->label('Sidebar Ad Click URL')
+                            ->url()
+                            ->placeholder('https://example.com')
+                            ->helperText('Link opened when users click the sidebar ad.'),
                     ])
                     ->columns(1),
             ])

@@ -55,6 +55,7 @@ use App\Http\Controllers\Api\V1\AccountVerificationController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\HashtagController;
 use App\Http\Controllers\Api\V1\CommunityPreferenceController;
+use App\Http\Controllers\Api\V1\AdsController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -428,4 +429,7 @@ Route::get('/users/{userId}/badge', [AccountVerificationController::class, 'getU
 // Hashtag routes
 Route::get('/hashtags/trending', [HashtagController::class, 'getTrending']); // Get trending hashtags
 Route::get('/hashtags/{hashtag}/posts', [HashtagController::class, 'getHashtagPosts']); // Get posts for a specific hashtag
+
+// Ads routes
+Route::get('/ads/sidebar', [AdsController::class, 'sidebar']);
 
