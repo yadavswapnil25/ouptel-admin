@@ -56,6 +56,7 @@ use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\HashtagController;
 use App\Http\Controllers\Api\V1\CommunityPreferenceController;
 use App\Http\Controllers\Api\V1\AdsController;
+use App\Http\Controllers\Api\V1\SurveyController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -433,4 +434,8 @@ Route::get('/hashtags/{hashtag}/posts', [HashtagController::class, 'getHashtagPo
 // Ads routes
 Route::get('/ads/sidebar', [AdsController::class, 'sidebar']);
 Route::get('/ads/sponsored', [AdsController::class, 'sponsored']);
+
+// Survey popup routes
+Route::post('/survey/status', [SurveyController::class, 'status']);
+Route::post('/survey/submit', [SurveyController::class, 'submit']);
 
