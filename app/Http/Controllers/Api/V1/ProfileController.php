@@ -330,7 +330,7 @@ class ProfileController extends Controller
         $userData['is_friend'] = $this->isFriend($user->user_id, $loggedUserId) ? 1 : 0;
 
         // Add profile and cover URLs
-        $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/default-avatar.png');
+        $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/placeholders/user-avatar.svg');
         $userData['cover_url'] = $user->cover ? asset('storage/' . $user->cover) : asset('images/default-cover.jpg');
 
         // Explicitly ensure address, working, working_link, school, college, university are included
@@ -375,7 +375,7 @@ class ProfileController extends Controller
                 ->exists();
             $followerData['is_following'] = $isFollowing ? 1 : 0;
 
-            $followerData['avatar_url'] = $follower->avatar ? asset('storage/' . $follower->avatar) : asset('images/default-avatar.png');
+            $followerData['avatar_url'] = $follower->avatar ? asset('storage/' . $follower->avatar) : asset('images/placeholders/user-avatar.svg');
 
             $result[] = $followerData;
         }
@@ -412,7 +412,7 @@ class ProfileController extends Controller
                 ->exists();
             $followData['is_following'] = $isFollowing ? 1 : 0;
 
-            $followData['avatar_url'] = $follow->avatar ? asset('storage/' . $follow->avatar) : asset('images/default-avatar.png');
+            $followData['avatar_url'] = $follow->avatar ? asset('storage/' . $follow->avatar) : asset('images/placeholders/user-avatar.svg');
 
             $result[] = $followData;
         }
@@ -517,7 +517,7 @@ class ProfileController extends Controller
                     unset($memberData[$field]);
                 }
 
-                $memberData['avatar_url'] = $member->avatar ?? asset('images/default-avatar.png');
+                $memberData['avatar_url'] = $member->avatar ?? asset('images/placeholders/user-avatar.svg');
 
                 $result[] = $memberData;
             }
