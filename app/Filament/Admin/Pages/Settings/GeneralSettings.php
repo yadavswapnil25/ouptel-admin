@@ -7,6 +7,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Form;
 use Filament\Pages\Page;
 use Filament\Actions\Action;
@@ -21,7 +22,8 @@ class GeneralSettings extends Page
     protected static ?string $navigationIcon = 'heroicon-o-cog-6-tooth';
     protected static ?string $navigationLabel = 'General Configuration';
     protected static ?string $title = 'General Configuration';
-    protected static bool $shouldRegisterNavigation = false;
+    protected static bool $shouldRegisterNavigation = true;
+    protected static ?string $navigationGroup = 'Settings';
     protected static string $view = 'filament.pages.settings.general';
 
     public ?array $data = [];
@@ -52,6 +54,7 @@ class GeneralSettings extends Page
             'update_user_profile' => Setting::get('update_user_profile', '30'),
             'exchangerate_key' => Setting::get('exchangerate_key', ''),
             'sidebar_ad_image' => Setting::get('sidebar_ad_image', ''),
+            'sidebar_ad_image_upload' => Setting::get('sidebar_ad_image_upload', ''),
             'sidebar_ad_url' => Setting::get('sidebar_ad_url', ''),
         ]);
     }
@@ -199,11 +202,17 @@ class GeneralSettings extends Page
 
                 Section::make('Sidebar Advertisement')
                     ->schema([
+                        FileUpload::make('sidebar_ad_image_upload')
+                            ->label('Upload Sidebar Ad Image')
+                            ->image()
+                            ->disk('public')
+                            ->directory('ads/sidebar')
+                            ->visibility('public')
+                            ->helperText('Upload an ad banner image from your computer.'),
                         TextInput::make('sidebar_ad_image')
                             ->label('Sidebar Ad Image URL')
-                            ->url()
                             ->placeholder('https://example.com/banner.jpg')
-                            ->helperText('Image URL shown in the left sidebar advertisement widget.'),
+                            ->helperText('Optional: direct image URL. Used if no uploaded image is set.'),
                         TextInput::make('sidebar_ad_url')
                             ->label('Sidebar Ad Click URL')
                             ->url()

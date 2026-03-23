@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class AdsController extends Controller
 {
@@ -18,6 +19,7 @@ class AdsController extends Controller
             $config = DB::table('Wo_Config')->pluck('value', 'name');
             // Filament settings UI writes to Setting model keys.
             $settings = [
+                'sidebar_ad_image_upload' => Setting::get('sidebar_ad_image_upload', ''),
                 'sidebar_ad_image' => Setting::get('sidebar_ad_image', ''),
                 'sidebar_ad_url' => Setting::get('sidebar_ad_url', ''),
             ];
@@ -31,9 +33,13 @@ class AdsController extends Controller
                 'ads_image',
                 'sidebar_ad',
             ]);
+            if ($imageUrl === '' && !empty($settings['sidebar_ad_image_upload'])) {
+                $imageUrl = $settings['sidebar_ad_image_upload'];
+            }
             if ($imageUrl === '' && !empty($settings['sidebar_ad_image'])) {
                 $imageUrl = $settings['sidebar_ad_image'];
             }
+            $imageUrl = $this->toPublicUrl($imageUrl);
 
             $linkUrl = $this->firstNonEmpty($config, [
                 'sidebar_ad_url',
@@ -83,6 +89,20 @@ class AdsController extends Controller
         }
 
         return $fallback;
+    }
+
+    private function toPublicUrl(string $pathOrUrl): string
+    {
+        $value = trim($pathOrUrl);
+        if ($value === '') {
+            return '';
+        }
+
+        if (str_starts_with($value, 'http://') || str_starts_with($value, 'https://')) {
+            return $value;
+        }
+
+        return Storage::disk('public')->url($value);
     }
 }
 
