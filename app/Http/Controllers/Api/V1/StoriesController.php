@@ -174,26 +174,36 @@ class StoriesController extends Controller
             ], 400);
         }
 
-        $fileType = $request->input('file_type');
+        // Normalize file_type to avoid false negatives from case/whitespace
+        $fileType = strtolower(trim((string) $request->input('file_type', '')));
         $file = $request->file('file');
 
         // Validate file type
-        if ($fileType == 'image') {
+        if ($fileType === 'image') {
             $validator = Validator::make($request->all(), [
-                'file' => 'required|image|mimes:jpeg,png,jpg,gif|max:10240',
+                'file' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
             ]);
-        } else {
+        } elseif ($fileType === 'video') {
             $validator = Validator::make($request->all(), [
                 'file' => 'required|mimes:mp4,m4v,avi,mpg,mov,webm|max:51200',
             ]);
-        }
-
-        if ($validator->fails()) {
+        } else {
             return response()->json([
                 'api_status' => 400,
                 'errors' => [
                     'error_id' => 7,
                     'error_text' => 'Incorrect value for (file_type), allowed: video|image'
+                ]
+            ], 400);
+        }
+
+        if ($validator->fails()) {
+            $fileError = $validator->errors()->first('file');
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 7,
+                    'error_text' => $fileError ?: 'Invalid file upload'
                 ]
             ], 400);
         }
