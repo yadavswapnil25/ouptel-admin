@@ -450,6 +450,7 @@ class NewFeedController extends Controller
                     ];
                 }
             }
+            $taggedFriends = $this->extractTaggedFriendsFromText((string) ($post->postText ?? ''));
 
             // Get post reactions count (try Wo_Reactions table first, fallback to post_likes column)
             // Use post_id field (which is used to store reactions) with fallback to id
@@ -502,6 +503,8 @@ class NewFeedController extends Controller
                 'user_id' => $post->user_id,
                 'recipient_id' => (int) ($post->recipient_id ?? 0),
                 'recipient' => $recipient,
+                'tagged_friends' => $taggedFriends,
+                'tagged_friends_count' => count($taggedFriends),
                 'post_text' => $post->postText ?? '',
                 'post_type' => $this->getPostType($post),
                 'post_privacy' => $post->postPrivacy ?? '0',
@@ -736,6 +739,54 @@ class NewFeedController extends Controller
             return 'album';
         }
         return 'text';
+    }
+
+    /**
+     * Parse @mentions from post text and resolve to users.
+     *
+     * @param string $text
+     * @return array<int, array<string, mixed>>
+     */
+    private function extractTaggedFriendsFromText(string $text): array
+    {
+        if ($text === '') {
+            return [];
+        }
+        if (!preg_match_all('/@([A-Za-z0-9_.]+)/', $text, $matches)) {
+            return [];
+        }
+        $usernames = array_values(array_unique(array_filter($matches[1] ?? [])));
+        if (empty($usernames)) {
+            return [];
+        }
+        $users = DB::table('Wo_Users')
+            ->whereIn('username', $usernames)
+            ->get(['user_id', 'username', 'first_name', 'last_name', 'name', 'avatar']);
+        if ($users->isEmpty()) {
+            return [];
+        }
+        $usersByUsername = [];
+        foreach ($users as $u) {
+            $usersByUsername[strtolower((string) $u->username)] = $u;
+        }
+        $result = [];
+        foreach ($usernames as $uname) {
+            $u = $usersByUsername[strtolower((string) $uname)] ?? null;
+            if (!$u) {
+                continue;
+            }
+            $displayName = trim(($u->first_name ?? '') . ' ' . ($u->last_name ?? ''));
+            $result[] = [
+                'user_id' => (int) $u->user_id,
+                'username' => $u->username ?? '',
+                'name' => $displayName !== '' ? $displayName : ($u->name ?? $u->username ?? 'User'),
+                'avatar_url' => ($u->avatar ?? '') ? asset('storage/' . $u->avatar) : null,
+            ];
+            if (count($result) >= 8) {
+                break;
+            }
+        }
+        return $result;
     }
 
     /**
