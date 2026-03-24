@@ -1859,6 +1859,14 @@ class FriendsController extends Controller
             }
 
             $notificationType = 'friend_request';
+
+            // Same person often has a pending follow request first, then taps Add Friend — one row in UI
+            DB::table('Wo_Notifications')
+                ->where('notifier_id', $senderId)
+                ->where('recipient_id', $receiverId)
+                ->where('type', 'follow_request')
+                ->delete();
+
             $existingNotification = DB::table('Wo_Notifications')
                 ->where('notifier_id', $senderId)
                 ->where('recipient_id', $receiverId)

@@ -119,6 +119,8 @@ class NotificationsController extends Controller
             $formattedNotifications[] = $this->formatNotification($notification, $user);
         }
 
+        $formattedNotifications = $this->dedupeFollowRequestWhenFriendRequestExists($formattedNotifications);
+
         return response()->json([
             'api_status' => 200,
             'api_text' => 'success',
@@ -509,6 +511,36 @@ class NotificationsController extends Controller
         }
 
         return [];
+    }
+
+    /**
+     * If the same notifier has both follow_request and friend_request, show only friend_request.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<int, array<string, mixed>>
+     */
+    private function dedupeFollowRequestWhenFriendRequestExists(array $items): array
+    {
+        $notifierHasFriendRequest = [];
+        foreach ($items as $n) {
+            $type = $n['type'] ?? '';
+            $nid = (string) ($n['notifier_id'] ?? '');
+            if ($type === 'friend_request' && $nid !== '') {
+                $notifierHasFriendRequest[$nid] = true;
+            }
+        }
+
+        $out = [];
+        foreach ($items as $n) {
+            $type = $n['type'] ?? '';
+            $nid = (string) ($n['notifier_id'] ?? '');
+            if ($type === 'follow_request' && $nid !== '' && ! empty($notifierHasFriendRequest[$nid])) {
+                continue;
+            }
+            $out[] = $n;
+        }
+
+        return $out;
     }
 
     /**
