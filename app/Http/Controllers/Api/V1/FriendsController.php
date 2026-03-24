@@ -736,6 +736,7 @@ class FriendsController extends Controller
 
                 if ($updated) {
                     $this->updateFollowCounts($followerId, $followingId);
+                    $this->ensureWoFriendsAcceptedPair($followerKey, $followingKey);
                     $this->removeFriendRequestNotifications($followerKey, $followingKey);
                     DB::commit();
 
@@ -2082,6 +2083,77 @@ class FriendsController extends Controller
                 ->where('notifier_id', $notifierId)
                 ->whereIn('type', ['follow_request', 'friend_request'])
                 ->delete();
+        } catch (\Exception $e) {
+            // ignore
+        }
+    }
+
+    /**
+     * After a follow request is accepted, ensure Wo_Friends shows accepted so profile API sets is_friend=1
+     * (mutual Wo_Followers alone is not always present).
+     */
+    private function ensureWoFriendsAcceptedPair(string $userIdA, string $userIdB): void
+    {
+        if (! Schema::hasTable('Wo_Friends')) {
+            return;
+        }
+
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id')
+                && Schema::hasColumn('Wo_Friends', 'friend_id')
+                && Schema::hasColumn('Wo_Friends', 'status')) {
+                $row = DB::table('Wo_Friends')
+                    ->where(function ($q) use ($userIdA, $userIdB) {
+                        $q->where('user_id', $userIdA)->where('friend_id', $userIdB);
+                    })
+                    ->orWhere(function ($q) use ($userIdA, $userIdB) {
+                        $q->where('user_id', $userIdB)->where('friend_id', $userIdA);
+                    })
+                    ->first();
+
+                if ($row) {
+                    DB::table('Wo_Friends')->where('id', $row->id)->update(['status' => '2']);
+                } else {
+                    $insert = [
+                        'user_id' => $userIdA,
+                        'friend_id' => $userIdB,
+                        'status' => '2',
+                    ];
+                    if (Schema::hasColumn('Wo_Friends', 'time')) {
+                        $insert['time'] = (string) time();
+                    }
+                    DB::table('Wo_Friends')->insert($insert);
+                }
+
+                return;
+            }
+
+            if (Schema::hasColumn('Wo_Friends', 'from_id')
+                && Schema::hasColumn('Wo_Friends', 'to_id')
+                && Schema::hasColumn('Wo_Friends', 'status')) {
+                $row = DB::table('Wo_Friends')
+                    ->where(function ($q) use ($userIdA, $userIdB) {
+                        $q->where('from_id', $userIdA)->where('to_id', $userIdB);
+                    })
+                    ->orWhere(function ($q) use ($userIdA, $userIdB) {
+                        $q->where('from_id', $userIdB)->where('to_id', $userIdA);
+                    })
+                    ->first();
+
+                if ($row) {
+                    DB::table('Wo_Friends')->where('id', $row->id)->update(['status' => '2']);
+                } else {
+                    $insert = [
+                        'from_id' => $userIdA,
+                        'to_id' => $userIdB,
+                        'status' => '2',
+                    ];
+                    if (Schema::hasColumn('Wo_Friends', 'time')) {
+                        $insert['time'] = (string) time();
+                    }
+                    DB::table('Wo_Friends')->insert($insert);
+                }
+            }
         } catch (\Exception $e) {
             // ignore
         }
