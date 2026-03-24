@@ -720,51 +720,59 @@ class FriendsController extends Controller
         try {
             DB::beginTransaction();
 
-            // Find pending follow request (matching old API: Wo_AcceptFollowRequest)
-            // follower_id = person who sent request, following_id = person accepting
-            $followRequest = DB::table('Wo_Followers')
-                ->where('follower_id', $followerId)
-                ->where('following_id', $followingId)
-                ->where('active', '0') // Pending request
-                ->first();
+            $followerKey = (string) $followerId;
+            $followingKey = (string) $followingId;
+            $followRequest = $this->findPendingFollowRequestRow($followerKey, $followingKey);
 
-            if (!$followRequest) {
-                return response()->json([
-                    'api_status' => 400,
-                    'errors' => [
-                        'error_id' => 6,
-                        'error_text' => 'Follow request not found'
-                    ]
-                ], 404);
-            }
+            if ($followRequest) {
+                $updated = DB::table('Wo_Followers')
+                    ->where('follower_id', $followerId)
+                    ->where('following_id', $followingId)
+                    ->where(function ($q) {
+                        $q->where('active', '=', '0')
+                            ->orWhere('active', '=', 0);
+                    })
+                    ->update(['active' => '1']);
 
-            // Accept the request by setting active = '1' (matching old API logic)
-            $updated = DB::table('Wo_Followers')
-                ->where('follower_id', $followerId)
-                ->where('following_id', $followingId)
-                ->where('active', '0')
-                ->update(['active' => '1']);
+                if ($updated) {
+                    $this->updateFollowCounts($followerId, $followingId);
+                    $this->removeFriendRequestNotifications($followerKey, $followingKey);
+                    DB::commit();
 
-            if ($updated) {
-                // Update follow counts
-                $this->updateFollowCounts($followerId, $followingId);
+                    return response()->json([
+                        'api_status' => 200,
+                    ]);
+                }
 
-                DB::commit();
-
-                // Return response matching old API format
-                return response()->json([
-                    'api_status' => 200
-                ]);
-            } else {
                 DB::rollBack();
+
                 return response()->json([
                     'api_status' => 400,
                     'errors' => [
                         'error_id' => 500,
-                        'error_text' => 'Failed to accept follow request'
-                    ]
+                        'error_text' => 'Failed to accept follow request',
+                    ],
                 ], 500);
             }
+
+            if ($this->acceptWoFriendsIncoming($followerKey, $followingKey)) {
+                $this->removeFriendRequestNotifications($followerKey, $followingKey);
+                DB::commit();
+
+                return response()->json([
+                    'api_status' => 200,
+                ]);
+            }
+
+            DB::rollBack();
+
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Follow or friend request not found',
+                ],
+            ], 404);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -828,48 +836,58 @@ class FriendsController extends Controller
         try {
             DB::beginTransaction();
 
-            // Find pending follow request (matching old API: Wo_DeleteFollowRequest)
-            // follower_id = person who sent request, following_id = person declining
-            $followRequest = DB::table('Wo_Followers')
-                ->where('follower_id', $followerId)
-                ->where('following_id', $followingId)
-                ->where('active', '0') // Pending request
-                ->first();
+            $followerKey = (string) $followerId;
+            $followingKey = (string) $followingId;
+            $followRequest = $this->findPendingFollowRequestRow($followerKey, $followingKey);
 
-            if (!$followRequest) {
-                return response()->json([
-                    'api_status' => 400,
-                    'errors' => [
-                        'error_id' => 6,
-                        'error_text' => 'Follow request not found'
-                    ]
-                ], 404);
-            }
+            if ($followRequest) {
+                $deleted = DB::table('Wo_Followers')
+                    ->where('follower_id', $followerId)
+                    ->where('following_id', $followingId)
+                    ->where(function ($q) {
+                        $q->where('active', '=', '0')
+                            ->orWhere('active', '=', 0);
+                    })
+                    ->delete();
 
-            // Decline the request by deleting it (matching old API logic)
-            $deleted = DB::table('Wo_Followers')
-                ->where('follower_id', $followerId)
-                ->where('following_id', $followingId)
-                ->where('active', '0')
-                ->delete();
+                if ($deleted) {
+                    $this->removeFriendRequestNotifications($followerKey, $followingKey);
+                    DB::commit();
 
-            if ($deleted) {
-                DB::commit();
+                    return response()->json([
+                        'api_status' => 200,
+                    ]);
+                }
 
-                // Return response matching old API format
-                return response()->json([
-                    'api_status' => 200
-                ]);
-            } else {
                 DB::rollBack();
+
                 return response()->json([
                     'api_status' => 400,
                     'errors' => [
                         'error_id' => 500,
-                        'error_text' => 'Failed to decline follow request'
-                    ]
+                        'error_text' => 'Failed to decline follow request',
+                    ],
                 ], 500);
             }
+
+            if ($this->declineWoFriendsIncoming($followerKey, $followingKey)) {
+                $this->removeFriendRequestNotifications($followerKey, $followingKey);
+                DB::commit();
+
+                return response()->json([
+                    'api_status' => 200,
+                ]);
+            }
+
+            DB::rollBack();
+
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Follow or friend request not found',
+                ],
+            ], 404);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -1947,6 +1965,117 @@ class FriendsController extends Controller
         } catch (\Exception $e) {
             // Columns don't exist, skip update
             // Silently fail if columns don't exist
+        }
+    }
+
+    private function findPendingFollowRequestRow(string $followerId, string $followingId): ?object
+    {
+        if (! Schema::hasTable('Wo_Followers')) {
+            return null;
+        }
+
+        try {
+            return DB::table('Wo_Followers')
+                ->where('follower_id', $followerId)
+                ->where('following_id', $followingId)
+                ->where(function ($q) {
+                    $q->where('active', '=', '0')
+                        ->orWhere('active', '=', 0);
+                })
+                ->first();
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    private function acceptWoFriendsIncoming(string $senderId, string $recipientId): bool
+    {
+        if (! Schema::hasTable('Wo_Friends')) {
+            return false;
+        }
+
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id')
+                && Schema::hasColumn('Wo_Friends', 'friend_id')
+                && Schema::hasColumn('Wo_Friends', 'status')) {
+                $updated = DB::table('Wo_Friends')
+                    ->where('user_id', $senderId)
+                    ->where('friend_id', $recipientId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->update(['status' => '2']);
+
+                return (bool) $updated;
+            }
+
+            if (Schema::hasColumn('Wo_Friends', 'from_id')
+                && Schema::hasColumn('Wo_Friends', 'to_id')
+                && Schema::hasColumn('Wo_Friends', 'status')) {
+                $updated = DB::table('Wo_Friends')
+                    ->where('from_id', $senderId)
+                    ->where('to_id', $recipientId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->update(['status' => '2']);
+
+                return (bool) $updated;
+            }
+        } catch (\Exception $e) {
+            return false;
+        }
+
+        return false;
+    }
+
+    private function declineWoFriendsIncoming(string $senderId, string $recipientId): bool
+    {
+        if (! Schema::hasTable('Wo_Friends')) {
+            return false;
+        }
+
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id')
+                && Schema::hasColumn('Wo_Friends', 'friend_id')
+                && Schema::hasColumn('Wo_Friends', 'status')) {
+                $deleted = DB::table('Wo_Friends')
+                    ->where('user_id', $senderId)
+                    ->where('friend_id', $recipientId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->delete();
+
+                return (bool) $deleted;
+            }
+
+            if (Schema::hasColumn('Wo_Friends', 'from_id')
+                && Schema::hasColumn('Wo_Friends', 'to_id')
+                && Schema::hasColumn('Wo_Friends', 'status')) {
+                $deleted = DB::table('Wo_Friends')
+                    ->where('from_id', $senderId)
+                    ->where('to_id', $recipientId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->delete();
+
+                return (bool) $deleted;
+            }
+        } catch (\Exception $e) {
+            return false;
+        }
+
+        return false;
+    }
+
+    private function removeFriendRequestNotifications(string $notifierId, string $recipientId): void
+    {
+        if (! Schema::hasTable('Wo_Notifications')) {
+            return;
+        }
+
+        try {
+            DB::table('Wo_Notifications')
+                ->where('recipient_id', $recipientId)
+                ->where('notifier_id', $notifierId)
+                ->whereIn('type', ['follow_request', 'friend_request'])
+                ->delete();
+        } catch (\Exception $e) {
+            // ignore
         }
     }
 

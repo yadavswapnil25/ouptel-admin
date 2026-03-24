@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class NotificationsController extends Controller
@@ -77,11 +78,14 @@ class NotificationsController extends Controller
             ->whereNotIn('type', $excludedTypes)
             ->count();
 
-        // Count friend requests
+        // Count friend / follow requests (pending followers + pending friend-table rows)
         $countFriendRequests = DB::table('Wo_Followers')
             ->where('following_id', $tokenUserId)
-            ->where('active', 0)
+            ->where(function ($q) {
+                $q->where('active', 0)->orWhere('active', '0');
+            })
             ->count();
+        $countFriendRequests += $this->countIncomingFriendTableRequestRows($tokenUserId);
 
         // Get friend requests
         $friendRequests = $this->getFriendRequests($tokenUserId);
@@ -397,15 +401,39 @@ class NotificationsController extends Controller
     {
         $requests = DB::table('Wo_Followers')
             ->where('following_id', $userId)
-            ->where('active', 0)
+            ->where(function ($q) {
+                $q->where('active', 0)->orWhere('active', '0');
+            })
             ->orderByDesc('time')
             ->limit(20)
             ->get();
 
         $formatted = [];
+        $seen = [];
         foreach ($requests as $request) {
             $user = DB::table('Wo_Users')->where('user_id', $request->follower_id)->first();
             if ($user) {
+                $uid = (string) $user->user_id;
+                $seen[$uid] = true;
+                $formatted[] = [
+                    'user_id' => $user->user_id,
+                    'username' => $user->username ?? 'Unknown',
+                    'name' => $user->name ?? $user->username ?? 'Unknown User',
+                    'avatar' => $user->avatar ?? '',
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'verified' => (bool) ($user->verified ?? false),
+                ];
+            }
+        }
+
+        foreach ($this->getIncomingFriendTableSenderIds($userId) as $senderId) {
+            $sid = (string) $senderId;
+            if (isset($seen[$sid])) {
+                continue;
+            }
+            $user = DB::table('Wo_Users')->where('user_id', $senderId)->first();
+            if ($user) {
+                $seen[$sid] = true;
                 $formatted[] = [
                     'user_id' => $user->user_id,
                     'username' => $user->username ?? 'Unknown',
@@ -418,6 +446,69 @@ class NotificationsController extends Controller
         }
 
         return $formatted;
+    }
+
+    private function countIncomingFriendTableRequestRows(string $userId): int
+    {
+        if (! Schema::hasTable('Wo_Friends') || ! Schema::hasColumn('Wo_Friends', 'status')) {
+            return 0;
+        }
+
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                return (int) DB::table('Wo_Friends')
+                    ->where('friend_id', $userId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->count();
+            }
+
+            if (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                return (int) DB::table('Wo_Friends')
+                    ->where('to_id', $userId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->count();
+            }
+        } catch (\Exception $e) {
+            return 0;
+        }
+
+        return 0;
+    }
+
+    /**
+     * @return list<string|int>
+     */
+    private function getIncomingFriendTableSenderIds(string $userId): array
+    {
+        if (! Schema::hasTable('Wo_Friends') || ! Schema::hasColumn('Wo_Friends', 'status')) {
+            return [];
+        }
+
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                return DB::table('Wo_Friends')
+                    ->where('friend_id', $userId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->pluck('user_id')
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+
+            if (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                return DB::table('Wo_Friends')
+                    ->where('to_id', $userId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->pluck('from_id')
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+        } catch (\Exception $e) {
+            return [];
+        }
+
+        return [];
     }
 
     /**
@@ -475,6 +566,10 @@ class NotificationsController extends Controller
                 break;
             case 'follow_request':
                 $notification['type_text'] = 'sent you a follow request';
+                $notification['icon'] = 'user-plus';
+                break;
+            case 'friend_request':
+                $notification['type_text'] = 'sent you a friend request';
                 $notification['icon'] = 'user-plus';
                 break;
             case 'comment_mention':
