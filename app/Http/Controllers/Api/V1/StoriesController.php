@@ -1096,6 +1096,20 @@ class StoriesController extends Controller
                     ->toArray();
                 
                 if (!empty($viewUserIds)) {
+                    // Load reactions for this story keyed by viewer user_id.
+                    $viewerReactions = [];
+                    if (Schema::hasTable('Wo_Reactions')) {
+                        try {
+                            $viewerReactions = DB::table('Wo_Reactions')
+                                ->where('story_id', $storyId)
+                                ->whereIn('user_id', $viewUserIds)
+                                ->pluck('reaction', 'user_id')
+                                ->toArray();
+                        } catch (\Exception $e) {
+                            $viewerReactions = [];
+                        }
+                    }
+
                     // Get user data for all viewers
                     $userQuery = DB::table('Wo_Users')
                         ->whereIn('user_id', $viewUserIds);
@@ -1166,6 +1180,7 @@ class StoriesController extends Controller
                             'avatar' => $user->avatar ?? '',
                             'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                             'verified' => (bool) ($user->verified ?? false),
+                            'reaction' => isset($viewerReactions[$user->user_id]) ? (int) $viewerReactions[$user->user_id] : null,
                             'offset_id' => $view->id ?? 0,
                             'viewed_at' => ($hasTimeColumn && $view && isset($view->time)) ? date('c', $view->time) : null,
                         ];
@@ -1200,6 +1215,18 @@ class StoriesController extends Controller
                     foreach ($views as $view) {
                         $user = DB::table('Wo_Users')->where('user_id', $view->user_id)->first();
                         if ($user) {
+                            $viewerReaction = null;
+                            if (Schema::hasTable('Wo_Reactions')) {
+                                try {
+                                    $viewerReaction = DB::table('Wo_Reactions')
+                                        ->where('story_id', $storyId)
+                                        ->where('user_id', $view->user_id)
+                                        ->value('reaction');
+                                } catch (\Exception $eReaction) {
+                                    $viewerReaction = null;
+                                }
+                            }
+
                             // Check if user is active (if column exists)
                             if (Schema::hasColumn('Wo_Users', 'active')) {
                                 $isActive = in_array($user->active, ['1', 1]);
@@ -1225,6 +1252,7 @@ class StoriesController extends Controller
                                 'avatar' => $user->avatar ?? '',
                                 'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                                 'verified' => (bool) ($user->verified ?? false),
+                                'reaction' => $viewerReaction !== null ? (int) $viewerReaction : null,
                                 'offset_id' => $view->id,
                                 'viewed_at' => ($hasTimeColumn && isset($view->time)) ? date('c', $view->time) : null,
                             ];
