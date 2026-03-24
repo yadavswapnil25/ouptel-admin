@@ -668,6 +668,25 @@ class StoriesController extends Controller
             
             DB::table('Wo_Reactions')->insert($reactionInsertData);
 
+            // Create notification for story owner similar to viewed_story notifications.
+            if (Schema::hasTable('Wo_Notifications') && (string) $story->user_id !== (string) $tokenUserId) {
+                try {
+                    $storyOwner = DB::table('Wo_Users')->where('user_id', $story->user_id)->first();
+                    if ($storyOwner) {
+                        DB::table('Wo_Notifications')->insert([
+                            'notifier_id' => $tokenUserId,
+                            'recipient_id' => $story->user_id,
+                            'type' => 'reacted_story',
+                            'url' => 'index.php?link1=timeline&u=' . ($storyOwner->username ?? ''),
+                            'time' => time(),
+                            'seen' => 0,
+                        ]);
+                    }
+                } catch (\Exception $e) {
+                    // Notification errors should not fail story reaction.
+                }
+            }
+
             return response()->json([
                 'api_status' => 200,
                 'message' => 'story reacted'

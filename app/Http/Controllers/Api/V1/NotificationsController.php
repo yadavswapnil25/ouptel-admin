@@ -578,6 +578,10 @@ class NotificationsController extends Controller
                 $notification['type_text'] = 'viewed your story';
                 $notification['icon'] = 'story';
                 break;
+            case 'reacted_story':
+                $notification['type_text'] = 'reacted to your story';
+                $notification['icon'] = 'thumbs-up';
+                break;
             default:
                 $notification['type_text'] = 'sent you a notification';
                 $notification['icon'] = 'bell';
