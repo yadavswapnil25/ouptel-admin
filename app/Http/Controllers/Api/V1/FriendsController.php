@@ -27,147 +27,154 @@ class FriendsController extends Controller
 
         $type = $request->query('type', 'all');
         $perPage = (int) ($request->query('per_page', 12));
-        $perPage = max(1, min($perPage, 50));
+        $perPage = max(1, min($perPage, 100));
         $page = (int) ($request->query('page', 1));
         $page = max(1, $page);
 
         try {
-            // Get friends from Wo_Followers table (mutual following = friends)
-            // Friends are users where both follow each other (active = 1)
-            $friends = [];
-            
+            $subjectUserId = (string) $request->query('user_id', $tokenUserId);
+
+            if (! DB::table('Wo_Users')->where('user_id', $subjectUserId)->exists()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'User not found',
+                    'data' => [],
+                    'meta' => [
+                        'current_page' => $page,
+                        'per_page' => $perPage,
+                        'total' => 0,
+                        'last_page' => 1,
+                        'from' => 0,
+                        'to' => 0,
+                        'has_more' => false,
+                    ],
+                ], 404);
+            }
+
+            $friendIds = [];
+
             if (Schema::hasTable('Wo_Followers')) {
-                // Get users I'm following (active = 1 means accepted)
                 $followingIds = DB::table('Wo_Followers')
-                    ->where('follower_id', $tokenUserId)
-                    ->where(function($q) {
+                    ->where('follower_id', $subjectUserId)
+                    ->where(function ($q) {
                         $q->where('active', '=', '1')
-                          ->orWhere('active', '=', 1);
+                            ->orWhere('active', '=', 1);
                     })
                     ->pluck('following_id')
+                    ->map(fn ($id) => (string) $id)
                     ->toArray();
 
-                // Get users following me (active = 1 means accepted)
                 $followersIds = DB::table('Wo_Followers')
-                    ->where('following_id', $tokenUserId)
-                    ->where(function($q) {
+                    ->where('following_id', $subjectUserId)
+                    ->where(function ($q) {
                         $q->where('active', '=', '1')
-                          ->orWhere('active', '=', 1);
+                            ->orWhere('active', '=', 1);
                     })
                     ->pluck('follower_id')
+                    ->map(fn ($id) => (string) $id)
                     ->toArray();
 
-                // Friends are users who follow each other (mutual following)
-                $friendIds = array_intersect($followingIds, $followersIds);
-                
-                if (!empty($friendIds)) {
-                    // Get blocked users to exclude
-                    $blockedIds = [];
-                    if (Schema::hasTable('Wo_Blocks')) {
-                        $blockedIds = DB::table('Wo_Blocks')
-                            ->where(function($q) use ($tokenUserId) {
-                                $q->where('blocker', $tokenUserId)
-                                  ->orWhere('blocked', $tokenUserId);
-                            })
-                            ->pluck(DB::raw('CASE WHEN blocker = ' . $tokenUserId . ' THEN blocked ELSE blocker END'))
-                            ->toArray();
-                    }
+                $friendIds = array_values(array_unique(array_intersect($followingIds, $followersIds)));
+            }
 
-                    // Exclude blocked users
-                    $friendIds = array_diff($friendIds, $blockedIds);
+            $woFriendIds = $this->getAcceptedWoFriendsPartnerIds($subjectUserId);
+            $friendIds = array_values(array_unique(array_merge($friendIds, $woFriendIds)));
+            $friendIds = array_values(array_diff($friendIds, [$subjectUserId]));
 
-                    // Get total count
-                    $total = count($friendIds);
+            $blockedIds = [];
+            if (Schema::hasTable('Wo_Blocks')) {
+                $blockedIds = DB::table('Wo_Blocks')
+                    ->where('blocker', $subjectUserId)
+                    ->pluck('blocked')
+                    ->merge(DB::table('Wo_Blocks')->where('blocked', $subjectUserId)->pluck('blocker'))
+                    ->map(fn ($id) => (string) $id)
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
 
-                    // Apply pagination
-                    $offset = ($page - 1) * $perPage;
-                    $paginatedFriendIds = array_slice($friendIds, $offset, $perPage);
+            if (! empty($blockedIds)) {
+                $friendIds = array_values(array_diff($friendIds, $blockedIds));
+            }
 
-                    // Get friend user data
-                    if (!empty($paginatedFriendIds)) {
-                        $friendsData = DB::table('Wo_Users')
-                            ->whereIn('user_id', $paginatedFriendIds)
-                            ->where('active', '1')
-                            ->get();
+            sort($friendIds, SORT_NATURAL);
 
-                        foreach ($friendsData as $friend) {
-                            // Get mutual friends count
-                            $mutualFriendsCount = 0;
-                            if (Schema::hasTable('Wo_Followers')) {
-                                $currentUserFollowing = DB::table('Wo_Followers')
-                                    ->where('follower_id', $tokenUserId)
-                                    ->where(function($q) {
-                                        $q->where('active', '=', '1')
-                                          ->orWhere('active', '=', 1);
-                                    })
-                                    ->pluck('following_id')
-                                    ->toArray();
-                                
-                                $friendFollowing = DB::table('Wo_Followers')
-                                    ->where('follower_id', $friend->user_id)
-                                    ->where(function($q) {
-                                        $q->where('active', '=', '1')
-                                          ->orWhere('active', '=', 1);
-                                    })
-                                    ->pluck('following_id')
-                                    ->toArray();
-                                
-                                $mutualFriendsCount = count(array_intersect($currentUserFollowing, $friendFollowing));
-                            }
+            $friends = [];
+            $total = count($friendIds);
 
-                            $friends[] = [
-                                'user_id' => $friend->user_id,
-                                'username' => $friend->username ?? 'Unknown',
-                                'name' => $this->getUserName($friend),
-                                'first_name' => $friend->first_name ?? '',
-                                'last_name' => $friend->last_name ?? '',
-                                'email' => $friend->email ?? '',
-                                'avatar' => $friend->avatar ?? '',
-                                'avatar_url' => $friend->avatar ? asset('storage/' . $friend->avatar) : null,
-                                'cover' => $friend->cover ?? '',
-                                'cover_url' => $friend->cover ? asset('storage/' . $friend->cover) : null,
-                                'verified' => (bool) ($friend->verified ?? false),
-                                'is_following' => true,
-                                'is_following_me' => true,
-                                'is_friend' => true,
-                                'mutual_friends_count' => $mutualFriendsCount,
-                                'lastseen' => $friend->lastseen ?? time(),
-                                'lastseen_time_text' => $this->getTimeElapsedString($friend->lastseen ?? time()),
-                            ];
+            if ($total > 0) {
+                $offset = ($page - 1) * $perPage;
+                $paginatedFriendIds = array_slice($friendIds, $offset, $perPage);
+
+                if (! empty($paginatedFriendIds)) {
+                    $friendsData = DB::table('Wo_Users')
+                        ->whereIn('user_id', $paginatedFriendIds)
+                        ->where('active', '1')
+                        ->get()
+                        ->sortBy(fn ($f) => strtolower($this->getUserName($f)))
+                        ->values();
+
+                    foreach ($friendsData as $friend) {
+                        $mutualFriendsCount = 0;
+                        if (Schema::hasTable('Wo_Followers')) {
+                            $viewerFollowing = DB::table('Wo_Followers')
+                                ->where('follower_id', $tokenUserId)
+                                ->where(function ($q) {
+                                    $q->where('active', '=', '1')
+                                        ->orWhere('active', '=', 1);
+                                })
+                                ->pluck('following_id')
+                                ->toArray();
+
+                            $friendFollowing = DB::table('Wo_Followers')
+                                ->where('follower_id', $friend->user_id)
+                                ->where(function ($q) {
+                                    $q->where('active', '=', '1')
+                                        ->orWhere('active', '=', 1);
+                                })
+                                ->pluck('following_id')
+                                ->toArray();
+
+                            $mutualFriendsCount = count(array_intersect($viewerFollowing, $friendFollowing));
                         }
+
+                        $friends[] = [
+                            'user_id' => $friend->user_id,
+                            'username' => $friend->username ?? 'Unknown',
+                            'name' => $this->getUserName($friend),
+                            'first_name' => $friend->first_name ?? '',
+                            'last_name' => $friend->last_name ?? '',
+                            'email' => $friend->email ?? '',
+                            'avatar' => $friend->avatar ?? '',
+                            'avatar_url' => $friend->avatar ? asset('storage/' . $friend->avatar) : null,
+                            'cover' => $friend->cover ?? '',
+                            'cover_url' => $friend->cover ? asset('storage/' . $friend->cover) : null,
+                            'verified' => (bool) ($friend->verified ?? false),
+                            'is_following' => true,
+                            'is_following_me' => true,
+                            'is_friend' => true,
+                            'mutual_friends_count' => $mutualFriendsCount,
+                            'lastseen' => $friend->lastseen ?? time(),
+                            'lastseen_time_text' => $this->getTimeElapsedString($friend->lastseen ?? time()),
+                        ];
                     }
-
-                    // Calculate pagination metadata
-                    $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
-
-                    return response()->json([
-                        'ok' => true,
-                        'data' => $friends,
-                        'meta' => [
-                            'current_page' => $page,
-                            'per_page' => $perPage,
-                            'total' => $total,
-                            'last_page' => $lastPage,
-                            'from' => $total > 0 ? $offset + 1 : 0,
-                            'to' => min($offset + $perPage, $total),
-                            'has_more' => $page < $lastPage,
-                        ],
-                    ]);
                 }
             }
 
-            // No friends found
+            $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
+            $offset = ($page - 1) * $perPage;
+
             return response()->json([
                 'ok' => true,
-                'data' => [],
+                'data' => $friends,
                 'meta' => [
                     'current_page' => $page,
                     'per_page' => $perPage,
-                    'total' => 0,
-                    'last_page' => 1,
-                    'from' => 0,
-                    'to' => 0,
-                    'has_more' => false,
+                    'total' => $total,
+                    'last_page' => $lastPage,
+                    'from' => $total > 0 ? $offset + 1 : 0,
+                    'to' => min($offset + $perPage, $total),
+                    'has_more' => $page < $lastPage,
                 ],
             ]);
 
@@ -184,6 +191,62 @@ class FriendsController extends Controller
                 ],
             ], 500);
         }
+    }
+
+    /**
+     * Accepted Wo_Friends partners for a user (status = 2), both column layouts.
+     *
+     * @return list<string>
+     */
+    private function getAcceptedWoFriendsPartnerIds(string $userId): array
+    {
+        if (! Schema::hasTable('Wo_Friends')) {
+            return [];
+        }
+
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id')
+                && Schema::hasColumn('Wo_Friends', 'friend_id')
+                && Schema::hasColumn('Wo_Friends', 'status')) {
+                return DB::table('Wo_Friends')
+                    ->where('user_id', $userId)
+                    ->whereIn('status', ['2', 2])
+                    ->pluck('friend_id')
+                    ->merge(
+                        DB::table('Wo_Friends')
+                            ->where('friend_id', $userId)
+                            ->whereIn('status', ['2', 2])
+                            ->pluck('user_id')
+                    )
+                    ->map(fn ($id) => (string) $id)
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+
+            if (Schema::hasColumn('Wo_Friends', 'from_id')
+                && Schema::hasColumn('Wo_Friends', 'to_id')
+                && Schema::hasColumn('Wo_Friends', 'status')) {
+                return DB::table('Wo_Friends')
+                    ->where('from_id', $userId)
+                    ->whereIn('status', ['2', 2])
+                    ->pluck('to_id')
+                    ->merge(
+                        DB::table('Wo_Friends')
+                            ->where('to_id', $userId)
+                            ->whereIn('status', ['2', 2])
+                            ->pluck('from_id')
+                    )
+                    ->map(fn ($id) => (string) $id)
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+        } catch (\Exception $e) {
+            return [];
+        }
+
+        return [];
     }
 
     public function search(Request $request): JsonResponse
