@@ -472,8 +472,12 @@ class PeopleFollowController extends Controller
             }
 
             $query = DB::table('Wo_Posts')
-                ->whereIn('user_id', $followingUserIds)
-                ->whereIn('active', ['1', 1]); // Handle both string and integer
+                ->whereIn('active', ['1', 1]) // Handle both string and integer
+                ->where(function ($q) use ($followingUserIds, $userId) {
+                    $q->whereIn('user_id', $followingUserIds)
+                      // Include posts where current user is explicitly tagged/recipient.
+                      ->orWhere('recipient_id', $userId);
+                });
 
             switch ($feedOrder) {
                 case 0: // All Posts
@@ -517,6 +521,20 @@ class PeopleFollowController extends Controller
             // Get user information
             $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
             
+            // Get recipient information (for "X and Y" display in feed)
+            $recipient = null;
+            if (!empty($post->recipient_id) && (int) $post->recipient_id > 0) {
+                $recipientUser = DB::table('Wo_Users')->where('user_id', (int) $post->recipient_id)->first();
+                if ($recipientUser) {
+                    $recipient = [
+                        'user_id' => (int) $recipientUser->user_id,
+                        'username' => $recipientUser->username ?? 'Unknown',
+                        'name' => $this->getUserName($recipientUser),
+                        'avatar_url' => ($recipientUser->avatar) ? asset('storage/' . $recipientUser->avatar) : null,
+                    ];
+                }
+            }
+
             // Get post reactions count
             $postIdForReactions = $post->post_id ?? $post->id;
             $reactionsCount = $this->getPostReactionsCount($postIdForReactions);
@@ -551,6 +569,8 @@ class PeopleFollowController extends Controller
                 'id' => $post->id,
                 'post_id' => $post->post_id ?? $post->id,
                 'user_id' => $post->user_id,
+                'recipient_id' => (int) ($post->recipient_id ?? 0),
+                'recipient' => $recipient,
                 'post_text' => $post->postText ?? '',
                 'post_type' => $postType,
                 'post_privacy' => $post->postPrivacy ?? '0',

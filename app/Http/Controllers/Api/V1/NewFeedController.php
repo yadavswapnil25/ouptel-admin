@@ -221,12 +221,17 @@ class NewFeedController extends Controller
                 ->pluck('preference_id')
                 ->all();
             if (!empty($userPreferenceIds)) {
-                $query->where(function ($q) use ($userPreferenceIds) {
+                $query->where(function ($q) use ($userPreferenceIds, $userId) {
                     $q->whereIn('community_preference_id', $userPreferenceIds)
-                      ->orWhereNull('community_preference_id');
+                      ->orWhereNull('community_preference_id')
+                      // Always include posts where current user is recipient/tagged.
+                      ->orWhere('recipient_id', $userId);
                 });
             } else {
-                $query->whereNull('community_preference_id');
+                $query->where(function ($q) use ($userId) {
+                    $q->whereNull('community_preference_id')
+                      ->orWhere('recipient_id', $userId);
+                });
             }
         }
 
@@ -432,6 +437,20 @@ class NewFeedController extends Controller
             // Get user information
             $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
             
+            // Get recipient information (for "X and Y" display in feed)
+            $recipient = null;
+            if (!empty($post->recipient_id) && (int) $post->recipient_id > 0) {
+                $recipientUser = DB::table('Wo_Users')->where('user_id', (int) $post->recipient_id)->first();
+                if ($recipientUser) {
+                    $recipient = [
+                        'user_id' => (int) $recipientUser->user_id,
+                        'username' => $recipientUser->username ?? 'Unknown',
+                        'name' => trim(($recipientUser->first_name ?? '') . ' ' . ($recipientUser->last_name ?? '')) ?: ($recipientUser->name ?? $recipientUser->username ?? 'Unknown User'),
+                        'avatar_url' => ($recipientUser->avatar) ? asset('storage/' . $recipientUser->avatar) : null,
+                    ];
+                }
+            }
+
             // Get post reactions count (try Wo_Reactions table first, fallback to post_likes column)
             // Use post_id field (which is used to store reactions) with fallback to id
             $postIdForReactions = $post->post_id ?? $post->id;
@@ -481,6 +500,8 @@ class NewFeedController extends Controller
                 'id' => $post->id,
                 'post_id' => $post->post_id ?? $post->id,
                 'user_id' => $post->user_id,
+                'recipient_id' => (int) ($post->recipient_id ?? 0),
+                'recipient' => $recipient,
                 'post_text' => $post->postText ?? '',
                 'post_type' => $this->getPostType($post),
                 'post_privacy' => $post->postPrivacy ?? '0',
