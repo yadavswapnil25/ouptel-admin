@@ -247,6 +247,9 @@ class ProfileController extends Controller
         if ($isFollowing) {
             $userData['is_following'] = 1;
             $userData['can_follow'] = 1;
+            if ($this->hasOutgoingFriendTablePending((string) $loggedUserId, (string) $user->user_id)) {
+                $userData['friend_request_sent'] = 1;
+            }
         } else {
             // Check if friend request is pending (active = 0 means pending request)
             $isPendingRequest = DB::table('Wo_Followers')
@@ -659,6 +662,36 @@ class ProfileController extends Controller
             ->exists();
 
         return $blocked ? 1 : 0;
+    }
+
+    /**
+     * Pending friend-row sent by viewer while already following (Wo_Friends), for profile UI.
+     */
+    private function hasOutgoingFriendTablePending(string $loggedUserId, string $profileUserId): bool
+    {
+        if (! Schema::hasTable('Wo_Friends') || ! Schema::hasColumn('Wo_Friends', 'status')) {
+            return false;
+        }
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                return DB::table('Wo_Friends')
+                    ->where('user_id', $loggedUserId)
+                    ->where('friend_id', $profileUserId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->exists();
+            }
+            if (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                return DB::table('Wo_Friends')
+                    ->where('from_id', $loggedUserId)
+                    ->where('to_id', $profileUserId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->exists();
+            }
+        } catch (\Exception $e) {
+            return false;
+        }
+
+        return false;
     }
 
     /**

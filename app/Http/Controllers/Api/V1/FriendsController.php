@@ -591,8 +591,8 @@ class FriendsController extends Controller
                 ->whereIn('active', ['0', 0])
                 ->exists();
 
-            // If already following or has pending request, unfollow/remove request
-            if ($isFollowing || $isFollowRequested) {
+            // Pending follow only (active=0): cancel that request — do not touch active follows
+            if ($isFollowRequested && ! $isFollowing) {
                 $deleted = DB::table('Wo_Followers')
                     ->where('follower_id', $tokenUserId)
                     ->where('following_id', $recipientId)
@@ -600,8 +600,22 @@ class FriendsController extends Controller
 
                 if ($deleted) {
                     $followMessage = 'unfollowed';
-                    // Update follow counts
                     $this->updateFollowCounts($tokenUserId, $recipientId);
+                }
+            } elseif ($isFollowing) {
+                // Already following: never delete the follow here (old API toggled unfollow and broke "Add Friend")
+                $fromId = (string) $tokenUserId;
+                $toId = (string) $recipientId;
+
+                if ($this->isFriend($fromId, $toId)) {
+                    $followMessage = 'already_friends';
+                } elseif ($this->hasFriendTablePendingRequestFrom($fromId, $toId)) {
+                    $this->deleteFriendTablePendingRequestFrom($fromId, $toId);
+                    $followMessage = 'unfollowed';
+                } else {
+                    $this->insertFriendTablePendingRequest($fromId, $toId);
+                    $this->sendFriendInviteNotification($fromId, $toId);
+                    $followMessage = 'requested';
                 }
             } else {
                 // Friend requests should ALWAYS require approval (pending state)
@@ -1651,39 +1665,208 @@ class FriendsController extends Controller
      */
     private function isFriend(string $userId1, string $userId2): bool
     {
-        // Check Wo_Friends table first
         if (Schema::hasTable('Wo_Friends')) {
-            return DB::table('Wo_Friends')
-                ->where(function($q) use ($userId1, $userId2) {
-                    $q->where('from_id', $userId1)
-                      ->where('to_id', $userId2);
-                })
-                ->orWhere(function($q) use ($userId1, $userId2) {
-                    $q->where('from_id', $userId2)
-                      ->where('to_id', $userId1);
-                })
-                ->exists();
+            try {
+                if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                    $accepted = DB::table('Wo_Friends')
+                        ->where(function ($q) use ($userId1, $userId2) {
+                            $q->where('user_id', $userId1)->where('friend_id', $userId2);
+                        })
+                        ->orWhere(function ($q) use ($userId1, $userId2) {
+                            $q->where('user_id', $userId2)->where('friend_id', $userId1);
+                        })
+                        ->whereIn('status', ['2', 2])
+                        ->exists();
+                    if ($accepted) {
+                        return true;
+                    }
+                }
+
+                if (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                    $q = DB::table('Wo_Friends')
+                        ->where(function ($q) use ($userId1, $userId2) {
+                            $q->where('from_id', $userId1)->where('to_id', $userId2);
+                        })
+                        ->orWhere(function ($q) use ($userId1, $userId2) {
+                            $q->where('from_id', $userId2)->where('to_id', $userId1);
+                        });
+                    if (Schema::hasColumn('Wo_Friends', 'status')) {
+                        $q->whereIn('status', ['2', 2]);
+                    }
+                    if ($q->exists()) {
+                        return true;
+                    }
+                }
+            } catch (\Exception $e) {
+                // fall through
+            }
         }
-        
-        // Fallback to Wo_Followers (mutual following = friends)
+
         if (Schema::hasTable('Wo_Followers')) {
             $user1FollowingUser2 = DB::table('Wo_Followers')
                 ->where('follower_id', $userId1)
                 ->where('following_id', $userId2)
-                ->where('active', 1)
+                ->whereIn('active', ['1', 1])
                 ->exists();
-            
+
             $user2FollowingUser1 = DB::table('Wo_Followers')
                 ->where('follower_id', $userId2)
                 ->where('following_id', $userId1)
-                ->where('active', 1)
+                ->whereIn('active', ['1', 1])
                 ->exists();
-            
-            // Both following each other = friends
+
             return $user1FollowingUser2 && $user2FollowingUser1;
         }
-        
+
         return false;
+    }
+
+    /**
+     * Outgoing friend-table request (pending), user_id / friend_id layout.
+     */
+    private function hasFriendTablePendingRequestFrom(string $senderId, string $receiverId): bool
+    {
+        if (! Schema::hasTable('Wo_Friends') || ! Schema::hasColumn('Wo_Friends', 'status')) {
+            return false;
+        }
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                return DB::table('Wo_Friends')
+                    ->where('user_id', $senderId)
+                    ->where('friend_id', $receiverId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->exists();
+            }
+            if (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                return DB::table('Wo_Friends')
+                    ->where('from_id', $senderId)
+                    ->where('to_id', $receiverId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->exists();
+            }
+        } catch (\Exception $e) {
+            return false;
+        }
+
+        return false;
+    }
+
+    private function deleteFriendTablePendingRequestFrom(string $senderId, string $receiverId): void
+    {
+        if (! Schema::hasTable('Wo_Friends')) {
+            return;
+        }
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                DB::table('Wo_Friends')
+                    ->where('user_id', $senderId)
+                    ->where('friend_id', $receiverId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->delete();
+            } elseif (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id') && Schema::hasColumn('Wo_Friends', 'status')) {
+                DB::table('Wo_Friends')
+                    ->where('from_id', $senderId)
+                    ->where('to_id', $receiverId)
+                    ->whereIn('status', ['0', '1', 0, 1])
+                    ->delete();
+            }
+        } catch (\Exception $e) {
+            // ignore
+        }
+    }
+
+    /**
+     * @return void Inserts when schema supports it; no-op otherwise (notification still sent from caller).
+     */
+    private function insertFriendTablePendingRequest(string $senderId, string $receiverId): void
+    {
+        if (! Schema::hasTable('Wo_Friends')) {
+            return;
+        }
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id')
+                && Schema::hasColumn('Wo_Friends', 'friend_id')
+                && Schema::hasColumn('Wo_Friends', 'status')) {
+                $exists = DB::table('Wo_Friends')
+                    ->where('user_id', $senderId)
+                    ->where('friend_id', $receiverId)
+                    ->exists();
+                if ($exists) {
+                    return;
+                }
+                $row = [
+                    'user_id' => $senderId,
+                    'friend_id' => $receiverId,
+                    'status' => '1',
+                ];
+                if (Schema::hasColumn('Wo_Friends', 'time')) {
+                    $row['time'] = (string) time();
+                }
+                DB::table('Wo_Friends')->insert($row);
+
+                return;
+            }
+
+            if (Schema::hasColumn('Wo_Friends', 'from_id')
+                && Schema::hasColumn('Wo_Friends', 'to_id')
+                && Schema::hasColumn('Wo_Friends', 'status')) {
+                $exists = DB::table('Wo_Friends')
+                    ->where('from_id', $senderId)
+                    ->where('to_id', $receiverId)
+                    ->exists();
+                if ($exists) {
+                    return;
+                }
+                $row = [
+                    'from_id' => $senderId,
+                    'to_id' => $receiverId,
+                    'status' => '1',
+                ];
+                if (Schema::hasColumn('Wo_Friends', 'time')) {
+                    $row['time'] = (string) time();
+                }
+                DB::table('Wo_Friends')->insert($row);
+            }
+        } catch (\Exception $e) {
+            // ignore; caller still sends notification
+        }
+    }
+
+    private function sendFriendInviteNotification(string $senderId, string $receiverId): void
+    {
+        try {
+            $sender = DB::table('Wo_Users')->where('user_id', $senderId)->first();
+            if (! $sender || ! Schema::hasTable('Wo_Notifications')) {
+                return;
+            }
+
+            $notificationType = 'friend_request';
+            $existingNotification = DB::table('Wo_Notifications')
+                ->where('notifier_id', $senderId)
+                ->where('recipient_id', $receiverId)
+                ->where('type', $notificationType)
+                ->where('seen', 0)
+                ->first();
+
+            if ($existingNotification) {
+                return;
+            }
+
+            $notificationData = [
+                'notifier_id' => $senderId,
+                'recipient_id' => $receiverId,
+                'type' => $notificationType,
+                'text' => '',
+                'url' => 'index.php?link1=timeline&u=' . ($sender->username ?? ''),
+                'seen' => 0,
+            ];
+            if (Schema::hasColumn('Wo_Notifications', 'time')) {
+                $notificationData['time'] = time();
+            }
+            DB::table('Wo_Notifications')->insert($notificationData);
+        } catch (\Exception $e) {
+            // ignore
+        }
     }
 
     /**
