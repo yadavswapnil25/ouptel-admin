@@ -116,6 +116,8 @@ class FriendsController extends Controller
 
                     foreach ($friendsData as $friend) {
                         $mutualFriendsCount = 0;
+                        $isFollowing = false;
+                        $isFollowingMe = false;
                         if (Schema::hasTable('Wo_Followers')) {
                             $viewerFollowing = DB::table('Wo_Followers')
                                 ->where('follower_id', $tokenUserId)
@@ -135,6 +137,13 @@ class FriendsController extends Controller
                                 ->pluck('following_id')
                                 ->toArray();
 
+                            // Determine whether the viewer currently follows this friend,
+                            // and whether this friend follows back (viewer).
+                            $viewerFollowing = array_map(fn ($id) => (string) $id, $viewerFollowing);
+                            $friendFollowing = array_map(fn ($id) => (string) $id, $friendFollowing);
+                            $isFollowing = in_array((string) $friend->user_id, $viewerFollowing, true);
+                            $isFollowingMe = in_array((string) $tokenUserId, $friendFollowing, true);
+
                             $mutualFriendsCount = count(array_intersect($viewerFollowing, $friendFollowing));
                         }
 
@@ -150,8 +159,8 @@ class FriendsController extends Controller
                             'cover' => $friend->cover ?? '',
                             'cover_url' => $friend->cover ? asset('storage/' . $friend->cover) : null,
                             'verified' => (bool) ($friend->verified ?? false),
-                            'is_following' => true,
-                            'is_following_me' => true,
+                            'is_following' => $isFollowing,
+                            'is_following_me' => $isFollowingMe,
                             'is_friend' => true,
                             'mutual_friends_count' => $mutualFriendsCount,
                             'lastseen' => $friend->lastseen ?? time(),
