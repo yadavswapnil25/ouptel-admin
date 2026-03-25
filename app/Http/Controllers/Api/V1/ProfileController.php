@@ -1507,12 +1507,13 @@ class ProfileController extends Controller
             $userReaction = $this->getUserReaction($postIdForReactions, $loggedUserId);
             $isLiked = $userReaction !== null;
 
-            // Get comments count
+            // Wo_Comments.post_id matches Wo_Posts.post_id (public id), same as new-feed — not internal id
+            $commentLookupPostId = (int) ($post->post_id ?? $post->id);
             $commentsCount = 0;
             if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Comments')) {
                 try {
                     $commentsCount = DB::table('Wo_Comments')
-                        ->where('post_id', $post->id)
+                        ->where('post_id', $commentLookupPostId)
                         ->count();
                 } catch (\Exception $e) {
                     $commentsCount = (int) ($post->post_comments ?? 0);
