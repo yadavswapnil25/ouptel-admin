@@ -59,8 +59,11 @@ class ShareController extends Controller
             ], 400);
         }
 
-        // Get original post
-        $originalPost = DB::table('Wo_Posts')->where('id', $postId)->first();
+        // Resolve post: clients send either DB `id` or public `post_id` (same as PostController)
+        $originalPost = DB::table('Wo_Posts')
+            ->where('id', $postId)
+            ->orWhere('post_id', $postId)
+            ->first();
         if (!$originalPost) {
             return response()->json([
                 'api_status' => 400,
@@ -70,6 +73,9 @@ class ShareController extends Controller
                 ]
             ], 404);
         }
+
+        $internalPostId = (int) $originalPost->id;
+        $notificationPostId = (int) ($originalPost->post_id ?? $internalPostId);
 
         try {
             DB::beginTransaction();
@@ -101,8 +107,8 @@ class ShareController extends Controller
                 }
                 $recipientUserId = $originalPostOwner;
 
-                // Create shared post
-                $newPostId = $this->sharePost($postId, $userId, 'user', $text);
+                // Create shared post (internal DB id; sharePost loads Wo_Posts by id)
+                $newPostId = $this->sharePost($internalPostId, $userId, 'user', $text);
 
             } elseif ($s === 'page') {
                 // Share on page
@@ -155,7 +161,7 @@ class ShareController extends Controller
                 $recipientUserId = $originalPostOwner;
 
                 // Create shared post
-                $newPostId = $this->sharePost($postId, $typeId, 'page', $text);
+                $newPostId = $this->sharePost($internalPostId, $typeId, 'page', $text);
 
             } elseif ($s === 'group') {
                 // Share on group
@@ -208,7 +214,7 @@ class ShareController extends Controller
                 $recipientUserId = $originalPostOwner;
 
                 // Create shared post
-                $newPostId = $this->sharePost($postId, $typeId, 'group', $text);
+                $newPostId = $this->sharePost($internalPostId, $typeId, 'group', $text);
 
             } else {
                 return response()->json([
@@ -230,7 +236,7 @@ class ShareController extends Controller
                 DB::table('Wo_Notifications')->insert([
                     'recipient_id' => $recipientUserId,
                     'notifier_id' => $tokenUserId,
-                    'post_id' => $postId,
+                    'post_id' => $notificationPostId,
                     'type' => 'shared_your_post',
                     'url' => 'index.php?link1=post&id=' . $newPostId,
                     'time' => time(),
@@ -244,7 +250,7 @@ class ShareController extends Controller
                         DB::table('Wo_Notifications')->insert([
                             'recipient_id' => $timelineUserId,
                             'notifier_id' => $tokenUserId,
-                            'post_id' => $postId,
+                            'post_id' => $notificationPostId,
                             'type' => 'shared_a_post_in_timeline',
                             'url' => 'index.php?link1=post&id=' . $newPostId,
                             'time' => time(),
