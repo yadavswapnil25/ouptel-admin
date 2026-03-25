@@ -760,8 +760,13 @@ class NewFeedController extends Controller
             return [];
         }
         $users = DB::table('Wo_Users')
-            ->whereIn('username', $usernames)
-            ->get(['user_id', 'username', 'first_name', 'last_name', 'name', 'avatar']);
+            ->whereIn('username', $usernames);
+
+        // Wo_Users in this project sometimes does not have a `name` column.
+        // To avoid SQLSTATE[42S22], never select `name` here.
+        $selectColumns = ['user_id', 'username', 'first_name', 'last_name', 'avatar'];
+
+        $users = $users->get($selectColumns);
         if ($users->isEmpty()) {
             return [];
         }
@@ -779,7 +784,7 @@ class NewFeedController extends Controller
             $result[] = [
                 'user_id' => (int) $u->user_id,
                 'username' => $u->username ?? '',
-                'name' => $displayName !== '' ? $displayName : ($u->name ?? $u->username ?? 'User'),
+                'name' => $displayName !== '' ? $displayName : ($u->username ?? 'User'),
                 'avatar_url' => ($u->avatar ?? '') ? asset('storage/' . $u->avatar) : null,
             ];
             if (count($result) >= 8) {

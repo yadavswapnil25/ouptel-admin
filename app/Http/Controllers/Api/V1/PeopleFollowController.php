@@ -1090,7 +1090,7 @@ class PeopleFollowController extends Controller
         }
         $users = DB::table('Wo_Users')
             ->whereIn('username', $usernames)
-            ->get(['user_id', 'username', 'first_name', 'last_name', 'name', 'avatar']);
+            ->get(['user_id', 'username', 'first_name', 'last_name', 'avatar']);
         if ($users->isEmpty()) {
             return [];
         }
@@ -1108,7 +1108,7 @@ class PeopleFollowController extends Controller
             $result[] = [
                 'user_id' => (int) $u->user_id,
                 'username' => $u->username ?? '',
-                'name' => $displayName !== '' ? $displayName : ($u->name ?? $u->username ?? 'User'),
+                'name' => $displayName !== '' ? $displayName : ($u->username ?? 'User'),
                 'avatar_url' => ($u->avatar ?? '') ? asset('storage/' . $u->avatar) : null,
             ];
             if (count($result) >= 8) {
