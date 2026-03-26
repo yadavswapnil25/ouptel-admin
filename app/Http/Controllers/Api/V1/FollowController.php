@@ -526,6 +526,52 @@ class FollowController extends Controller
                 ->where('following_id', $tokenUserId)
                 ->update(['active' => '1']);
 
+            // Create reverse follow so mutual-follow isFriend() check works
+            $reverseExists = DB::table('Wo_Followers')
+                ->where('follower_id', $tokenUserId)
+                ->where('following_id', $followerId)
+                ->exists();
+            if ($reverseExists) {
+                DB::table('Wo_Followers')
+                    ->where('follower_id', $tokenUserId)
+                    ->where('following_id', $followerId)
+                    ->update(['active' => '1']);
+            } else {
+                DB::table('Wo_Followers')->insert([
+                    'follower_id' => $tokenUserId,
+                    'following_id' => $followerId,
+                    'active' => '1',
+                    'time' => time(),
+                ]);
+            }
+
+            // Upsert Wo_Friends so profile isFriend() check works
+            try {
+                if (Schema::hasTable('Wo_Friends')
+                    && Schema::hasColumn('Wo_Friends', 'user_id')
+                    && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                    $fRow = DB::table('Wo_Friends')
+                        ->where(function ($q) use ($followerId, $tokenUserId) {
+                            $q->where('user_id', $followerId)->where('friend_id', $tokenUserId);
+                        })
+                        ->orWhere(function ($q) use ($followerId, $tokenUserId) {
+                            $q->where('user_id', $tokenUserId)->where('friend_id', $followerId);
+                        })
+                        ->first();
+                    if ($fRow) {
+                        DB::table('Wo_Friends')->where('id', $fRow->id)->update(['status' => '2']);
+                    } else {
+                        $ins = ['user_id' => $followerId, 'friend_id' => $tokenUserId, 'status' => '2'];
+                        if (Schema::hasColumn('Wo_Friends', 'time')) {
+                            $ins['time'] = (string) time();
+                        }
+                        DB::table('Wo_Friends')->insert($ins);
+                    }
+                }
+            } catch (\Exception $e) {
+                // best-effort
+            }
+
             // Update follow counts
             $this->updateFollowCounts($followerId, $tokenUserId);
 

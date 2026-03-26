@@ -809,6 +809,8 @@ class FriendsController extends Controller
                 if ($updated) {
                     $this->updateFollowCounts($followerId, $followingId);
                     $this->ensureWoFriendsAcceptedPair($followerKey, $followingKey);
+                    // Create the reverse follow so mutual-follow isFriend() check works
+                    $this->ensureMutualFollowActive($followingKey, $followerKey);
                     $this->removeFriendRequestNotifications($followerKey, $followingKey);
                     DB::commit();
 
@@ -829,6 +831,8 @@ class FriendsController extends Controller
             }
 
             if ($this->acceptWoFriendsIncoming($followerKey, $followingKey)) {
+                // Create the reverse follow so mutual-follow isFriend() check works
+                $this->ensureMutualFollowActive($followingKey, $followerKey);
                 $this->removeFriendRequestNotifications($followerKey, $followingKey);
                 DB::commit();
 
@@ -2228,6 +2232,44 @@ class FriendsController extends Controller
             }
         } catch (\Exception $e) {
             // ignore
+        }
+    }
+
+    /**
+     * Ensure a reverse active follow exists so that the mutual-follow isFriend() check
+     * (Wo_Followers A→B active=1 AND B→A active=1) works after a friend request is accepted.
+     *
+     * $followerKey = the acceptor (the one who just accepted)
+     * $followingKey = the original requester (the one whose request was accepted)
+     */
+    private function ensureMutualFollowActive(string $followerKey, string $followingKey): void
+    {
+        if (! Schema::hasTable('Wo_Followers')) {
+            return;
+        }
+
+        try {
+            $exists = DB::table('Wo_Followers')
+                ->where('follower_id', $followerKey)
+                ->where('following_id', $followingKey)
+                ->exists();
+
+            if ($exists) {
+                // Update any existing row (pending or not) to active=1
+                DB::table('Wo_Followers')
+                    ->where('follower_id', $followerKey)
+                    ->where('following_id', $followingKey)
+                    ->update(['active' => '1']);
+            } else {
+                DB::table('Wo_Followers')->insert([
+                    'follower_id' => $followerKey,
+                    'following_id' => $followingKey,
+                    'active' => '1',
+                    'time' => time(),
+                ]);
+            }
+        } catch (\Exception $e) {
+            // ignore – best-effort
         }
     }
 
