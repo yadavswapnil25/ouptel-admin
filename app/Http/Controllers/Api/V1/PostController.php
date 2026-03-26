@@ -2913,6 +2913,113 @@ class PostController extends Controller
     }
 
     /**
+     * Update post text (owner only).
+     *
+     * @param Request $request
+     * @param int $postId
+     * @return JsonResponse
+     */
+    public function updatePost(Request $request, int $postId): JsonResponse
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided',
+                ],
+            ], 401);
+        }
+
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$userId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found',
+                ],
+            ], 401);
+        }
+
+        $validator = Validator::make($request->all(), [
+            'postText' => 'required|string|max:5000',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'api_status' => 422,
+                'errors' => [
+                    'error_id' => 3,
+                    'error_text' => $validator->errors()->first(),
+                ],
+            ], 422);
+        }
+
+        try {
+            $post = DB::table('Wo_Posts')->where('post_id', $postId)->first();
+            if (!$post) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 4,
+                        'error_text' => 'Post not found',
+                    ],
+                ], 404);
+            }
+
+            if ((string) $post->user_id !== (string) $userId) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 7,
+                        'error_text' => 'You are not authorized to update this post',
+                    ],
+                ], 403);
+            }
+
+            $updated = DB::table('Wo_Posts')
+                ->where('post_id', $postId)
+                ->update(['postText' => trim((string) $request->input('postText'))]);
+
+            if (!$updated) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 8,
+                        'error_text' => 'No changes made',
+                    ],
+                ]);
+            }
+
+            return response()->json([
+                'api_status' => 200,
+                'message' => 'Post updated successfully',
+                'data' => [
+                    'post_id' => $postId,
+                    'post_text' => trim((string) $request->input('postText')),
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error updating post', [
+                'post_id' => $postId,
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'api_status' => 500,
+                'errors' => [
+                    'error_id' => 9,
+                    'error_text' => 'Failed to update post',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
      * Delete a post
      * 
      * @param Request $request
