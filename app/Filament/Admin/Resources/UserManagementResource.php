@@ -4,6 +4,7 @@ namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\UserManagementResource\Pages;
 use App\Filament\Admin\Concerns\HasPanelAccess;
+use App\Http\Controllers\Api\V1\CountriesController;
 use App\Models\User;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -26,6 +27,10 @@ use Filament\Forms\Components\Toggle;
 use Filament\Forms\Components\FileUpload;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
+use Filament\Tables\Enums\FiltersLayout;
+use Filament\Infolists\Infolist;
+use Filament\Infolists\Components\Section as InfolistSection;
+use Filament\Infolists\Components\TextEntry;
 use Illuminate\Database\Eloquent\Builder;
 
 class UserManagementResource extends Resource
@@ -98,6 +103,14 @@ class UserManagementResource extends Resource
                             })
                             ->searchable(),
 
+                        Select::make('country_id')
+                            ->label('Country')
+                            ->options(fn (): array => CountriesController::getCountrySelectOptions())
+                            ->searchable()
+                            ->placeholder('—')
+                            ->nullable()
+                            ->dehydrateStateUsing(fn ($state) => $state !== null && $state !== '' ? (int) $state : null),
+
                         Select::make('active')
                             ->options([
                                 '1' => 'Active',
@@ -127,6 +140,45 @@ class UserManagementResource extends Resource
                         Toggle::make('verified')
                             ->label('Verified User')
                             ->dehydrated(fn ($state) => filled($state)),
+                    ])
+                    ->columns(2),
+            ]);
+    }
+
+    public static function infolist(Infolist $infolist): Infolist
+    {
+        return $infolist
+            ->schema([
+                InfolistSection::make('User Information')
+                    ->schema([
+                        TextEntry::make('username'),
+                        TextEntry::make('email'),
+                        TextEntry::make('first_name'),
+                        TextEntry::make('last_name'),
+                        TextEntry::make('phone_number')
+                            ->placeholder('—'),
+                        TextEntry::make('gender')
+                            ->label('Gender')
+                            ->formatStateUsing(fn (?string $state): string => $state
+                                ? \App\Models\Gender::getGenderName($state)
+                                : '—'),
+                        TextEntry::make('country_id')
+                            ->label('Country')
+                            ->formatStateUsing(fn ($state): string => CountriesController::getCountryNameById($state)),
+                        TextEntry::make('status_text')
+                            ->label('Status'),
+                        TextEntry::make('type_text')
+                            ->label('Account Type'),
+                        TextEntry::make('verified')
+                            ->label('Verified')
+                            ->formatStateUsing(fn ($state): string => ($state === '1' || $state === true) ? 'Yes' : 'No'),
+                        TextEntry::make('joined_date')
+                            ->label('Joined')
+                            ->dateTime('M d, Y'),
+                        TextEntry::make('last_seen_date')
+                            ->label('Last Seen')
+                            ->dateTime('M d, Y H:i')
+                            ->placeholder('Never'),
                     ])
                     ->columns(2),
             ]);
@@ -201,14 +253,38 @@ class UserManagementResource extends Resource
                 TextColumn::make('gender')
                     ->label('Gender')
                     ->badge()
-                    ->color(fn (string $state): string => match ($state) {
+                    ->color(fn (?string $state): string => match ($state) {
                         'male' => 'info',
                         'female' => 'success',
                         '1802' => 'warning',
                         'mal****' => 'gray',
                         default => 'gray',
                     })
-                    ->formatStateUsing(fn (string $state): string => \App\Models\Gender::getGenderName($state)),
+                    ->formatStateUsing(fn (?string $state): string => $state
+                        ? \App\Models\Gender::getGenderName($state)
+                        : '—'),
+
+                TextColumn::make('country_id')
+                    ->label('Country')
+                    ->formatStateUsing(fn ($state): string => CountriesController::getCountryNameById($state))
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        $needle = strtolower(trim($search));
+                        if ($needle === '') {
+                            return $query;
+                        }
+
+                        $ids = [];
+                        foreach (CountriesController::getCountrySelectOptions() as $id => $name) {
+                            if (str_contains(strtolower($name), $needle)) {
+                                $ids[] = $id;
+                            }
+                        }
+
+                        return $ids === []
+                            ? $query->whereRaw('1 = 0')
+                            : $query->whereIn('country_id', $ids);
+                    })
+                    ->sortable(),
 
                 TextColumn::make('status_text')
                     ->label('Status')
@@ -272,6 +348,68 @@ class UserManagementResource extends Resource
                     ->label('Gender')
                     ->options(function () {
                         return \App\Models\Gender::getGenderOptions();
+                    })
+                    ->searchable(),
+
+                SelectFilter::make('country_id')
+                    ->label('Country')
+                    ->options(fn (): array => CountriesController::getCountrySelectOptions())
+                    ->searchable(),
+
+                SelectFilter::make('age_group')
+                    ->label('Age Group')
+                    ->options([
+                        '0_17' => 'Under 18',
+                        '18_24' => '18–24',
+                        '25_34' => '25–34',
+                        '35_44' => '35–44',
+                        '45_54' => '45–54',
+                        '55_64' => '55–64',
+                        '65_plus' => '65+',
+                        'missing' => 'No date of birth',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $value = $data['value'] ?? null;
+                        if (blank($value)) {
+                            return $query;
+                        }
+
+                        return match ($value) {
+                            'missing' => $query->where(function (Builder $q): void {
+                                $q->whereNull('birthday')
+                                    ->orWhere('birthday', '')
+                                    ->orWhereRaw("STR_TO_DATE(birthday, '%Y-%m-%d') IS NULL");
+                            }),
+                            '0_17' => $query->whereRaw(
+                                "birthday IS NOT NULL AND birthday != '' AND STR_TO_DATE(birthday, '%Y-%m-%d') IS NOT NULL AND TIMESTAMPDIFF(YEAR, STR_TO_DATE(birthday, '%Y-%m-%d'), CURDATE()) BETWEEN ? AND ?",
+                                [0, 17],
+                            ),
+                            '18_24' => $query->whereRaw(
+                                "birthday IS NOT NULL AND birthday != '' AND STR_TO_DATE(birthday, '%Y-%m-%d') IS NOT NULL AND TIMESTAMPDIFF(YEAR, STR_TO_DATE(birthday, '%Y-%m-%d'), CURDATE()) BETWEEN ? AND ?",
+                                [18, 24],
+                            ),
+                            '25_34' => $query->whereRaw(
+                                "birthday IS NOT NULL AND birthday != '' AND STR_TO_DATE(birthday, '%Y-%m-%d') IS NOT NULL AND TIMESTAMPDIFF(YEAR, STR_TO_DATE(birthday, '%Y-%m-%d'), CURDATE()) BETWEEN ? AND ?",
+                                [25, 34],
+                            ),
+                            '35_44' => $query->whereRaw(
+                                "birthday IS NOT NULL AND birthday != '' AND STR_TO_DATE(birthday, '%Y-%m-%d') IS NOT NULL AND TIMESTAMPDIFF(YEAR, STR_TO_DATE(birthday, '%Y-%m-%d'), CURDATE()) BETWEEN ? AND ?",
+                                [35, 44],
+                            ),
+                            '45_54' => $query->whereRaw(
+                                "birthday IS NOT NULL AND birthday != '' AND STR_TO_DATE(birthday, '%Y-%m-%d') IS NOT NULL AND TIMESTAMPDIFF(YEAR, STR_TO_DATE(birthday, '%Y-%m-%d'), CURDATE()) BETWEEN ? AND ?",
+                                [45, 54],
+                            ),
+                            '55_64' => $query->whereRaw(
+                                "birthday IS NOT NULL AND birthday != '' AND STR_TO_DATE(birthday, '%Y-%m-%d') IS NOT NULL AND TIMESTAMPDIFF(YEAR, STR_TO_DATE(birthday, '%Y-%m-%d'), CURDATE()) BETWEEN ? AND ?",
+                                [55, 64],
+                            ),
+                            '65_plus' => $query->whereRaw(
+                                "birthday IS NOT NULL AND birthday != '' AND STR_TO_DATE(birthday, '%Y-%m-%d') IS NOT NULL AND TIMESTAMPDIFF(YEAR, STR_TO_DATE(birthday, '%Y-%m-%d'), CURDATE()) >= ?",
+                                [65],
+                            ),
+                            default => $query,
+                        };
                     }),
 
                 TernaryFilter::make('verified')
@@ -285,7 +423,8 @@ class UserManagementResource extends Resource
                     ->placeholder('All users')
                     ->trueLabel('Online only')
                     ->falseLabel('Offline only'),
-            ])
+            ], layout: FiltersLayout::AboveContent)
+            ->persistFiltersInSession()
             ->actions([
                 ActionGroup::make([
                     ViewAction::make(),

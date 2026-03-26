@@ -12,7 +12,7 @@ class CountriesController extends BaseController
      * Get countries list (matching old code structure from language files)
      * Countries are hardcoded in language files, not in database
      */
-    private function getCountriesArray(): array
+    public static function getCountriesArray(): array
     {
         // Countries array matching old code from assets/languages/extra/english.php
         return [
@@ -259,13 +259,51 @@ class CountriesController extends BaseController
     }
 
     /**
+     * Human-readable country name for a Wo_Users.country_id value.
+     */
+    public static function getCountryNameById(mixed $countryId): string
+    {
+        if ($countryId === null || $countryId === '') {
+            return '—';
+        }
+
+        $id = (int) $countryId;
+        if ($id === 0) {
+            return '—';
+        }
+
+        $countries = self::getCountriesArray();
+        $key = (string) $id;
+
+        return $countries[$key] ?? 'Unknown';
+    }
+
+    /**
+     * Options for selects (id => name), excluding the placeholder row.
+     *
+     * @return array<int, string>
+     */
+    public static function getCountrySelectOptions(): array
+    {
+        $out = [];
+        foreach (self::getCountriesArray() as $id => $name) {
+            if ($id === '0') {
+                continue;
+            }
+            $out[(int) $id] = $name;
+        }
+
+        return $out;
+    }
+
+    /**
      * Get countries list (for explore page)
      * Matching old API structure
      * Ordered by ID (0, 1, 2, etc.) not alphabetically
      */
     public function index(Request $request): JsonResponse
     {
-        $countriesArray = $this->getCountriesArray();
+        $countriesArray = self::getCountriesArray();
         
         // Convert to list format (excluding '0' => 'Select Country')
         // Keep original order by ID (0, 1, 2, etc.)
@@ -294,7 +332,7 @@ class CountriesController extends BaseController
      */
     public function meta(Request $request): JsonResponse
     {
-        $countriesArray = $this->getCountriesArray();
+        $countriesArray = self::getCountriesArray();
         
         // Convert to list format (excluding '0' => 'Select Country')
         // Keep original order by ID (0, 1, 2, etc.)
