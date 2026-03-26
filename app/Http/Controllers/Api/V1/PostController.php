@@ -3048,8 +3048,11 @@ class PostController extends Controller
         }
 
         try {
-            // Find the post
-            $post = DB::table('Wo_Posts')->where('post_id', $postId)->first();
+            // Find by either DB primary id or legacy post_id
+            $post = DB::table('Wo_Posts')
+                ->where('id', $postId)
+                ->orWhere('post_id', $postId)
+                ->first();
 
             if (!$post) {
                 return response()->json([
@@ -3114,23 +3117,38 @@ class PostController extends Controller
                 }
             }
 
+            $rowId = $post->id ?? $post->post_id ?? $postId;
+            $legacyPostId = $post->post_id ?? $postId;
+
             // Delete post reactions
             if (DB::getSchemaBuilder()->hasTable('Wo_PostReactions')) {
-                DB::table('Wo_PostReactions')->where('post_id', $postId)->delete();
+                DB::table('Wo_PostReactions')
+                    ->where('post_id', $rowId)
+                    ->orWhere('post_id', $legacyPostId)
+                    ->delete();
             }
 
             // Delete post comments
             if (DB::getSchemaBuilder()->hasTable('Wo_Comments')) {
-                DB::table('Wo_Comments')->where('post_id', $postId)->delete();
+                DB::table('Wo_Comments')
+                    ->where('post_id', $rowId)
+                    ->orWhere('post_id', $legacyPostId)
+                    ->delete();
             }
 
             // Delete saved posts
             if (DB::getSchemaBuilder()->hasTable('Wo_SavedPosts')) {
-                DB::table('Wo_SavedPosts')->where('post_id', $postId)->delete();
+                DB::table('Wo_SavedPosts')
+                    ->where('post_id', $rowId)
+                    ->orWhere('post_id', $legacyPostId)
+                    ->delete();
             }
 
             // Delete the post
-            DB::table('Wo_Posts')->where('post_id', $postId)->delete();
+            DB::table('Wo_Posts')
+                ->where('id', $rowId)
+                ->orWhere('post_id', $legacyPostId)
+                ->delete();
 
             // Update user post count
             if ($post->user_id) {
@@ -3149,7 +3167,8 @@ class PostController extends Controller
                 'api_version' => '1.0',
                 'message' => 'Post deleted successfully',
                 'data' => [
-                    'post_id' => $postId,
+                    'post_id' => $legacyPostId,
+                    'row_id' => $rowId,
                     'deleted' => true
                 ]
             ], 200);
