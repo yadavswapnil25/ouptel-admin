@@ -2925,10 +2925,7 @@ class PostController extends Controller
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
             return response()->json([
                 'api_status' => 400,
-                'errors' => [
-                    'error_id' => 1,
-                    'error_text' => 'Unauthorized - No Bearer token provided',
-                ],
+                'errors' => ['error_id' => 1, 'error_text' => 'Unauthorized - No Bearer token provided'],
             ], 401);
         }
 
@@ -2937,25 +2934,56 @@ class PostController extends Controller
         if (!$userId) {
             return response()->json([
                 'api_status' => 400,
-                'errors' => [
-                    'error_id' => 2,
-                    'error_text' => 'Invalid token - Session not found',
-                ],
+                'errors' => ['error_id' => 2, 'error_text' => 'Invalid token - Session not found'],
             ], 401);
         }
 
-        $validator = Validator::make($request->all(), [
-            'postText' => 'required|string|max:5000',
-        ]);
+        $hasText      = $request->has('postText') && trim((string) $request->input('postText')) !== '';
+        $hasNewPhoto  = $request->hasFile('postPhoto');
+        $hasNewVideo  = $request->hasFile('postVideo');
+        $newGifUrl    = trim((string) $request->input('postGif', ''));
+        $hasGif       = $newGifUrl !== '';
+        $removePhoto  = (string) $request->input('removePhoto', '0') === '1';
 
-        if ($validator->fails()) {
+        if (!$hasText && !$hasNewPhoto && !$hasNewVideo && !$hasGif && !$removePhoto) {
             return response()->json([
                 'api_status' => 422,
-                'errors' => [
-                    'error_id' => 3,
-                    'error_text' => $validator->errors()->first(),
-                ],
+                'errors' => ['error_id' => 3, 'error_text' => 'Nothing to update'],
             ], 422);
+        }
+
+        if ($hasText) {
+            $tv = Validator::make($request->all(), ['postText' => 'string|max:5000']);
+            if ($tv->fails()) {
+                return response()->json([
+                    'api_status' => 422,
+                    'errors' => ['error_id' => 3, 'error_text' => $tv->errors()->first()],
+                ], 422);
+            }
+        }
+
+        if ($hasNewPhoto) {
+            $pv = Validator::make($request->all(), [
+                'postPhoto' => 'image|mimes:jpeg,png,jpg,gif,webp|max:10240',
+            ]);
+            if ($pv->fails()) {
+                return response()->json([
+                    'api_status' => 422,
+                    'errors' => ['error_id' => 3, 'error_text' => $pv->errors()->first()],
+                ], 422);
+            }
+        }
+
+        if ($hasNewVideo) {
+            $vv = Validator::make($request->all(), [
+                'postVideo' => 'mimes:mp4,mov,avi,webm|max:102400',
+            ]);
+            if ($vv->fails()) {
+                return response()->json([
+                    'api_status' => 422,
+                    'errors' => ['error_id' => 3, 'error_text' => $vv->errors()->first()],
+                ], 422);
+            }
         }
 
         try {
@@ -2967,49 +2995,99 @@ class PostController extends Controller
             if (!$post) {
                 return response()->json([
                     'api_status' => 400,
-                    'errors' => [
-                        'error_id' => 4,
-                        'error_text' => 'Post not found',
-                    ],
+                    'errors' => ['error_id' => 4, 'error_text' => 'Post not found'],
                 ], 404);
             }
 
             if ((string) $post->user_id !== (string) $userId) {
                 return response()->json([
                     'api_status' => 400,
-                    'errors' => [
-                        'error_id' => 7,
-                        'error_text' => 'You are not authorized to update this post',
-                    ],
+                    'errors' => ['error_id' => 7, 'error_text' => 'You are not authorized to update this post'],
                 ], 403);
             }
 
-            $rowId = $post->id ?? $post->post_id;
-            DB::table('Wo_Posts')
-                ->where('id', $rowId)
-                ->update(['postText' => trim((string) $request->input('postText'))]);
+            $rowId      = $post->id ?? $post->post_id;
+            $updateData = [];
+
+            if ($hasText) {
+                $updateData['postText'] = trim((string) $request->input('postText'));
+            }
+
+            $newPhotoUrl = null;
+            $newVideoUrl = null;
+
+            if ($hasNewPhoto) {
+                // Delete old stored photo (skip external URLs like GIFs)
+                if (!empty($post->postPhoto) && !filter_var($post->postPhoto, FILTER_VALIDATE_URL)) {
+                    $oldPath = 'public/' . ltrim($post->postPhoto, '/');
+                    if (Storage::exists($oldPath)) Storage::delete($oldPath);
+                }
+                $newPhotoPath            = $this->handleFileUpload($request->file('postPhoto'), 'posts/photos', 'photo');
+                $updateData['postPhoto'] = $newPhotoPath;
+                $updateData['postVideo'] = '';
+                $updateData['postType']  = 'photo';
+                $newPhotoUrl             = asset('storage/' . $newPhotoPath);
+
+            } elseif ($hasNewVideo) {
+                // Delete old stored video
+                if (!empty($post->postVideo) && !filter_var($post->postVideo, FILTER_VALIDATE_URL)) {
+                    $oldVideoPath = 'public/' . ltrim($post->postVideo, '/');
+                    if (Storage::exists($oldVideoPath)) Storage::delete($oldVideoPath);
+                }
+                $newVideoPath            = $this->handleFileUpload($request->file('postVideo'), 'posts/videos', 'video');
+                $updateData['postVideo'] = $newVideoPath;
+                $updateData['postPhoto'] = '';
+                $updateData['postType']  = 'video';
+                $newVideoUrl             = asset('storage/' . $newVideoPath);
+
+            } elseif ($hasGif) {
+                $updateData['postPhoto'] = $newGifUrl;
+                $updateData['postVideo'] = '';
+                $updateData['postType']  = 'gif';
+                $newPhotoUrl             = $newGifUrl;
+
+            } elseif ($removePhoto) {
+                if (!empty($post->postPhoto) && !filter_var($post->postPhoto, FILTER_VALIDATE_URL)) {
+                    $oldPath = 'public/' . ltrim($post->postPhoto, '/');
+                    if (Storage::exists($oldPath)) Storage::delete($oldPath);
+                }
+                if (!empty($post->postVideo) && !filter_var($post->postVideo, FILTER_VALIDATE_URL)) {
+                    $oldVideoPath = 'public/' . ltrim($post->postVideo, '/');
+                    if (Storage::exists($oldVideoPath)) Storage::delete($oldVideoPath);
+                }
+                $updateData['postPhoto'] = '';
+                $updateData['postVideo'] = '';
+                $updateData['postType']  = 'text';
+            }
+
+            DB::table('Wo_Posts')->where('id', $rowId)->update($updateData);
+
+            $finalPhotoUrl = $newPhotoUrl;
+            if ($finalPhotoUrl === null && !$removePhoto) {
+                $finalPhotoUrl = $this->getPostPhotoUrl($post);
+            }
 
             return response()->json([
                 'api_status' => 200,
-                'message' => 'Post updated successfully',
-                'data' => [
-                    'post_id' => $postId,
-                    'post_text' => trim((string) $request->input('postText')),
+                'message'    => 'Post updated successfully',
+                'data'       => [
+                    'post_id'        => $postId,
+                    'post_text'      => $updateData['postText'] ?? $post->postText,
+                    'post_photo_url' => $finalPhotoUrl,
+                    'post_video_url' => $newVideoUrl,
+                    'post_type'      => $updateData['postType'] ?? $post->postType,
                 ],
             ]);
+
         } catch (\Throwable $e) {
             Log::error('Error updating post', [
                 'post_id' => $postId,
                 'user_id' => $userId,
-                'error' => $e->getMessage(),
+                'error'   => $e->getMessage(),
             ]);
-
             return response()->json([
                 'api_status' => 500,
-                'errors' => [
-                    'error_id' => 9,
-                    'error_text' => 'Failed to update post',
-                ],
+                'errors' => ['error_id' => 9, 'error_text' => 'Failed to update post'],
             ], 500);
         }
     }
