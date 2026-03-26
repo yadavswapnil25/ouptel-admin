@@ -3006,8 +3006,10 @@ class PostController extends Controller
                 ], 403);
             }
 
-            $rowId      = $post->id ?? $post->post_id;
-            $updateData = [];
+            // Use the same robust id-resolution as deletePost
+            $rowId        = $post->id       ?? ($post->post_id ?? $postId);
+            $legacyPostId = $post->post_id  ?? $postId;
+            $updateData   = [];
 
             if ($hasText) {
                 $updateData['postText'] = trim((string) $request->input('postText'));
@@ -3060,7 +3062,18 @@ class PostController extends Controller
                 $updateData['postType']  = 'text';
             }
 
-            DB::table('Wo_Posts')->where('id', $rowId)->update($updateData);
+            if (empty($updateData)) {
+                return response()->json([
+                    'api_status' => 422,
+                    'errors' => ['error_id' => 3, 'error_text' => 'Nothing to update'],
+                ], 422);
+            }
+
+            // Mirror deletePost's robust dual-key WHERE to handle both id and post_id schemas
+            DB::table('Wo_Posts')
+                ->where('id', $rowId)
+                ->orWhere('post_id', $legacyPostId)
+                ->update($updateData);
 
             $finalPhotoUrl = $newPhotoUrl;
             if ($finalPhotoUrl === null && !$removePhoto) {
@@ -3082,12 +3095,14 @@ class PostController extends Controller
         } catch (\Throwable $e) {
             Log::error('Error updating post', [
                 'post_id' => $postId,
-                'user_id' => $userId,
+                'user_id' => $userId ?? null,
                 'error'   => $e->getMessage(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
             ]);
             return response()->json([
                 'api_status' => 500,
-                'errors' => ['error_id' => 9, 'error_text' => 'Failed to update post'],
+                'errors'     => ['error_id' => 9, 'error_text' => 'Failed to update post: ' . $e->getMessage()],
             ], 500);
         }
     }
