@@ -3018,6 +3018,9 @@ class PostController extends Controller
             $newPhotoUrl = null;
             $newVideoUrl = null;
 
+            // Check once whether the optional video column exists
+            $hasVideoColumn = DB::getSchemaBuilder()->hasColumn('Wo_Posts', 'postVideo');
+
             if ($hasNewPhoto) {
                 // Delete old stored photo (skip external URLs like GIFs)
                 if (!empty($post->postPhoto) && !filter_var($post->postPhoto, FILTER_VALIDATE_URL)) {
@@ -3026,11 +3029,17 @@ class PostController extends Controller
                 }
                 $newPhotoPath            = $this->handleFileUpload($request->file('postPhoto'), 'posts/photos', 'photo');
                 $updateData['postPhoto'] = $newPhotoPath;
-                $updateData['postVideo'] = '';
                 $updateData['postType']  = 'photo';
+                if ($hasVideoColumn) $updateData['postVideo'] = '';
                 $newPhotoUrl             = asset('storage/' . $newPhotoPath);
 
             } elseif ($hasNewVideo) {
+                if (!$hasVideoColumn) {
+                    return response()->json([
+                        'api_status' => 422,
+                        'errors' => ['error_id' => 3, 'error_text' => 'Video uploads are not supported on this server'],
+                    ], 422);
+                }
                 // Delete old stored video
                 if (!empty($post->postVideo) && !filter_var($post->postVideo, FILTER_VALIDATE_URL)) {
                     $oldVideoPath = 'public/' . ltrim($post->postVideo, '/');
@@ -3044,8 +3053,8 @@ class PostController extends Controller
 
             } elseif ($hasGif) {
                 $updateData['postPhoto'] = $newGifUrl;
-                $updateData['postVideo'] = '';
                 $updateData['postType']  = 'gif';
+                if ($hasVideoColumn) $updateData['postVideo'] = '';
                 $newPhotoUrl             = $newGifUrl;
 
             } elseif ($removePhoto) {
@@ -3053,13 +3062,13 @@ class PostController extends Controller
                     $oldPath = 'public/' . ltrim($post->postPhoto, '/');
                     if (Storage::exists($oldPath)) Storage::delete($oldPath);
                 }
-                if (!empty($post->postVideo) && !filter_var($post->postVideo, FILTER_VALIDATE_URL)) {
+                if ($hasVideoColumn && !empty($post->postVideo) && !filter_var($post->postVideo, FILTER_VALIDATE_URL)) {
                     $oldVideoPath = 'public/' . ltrim($post->postVideo, '/');
                     if (Storage::exists($oldVideoPath)) Storage::delete($oldVideoPath);
                 }
                 $updateData['postPhoto'] = '';
-                $updateData['postVideo'] = '';
                 $updateData['postType']  = 'text';
+                if ($hasVideoColumn) $updateData['postVideo'] = '';
             }
 
             if (empty($updateData)) {
