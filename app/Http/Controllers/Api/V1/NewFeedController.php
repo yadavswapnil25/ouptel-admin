@@ -966,17 +966,43 @@ class NewFeedController extends Controller
             return null;
         }
 
-        try {
-            $reaction = DB::table('Wo_Reactions')
-                ->where('post_id', $postId)
-                ->where('user_id', $userId)
-                ->where('comment_id', 0)
-                ->value('reaction');
-
-            return $reaction !== null ? (int) $reaction : null;
-        } catch (\Exception $e) {
+        if (!$userId) {
             return null;
         }
+
+        $candidates = array_unique([(string) $postId, (int) $postId]);
+
+        foreach ($candidates as $pid) {
+            try {
+                // Primary lookup: comment_id = 0
+                $reaction = DB::table('Wo_Reactions')
+                    ->where('post_id', $pid)
+                    ->where('user_id', $userId)
+                    ->where('comment_id', 0)
+                    ->value('reaction');
+
+                if ($reaction !== null) {
+                    return (int) $reaction;
+                }
+
+                // Fallback: comment_id IS NULL or 0 (some installs store NULL)
+                $reaction = DB::table('Wo_Reactions')
+                    ->where('post_id', $pid)
+                    ->where('user_id', $userId)
+                    ->where(function ($q) {
+                        $q->whereNull('comment_id')->orWhere('comment_id', 0);
+                    })
+                    ->value('reaction');
+
+                if ($reaction !== null) {
+                    return (int) $reaction;
+                }
+            } catch (\Exception $e) {
+                // continue to next candidate
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -1380,13 +1406,29 @@ class NewFeedController extends Controller
         }
 
         try {
+            // Always fetch the current user's reaction separately so it's always included
+            // even when there are more than $limit reactions total.
+            $currentUserReactionRow = null;
+            if ($currentUserId) {
+                $currentUserReactionRow = DB::table('Wo_Reactions')
+                    ->where('post_id', $postId)
+                    ->where('user_id', $currentUserId)
+                    ->where(function ($q) {
+                        $q->whereNull('comment_id')->orWhere('comment_id', 0);
+                    })
+                    ->first();
+            }
+
             // Get all reactions (all types: like, love, haha, wow, sad, angry)
-            $reactions = DB::table('Wo_Reactions')
+            // Exclude current user from the general list (we'll prepend them)
+            $query = DB::table('Wo_Reactions')
                 ->where('post_id', $postId)
                 ->where('comment_id', 0)
-                ->orderBy('id', 'desc')
-                ->limit($limit)
-                ->get();
+                ->orderBy('id', 'desc');
+            if ($currentUserId) {
+                $query->where('user_id', '!=', $currentUserId);
+            }
+            $reactions = $query->limit($limit)->get();
 
             foreach ($reactions as $reaction) {
                 $user = DB::table('Wo_Users')->where('user_id', $reaction->user_id)->first();
@@ -1450,6 +1492,41 @@ class NewFeedController extends Controller
                         'reacted_at' => $reaction->time ?? null ? date('c', $reaction->time) : null,
                         'reacted_at_human' => $reaction->time ?? null ? $this->getHumanTime($reaction->time) : null,
                     ];
+                }
+            }
+
+            // Prepend the current user's own reaction at the front so the
+            // frontend can always find it (even when total reactions > $limit).
+            if ($currentUserReactionRow) {
+                $currentUser = DB::table('Wo_Users')->where('user_id', $currentUserId)->first();
+                if ($currentUser) {
+                    $cuName = $currentUser->name ?? '';
+                    if (empty($cuName)) {
+                        $cuName = trim(($currentUser->first_name ?? '') . ' ' . ($currentUser->last_name ?? ''));
+                    }
+                    if (empty($cuName)) {
+                        $cuName = $currentUser->username ?? 'Me';
+                    }
+                    $reactionNames = [1 => 'Like', 2 => 'Love', 3 => 'Haha', 4 => 'Wow', 5 => 'Sad', 6 => 'Angry'];
+                    $reactionIcons = [1 => '👍', 2 => '❤️', 3 => '😂', 4 => '😮', 5 => '😢', 6 => '😠'];
+                    $cuReactionType = (int) ($currentUserReactionRow->reaction ?? 1);
+                    array_unshift($likedUsers, [
+                        'user_id' => $currentUser->user_id,
+                        'username' => $currentUser->username ?? 'Unknown',
+                        'name' => $cuName,
+                        'first_name' => $currentUser->first_name ?? '',
+                        'last_name' => $currentUser->last_name ?? '',
+                        'avatar' => $currentUser->avatar ?? '',
+                        'avatar_url' => $currentUser->avatar ? asset('storage/' . $currentUser->avatar) : null,
+                        'verified' => (bool) ($currentUser->verified ?? false),
+                        'is_following' => 0,
+                        'reaction_type' => $cuReactionType,
+                        'reaction_name' => $reactionNames[$cuReactionType] ?? 'Like',
+                        'reaction_icon' => $reactionIcons[$cuReactionType] ?? '👍',
+                        'reacted_at' => $currentUserReactionRow->time ?? null ? date('c', $currentUserReactionRow->time) : null,
+                        'reacted_at_human' => $currentUserReactionRow->time ?? null ? $this->getHumanTime($currentUserReactionRow->time) : null,
+                        'is_current_user' => true,
+                    ]);
                 }
             }
         } catch (\Exception $e) {
