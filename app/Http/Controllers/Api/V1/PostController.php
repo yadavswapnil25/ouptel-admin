@@ -2959,7 +2959,11 @@ class PostController extends Controller
         }
 
         try {
-            $post = DB::table('Wo_Posts')->where('post_id', $postId)->first();
+            $post = DB::table('Wo_Posts')
+                ->where('id', $postId)
+                ->orWhere('post_id', $postId)
+                ->first();
+
             if (!$post) {
                 return response()->json([
                     'api_status' => 400,
@@ -2980,19 +2984,10 @@ class PostController extends Controller
                 ], 403);
             }
 
-            $updated = DB::table('Wo_Posts')
-                ->where('post_id', $postId)
+            $rowId = $post->id ?? $post->post_id;
+            DB::table('Wo_Posts')
+                ->where('id', $rowId)
                 ->update(['postText' => trim((string) $request->input('postText'))]);
-
-            if (!$updated) {
-                return response()->json([
-                    'api_status' => 400,
-                    'errors' => [
-                        'error_id' => 8,
-                        'error_text' => 'No changes made',
-                    ],
-                ]);
-            }
 
             return response()->json([
                 'api_status' => 200,
