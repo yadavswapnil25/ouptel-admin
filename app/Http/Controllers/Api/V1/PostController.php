@@ -2938,14 +2938,18 @@ class PostController extends Controller
             ], 401);
         }
 
-        $hasText      = $request->has('postText') && trim((string) $request->input('postText')) !== '';
-        $hasNewPhoto  = $request->hasFile('postPhoto');
-        $hasNewVideo  = $request->hasFile('postVideo');
-        $newGifUrl    = trim((string) $request->input('postGif', ''));
-        $hasGif       = $newGifUrl !== '';
-        $removePhoto  = (string) $request->input('removePhoto', '0') === '1';
+        $hasText       = $request->has('postText') && trim((string) $request->input('postText')) !== '';
+        $hasNewPhoto   = $request->hasFile('postPhoto');
+        $hasNewVideo   = $request->hasFile('postVideo');
+        $newGifUrl     = trim((string) $request->input('postGif', ''));
+        $hasGif        = $newGifUrl !== '';
+        $newYoutubeUrl = trim((string) $request->input('postYoutube', ''));
+        $hasYoutube    = $newYoutubeUrl !== '';
+        $newLinkUrl    = trim((string) $request->input('postLink', ''));
+        $hasLink       = $newLinkUrl !== '';
+        $removePhoto   = (string) $request->input('removePhoto', '0') === '1';
 
-        if (!$hasText && !$hasNewPhoto && !$hasNewVideo && !$hasGif && !$removePhoto) {
+        if (!$hasText && !$hasNewPhoto && !$hasNewVideo && !$hasGif && !$hasYoutube && !$hasLink && !$removePhoto) {
             return response()->json([
                 'api_status' => 422,
                 'errors' => ['error_id' => 3, 'error_text' => 'Nothing to update'],
@@ -3057,6 +3061,23 @@ class PostController extends Controller
                 if ($hasVideoColumn) $updateData['postVideo'] = '';
                 $newPhotoUrl             = $newGifUrl;
 
+            } elseif ($hasYoutube) {
+                $hasYoutubeColumn = DB::getSchemaBuilder()->hasColumn('Wo_Posts', 'postYoutube');
+                if ($hasYoutubeColumn) {
+                    $updateData['postYoutube'] = $newYoutubeUrl;
+                    $updateData['postType']    = 'youtube';
+                }
+                // Store the youtube URL so the response can reflect it
+                $newPhotoUrl = $newYoutubeUrl;
+
+            } elseif ($hasLink) {
+                $hasLinkColumn = DB::getSchemaBuilder()->hasColumn('Wo_Posts', 'postLink');
+                if ($hasLinkColumn) {
+                    $updateData['postLink'] = $newLinkUrl;
+                    $updateData['postType'] = 'link';
+                }
+                $newPhotoUrl = null;
+
             } elseif ($removePhoto) {
                 if (!empty($post->postPhoto) && !filter_var($post->postPhoto, FILTER_VALIDATE_URL)) {
                     $oldPath = 'public/' . ltrim($post->postPhoto, '/');
@@ -3093,11 +3114,13 @@ class PostController extends Controller
                 'api_status' => 200,
                 'message'    => 'Post updated successfully',
                 'data'       => [
-                    'post_id'        => $postId,
-                    'post_text'      => $updateData['postText'] ?? $post->postText,
-                    'post_photo_url' => $finalPhotoUrl,
-                    'post_video_url' => $newVideoUrl,
-                    'post_type'      => $updateData['postType'] ?? $post->postType,
+                    'post_id'         => $postId,
+                    'post_text'       => $updateData['postText']    ?? $post->postText,
+                    'post_photo_url'  => $finalPhotoUrl,
+                    'post_video_url'  => $newVideoUrl,
+                    'post_youtube_url'=> $updateData['postYoutube'] ?? null,
+                    'post_link_url'   => $updateData['postLink']    ?? null,
+                    'post_type'       => $updateData['postType']    ?? $post->postType,
                 ],
             ]);
 
