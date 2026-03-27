@@ -30,11 +30,11 @@ class CommunityPreferenceResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-heart';
 
-    protected static ?string $navigationLabel = 'Community Preferences';
+    protected static ?string $navigationLabel = 'Preferences';
 
     protected static ?string $modelLabel = 'Community Preference';
 
-    protected static ?string $pluralModelLabel = 'Community Preferences';
+    protected static ?string $pluralModelLabel = 'Preferences';
 
     protected static ?string $navigationGroup = 'Manage Features';
 
