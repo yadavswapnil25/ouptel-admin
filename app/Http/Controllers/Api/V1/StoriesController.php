@@ -969,14 +969,23 @@ class StoriesController extends Controller
                                 try {
                                     $storyOwner = DB::table('Wo_Users')->where('user_id', $story->user_id)->first();
                                     if ($storyOwner) {
-                                        DB::table('Wo_Notifications')->insert([
-                                            'notifier_id' => $tokenUserId,
-                                            'recipient_id' => $story->user_id,
-                                            'type' => 'viewed_story',
-                                            'url' => 'index.php?link1=timeline&u=' . ($storyOwner->username ?? ''),
-                                            'time' => time(),
-                                            'seen' => 0,
-                                        ]);
+                                        $existingViewedStoryNotification = DB::table('Wo_Notifications')
+                                            ->where('notifier_id', $tokenUserId)
+                                            ->where('recipient_id', $story->user_id)
+                                            ->where('type', 'viewed_story')
+                                            ->where('seen', 0)
+                                            ->exists();
+
+                                        if (!$existingViewedStoryNotification) {
+                                            DB::table('Wo_Notifications')->insert([
+                                                'notifier_id' => $tokenUserId,
+                                                'recipient_id' => $story->user_id,
+                                                'type' => 'viewed_story',
+                                                'url' => 'index.php?link1=timeline&u=' . ($storyOwner->username ?? ''),
+                                                'time' => time(),
+                                                'seen' => 0,
+                                            ]);
+                                        }
                                     }
                                 } catch (\Exception $e) {
                                     // Notification creation failed, but story is still marked as seen

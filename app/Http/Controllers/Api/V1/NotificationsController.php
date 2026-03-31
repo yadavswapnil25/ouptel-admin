@@ -120,6 +120,7 @@ class NotificationsController extends Controller
         }
 
         $formattedNotifications = $this->dedupeFollowRequestWhenFriendRequestExists($formattedNotifications);
+        $formattedNotifications = $this->dedupeStoryActionNotifications($formattedNotifications);
 
         return response()->json([
             'api_status' => 200,
@@ -537,6 +538,39 @@ class NotificationsController extends Controller
             if ($type === 'follow_request' && $nid !== '' && ! empty($notifierHasFriendRequest[$nid])) {
                 continue;
             }
+            $out[] = $n;
+        }
+
+        return $out;
+    }
+
+    /**
+     * Keep only the latest story action notification per notifier and type.
+     * This prevents repeated "viewed your story"/"reacted to your story" spam.
+     *
+     * @param array<int, array<string, mixed>> $items
+     * @return array<int, array<string, mixed>>
+     */
+    private function dedupeStoryActionNotifications(array $items): array
+    {
+        $storyTypes = ['viewed_story', 'reacted_story'];
+        $seenKeys = [];
+        $out = [];
+
+        foreach ($items as $n) {
+            $type = (string) ($n['type'] ?? '');
+            if (!in_array($type, $storyTypes, true)) {
+                $out[] = $n;
+                continue;
+            }
+
+            $notifierId = (string) ($n['notifier_id'] ?? '');
+            $key = $type . ':' . $notifierId;
+            if (isset($seenKeys[$key])) {
+                continue;
+            }
+
+            $seenKeys[$key] = true;
             $out[] = $n;
         }
 
