@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Cache;
 
 class PasswordController extends Controller
 {
@@ -313,6 +314,7 @@ class PasswordController extends Controller
 
             // Store reset token in database
             // Check if password reset table exists, otherwise use a simple approach
+            $storedInPersistentStore = false;
             if (DB::getSchemaBuilder()->hasTable('Wo_PasswordReset')) {
                 // Delete any existing reset tokens for this user
                 DB::table('Wo_PasswordReset')
@@ -327,6 +329,7 @@ class PasswordController extends Controller
                     'created_at' => time(),
                     'expires_at' => $expiresAt,
                 ]);
+                $storedInPersistentStore = true;
             } else {
                 // Fallback: Store token in user table if reset table doesn't exist
                 // Check if password_reset_token column exists
@@ -337,6 +340,7 @@ class PasswordController extends Controller
                             'password_reset_token' => $resetToken,
                             'password_reset_expires' => $expiresAt,
                         ]);
+                    $storedInPersistentStore = true;
                 } else {
                     // If no reset table and no column, log warning and continue
                     Log::warning('Password reset: No Wo_PasswordReset table and no password_reset_token column found. Token generated but not stored.', [
@@ -345,6 +349,19 @@ class PasswordController extends Controller
                     ]);
                 }
             }
+
+            // Always store token in cache as a reliable fallback.
+            // This prevents "invalid token" when DB reset storage is unavailable.
+            Cache::put(
+                'password_reset_token:' . $resetToken,
+                [
+                    'user_id' => (int) $user->user_id,
+                    'email' => (string) $user->email,
+                    'expires_at' => $expiresAt,
+                    'stored_in_db' => $storedInPersistentStore,
+                ],
+                now()->addHour()
+            );
 
             // Send password reset email
             $this->sendPasswordResetEmail($user, $resetToken);
@@ -410,6 +427,7 @@ class PasswordController extends Controller
         try {
             $user = null;
             $resetRecord = null;
+            $fromCache = false;
 
             // Check password reset table first
             if (DB::getSchemaBuilder()->hasTable('Wo_PasswordReset')) {
@@ -431,6 +449,21 @@ class PasswordController extends Controller
                     // Set resetRecord to indicate token was found
                     if ($user) {
                         $resetRecord = (object)['token' => $token];
+                    }
+                }
+            }
+
+            // Fallback: token in cache (used when DB/table columns are unavailable)
+            if (!$user || !$resetRecord) {
+                $cached = Cache::get('password_reset_token:' . $token);
+                if (is_array($cached) && !empty($cached['user_id'])) {
+                    $isExpired = isset($cached['expires_at']) && (int) $cached['expires_at'] <= time();
+                    if (!$isExpired) {
+                        $user = User::where('user_id', (int) $cached['user_id'])->first();
+                        if ($user) {
+                            $resetRecord = (object) ['token' => $token, 'user_id' => (int) $cached['user_id']];
+                            $fromCache = true;
+                        }
                     }
                 }
             }
@@ -471,7 +504,7 @@ class PasswordController extends Controller
                 DB::table('Wo_PasswordReset')
                     ->where('token', $token)
                     ->delete();
-            } else {
+            } elseif (!$fromCache) {
                 // Clear reset token from user table if column exists
                 if (DB::getSchemaBuilder()->hasColumn('Wo_Users', 'password_reset_token')) {
                     DB::table('Wo_Users')
@@ -482,6 +515,7 @@ class PasswordController extends Controller
                         ]);
                 }
             }
+            Cache::forget('password_reset_token:' . $token);
 
             // Log out all sessions for security
             DB::table('Wo_AppsSessions')
