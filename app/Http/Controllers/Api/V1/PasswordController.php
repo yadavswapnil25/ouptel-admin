@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 
 class PasswordController extends Controller
 {
@@ -528,17 +529,25 @@ class PasswordController extends Controller
      */
     private function sendPasswordResetEmail(User $user, string $token): void
     {
-        // In a real implementation, you would send an email with the reset link
-        // For now, we'll just log the action
-        $resetLink = url('/reset-password?token=' . $token);
-        
-        Log::info("Password reset email sent to user {$user->user_id} ({$user->email})", [
-            'reset_link' => $resetLink,
-            'token' => substr($token, 0, 10) . '...',
-        ]);
+        $appName = config('app.name', 'OUPTEL');
+        $frontendBase = rtrim((string) config('app.frontend_url', config('app.url', '')), '/');
+        $resetLink = $frontendBase !== ''
+            ? "{$frontendBase}/reset-password?token={$token}"
+            : url('/reset-password?token=' . $token);
+        $subject = "{$appName} - Password Reset Request";
+        $plainText = "Hello {$user->username},\n\nWe received a request to reset your {$appName} password.\n\nReset your password using this link:\n{$resetLink}\n\nThis link expires in 1 hour. If you didn't request this, you can ignore this email.";
 
-        // TODO: Implement actual email sending
-        // Example: Mail::to($user->email)->send(new PasswordResetMail($user, $resetLink));
+        Mail::send(
+            'emails.password-reset',
+            ['user' => $user, 'resetLink' => $resetLink, 'appName' => $appName],
+            function ($message) use ($user, $subject, $plainText) {
+                $message->to($user->email)
+                    ->subject($subject)
+                    ->text($plainText);
+            }
+        );
+
+        Log::info("Password reset email sent to user {$user->user_id} ({$user->email})");
     }
 
     /**
@@ -549,12 +558,21 @@ class PasswordController extends Controller
      */
     private function sendPasswordResetConfirmationEmail(User $user): void
     {
-        // In a real implementation, you would send a confirmation email
-        // For now, we'll just log the action
-        Log::info("Password reset confirmation email sent to user {$user->user_id} ({$user->email})");
+        $appName = config('app.name', 'OUPTEL');
+        $subject = "{$appName} - Password Changed Successfully";
+        $plainText = "Hello {$user->username},\n\nYour {$appName} password was changed successfully.\n\nIf you did not perform this change, please contact support immediately.";
 
-        // TODO: Implement actual email sending
-        // Example: Mail::to($user->email)->send(new PasswordResetConfirmationMail($user));
+        Mail::send(
+            'emails.password-reset-confirmation',
+            ['user' => $user, 'appName' => $appName],
+            function ($message) use ($user, $subject, $plainText) {
+                $message->to($user->email)
+                    ->subject($subject)
+                    ->text($plainText);
+            }
+        );
+
+        Log::info("Password reset confirmation email sent to user {$user->user_id} ({$user->email})");
     }
 
     /**
