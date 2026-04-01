@@ -90,7 +90,7 @@ class AuthController extends BaseController
             'confirm_password' => 'required|string|same:password',
             'first_name' => 'nullable|string|max:50',
             'last_name' => 'nullable|string|max:50',
-            'gender' => 'nullable|string|in:male,female',
+            'gender' => 'nullable|string|in:male,female,other',
             'birthday' => 'nullable|date|before:today',
             'country_id' => 'nullable|integer',
             'timezone' => 'nullable|string|max:50',
