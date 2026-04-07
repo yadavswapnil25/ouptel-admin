@@ -24,6 +24,8 @@ class Group extends Model
         'user_id',
         'registered',
         'time',
+        'agreement_accepted',
+        'agreement_accepted_at',
     ];
 
     protected $casts = [
@@ -32,6 +34,8 @@ class Group extends Model
         'privacy' => 'string',
         'join_privacy' => 'string',
         'time' => 'string',
+        'agreement_accepted' => 'boolean',
+        'agreement_accepted_at' => 'datetime',
     ];
 
     // Mutator to handle ENUM values for active column

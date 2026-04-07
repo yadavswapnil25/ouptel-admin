@@ -136,6 +136,15 @@ class GroupsController extends BaseController
             return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
         }
 
+        $agreementAccepted = $request->input('agreement_accepted', $request->input('agreed_to_terms', false));
+        $agreementAcceptedNormalized = filter_var($agreementAccepted, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($agreementAcceptedNormalized !== true) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Please agree to Ouptel\'s Group Terms & Community Guidelines',
+            ], 400);
+        }
+
         $validated = $request->validate([
             'group_name' => ['required', 'string', 'max:32'],
             'group_title' => ['required', 'string', 'max:100'],
@@ -164,6 +173,12 @@ class GroupsController extends BaseController
         $group->user_id = (string) $userId;
         $group->active = '1';
         $group->time = (string) time();
+        if (Schema::hasColumn('Wo_Groups', 'agreement_accepted')) {
+            $group->setAttribute('agreement_accepted', true);
+        }
+        if (Schema::hasColumn('Wo_Groups', 'agreement_accepted_at')) {
+            $group->setAttribute('agreement_accepted_at', now());
+        }
         $group->save();
 
         // Add creator as member
