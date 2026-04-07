@@ -263,9 +263,10 @@ class PagesController extends BaseController
         $pageName = $request->input('page_name');
         $pageTitle = $request->input('page_title');
         $pageCategory = $request->input('page_category', 1); // Default to 1 if empty
-        $pageDescription = $request->input('page_description', '');
+        $pageDescription = $request->input('page_description', $request->input('about', ''));
         $subCategory = $request->input('sub_category', '');
         $pageSubCategory = $request->input('page_sub_category', ''); // Alternative parameter name
+        $agreementAccepted = $request->input('agreement_accepted', $request->input('agreed_to_terms', false));
 
         // Validate page_name and page_title are not empty
         if (empty($pageName) || empty($pageTitle)) {
@@ -292,6 +293,15 @@ class PagesController extends BaseController
             return response()->json([
                 'api_status' => 400,
                 'errors' => $errors,
+            ], 400);
+        }
+
+        // Agreement is mandatory for create-page flow.
+        $agreementAcceptedNormalized = filter_var($agreementAccepted, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($agreementAcceptedNormalized !== true) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['Please agree to Ouptel\'s Page Terms & Community Guidelines'],
             ], 400);
         }
 
@@ -331,6 +341,26 @@ class PagesController extends BaseController
             $page->website = $request->input('website', '');
             $page->phone = $request->input('phone', '');
             $page->address = $request->input('address', '');
+
+            // Optional contact + social fields for page creation form.
+            $emailValue = trim((string) $request->input('email', $request->input('contact_email', '')));
+            $socialLinkValue = trim((string) $request->input('social_link', ''));
+            if (Schema::hasColumn('Wo_Pages', 'email')) {
+                $page->setAttribute('email', $emailValue);
+            } elseif (Schema::hasColumn('Wo_Pages', 'contact_email')) {
+                $page->setAttribute('contact_email', $emailValue);
+            }
+            if (Schema::hasColumn('Wo_Pages', 'social_link')) {
+                $page->setAttribute('social_link', $socialLinkValue);
+            }
+            if (Schema::hasColumn('Wo_Pages', 'agreement_accepted')) {
+                $page->setAttribute('agreement_accepted', 1);
+            } elseif (Schema::hasColumn('Wo_Pages', 'agreed_to_terms')) {
+                $page->setAttribute('agreed_to_terms', 1);
+            }
+            if (Schema::hasColumn('Wo_Pages', 'agreement_accepted_at')) {
+                $page->setAttribute('agreement_accepted_at', now());
+            }
             
             // Set sub_category directly on attributes since it's not in fillable
             if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
@@ -360,6 +390,7 @@ class PagesController extends BaseController
                 'page_id' => $page->page_id,
                 'sub_category' => $subCategoryValue,
                 'sub_category_name' => $subCategoryName,
+                'agreement_accepted' => true,
             ], 200);
 
         } catch (\Exception $e) {
@@ -556,6 +587,36 @@ class PagesController extends BaseController
             if ($request->has('address')) {
                 $address = $request->input('address', '');
                 $updateData['address'] = $address !== null ? trim((string) $address) : '';
+            }
+            if ($request->has('email') || $request->has('contact_email')) {
+                $emailValue = $request->input('email', $request->input('contact_email', ''));
+                $emailValue = $emailValue !== null ? trim((string) $emailValue) : '';
+                if (Schema::hasColumn('Wo_Pages', 'email')) {
+                    $updateData['email'] = $emailValue;
+                } elseif (Schema::hasColumn('Wo_Pages', 'contact_email')) {
+                    $updateData['contact_email'] = $emailValue;
+                }
+            }
+            if ($request->has('social_link') && Schema::hasColumn('Wo_Pages', 'social_link')) {
+                $socialLink = $request->input('social_link', '');
+                $updateData['social_link'] = $socialLink !== null ? trim((string) $socialLink) : '';
+            }
+            if ($request->has('agreement_accepted') || $request->has('agreed_to_terms')) {
+                $agreementAccepted = $request->input('agreement_accepted', $request->input('agreed_to_terms'));
+                $agreementAcceptedValue = filter_var($agreementAccepted, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+                if ($agreementAcceptedValue !== null) {
+                    if (Schema::hasColumn('Wo_Pages', 'agreement_accepted')) {
+                        $updateData['agreement_accepted'] = $agreementAcceptedValue ? 1 : 0;
+                    } elseif (Schema::hasColumn('Wo_Pages', 'agreed_to_terms')) {
+                        $updateData['agreed_to_terms'] = $agreementAcceptedValue ? 1 : 0;
+                    }
+                    if (
+                        $agreementAcceptedValue === true &&
+                        Schema::hasColumn('Wo_Pages', 'agreement_accepted_at')
+                    ) {
+                        $updateData['agreement_accepted_at'] = now();
+                    }
+                }
             }
 
             // Update social media links
@@ -859,6 +920,13 @@ class PagesController extends BaseController
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
+                    'email' => $pageData->email ?? ($pageData->contact_email ?? ''),
+                    'social_link' => $pageData->social_link ?? '',
+                    'agreement_accepted' => (bool) (
+                        $pageData->agreement_accepted ??
+                        $pageData->agreed_to_terms ??
+                        false
+                    ),
                     // Social media links
                     'facebook' => $socialLinks['facebook'] ?? '',
                     'instgram' => $socialLinks['instgram'] ?? '',
@@ -1241,6 +1309,13 @@ class PagesController extends BaseController
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
+                    'email' => $pageData->email ?? ($pageData->contact_email ?? ''),
+                    'social_link' => $pageData->social_link ?? '',
+                    'agreement_accepted' => (bool) (
+                        $pageData->agreement_accepted ??
+                        $pageData->agreed_to_terms ??
+                        false
+                    ),
                     // Social media links (retrieved directly from database)
                     'facebook' => $socialLinks['facebook'] ?? '',
                     'instgram' => $socialLinks['instgram'] ?? '',
@@ -1413,6 +1488,13 @@ class PagesController extends BaseController
                     'website' => $pageItem->website ?? '',
                     'phone' => $pageItem->phone ?? '',
                     'address' => $pageItem->address ?? '',
+                    'email' => $pageItem->getAttributes()['email'] ?? ($pageItem->getAttributes()['contact_email'] ?? ''),
+                    'social_link' => $pageItem->getAttributes()['social_link'] ?? '',
+                    'agreement_accepted' => (bool) (
+                        $pageItem->getAttributes()['agreement_accepted'] ??
+                        $pageItem->getAttributes()['agreed_to_terms'] ??
+                        false
+                    ),
                     'url' => $pageItem->url ?? url('/page/' . ($pageItem->page_name ?? '')),
                     'likes_count' => $likesCount,
                     'is_liked' => $isLiked,

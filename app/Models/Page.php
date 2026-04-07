@@ -21,8 +21,14 @@ class Page extends Model
         'avatar',
         'cover',
         'website',
+        'social_link',
         'phone',
+        'email',
+        'contact_email',
         'address',
+        'agreement_accepted',
+        'agreed_to_terms',
+        'agreement_accepted_at',
         'active',
     ];
 
