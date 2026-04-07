@@ -7,6 +7,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class EventsController extends BaseController
 {
@@ -79,6 +80,10 @@ class EventsController extends BaseController
                 'comments' => $event->comments_count,
                 'reactions' => $event->reactions_count,
             ],
+            'is_public' => (bool) ($event->getAttributes()['is_public'] ?? true),
+            'allow_join' => (bool) ($event->getAttributes()['allow_join'] ?? true),
+            'published' => (bool) ($event->getAttributes()['published'] ?? true),
+            'agreement_accepted' => (bool) ($event->getAttributes()['agreement_accepted'] ?? false),
         ];
     }
     public function index(Request $request): JsonResponse
@@ -137,6 +142,15 @@ class EventsController extends BaseController
             return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
         }
 
+        $agreementAccepted = $request->input('agreement_accepted', $request->input('agreed_to_terms', false));
+        $agreementAcceptedNormalized = filter_var($agreementAccepted, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        if ($agreementAcceptedNormalized !== true) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Please agree to Ouptel\'s Event Terms & Community Guidelines',
+            ], 400);
+        }
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:120'],
             'location' => ['required', 'string', 'max:255'],
@@ -148,6 +162,9 @@ class EventsController extends BaseController
             'cover' => ['nullable', 'string'],
             'image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:2048'], // 2MB max
             'cover_image' => ['nullable', 'image', 'mimes:jpeg,png,jpg,gif,webp', 'max:5120'], // 5MB max
+            'is_public' => ['sometimes', 'boolean'],
+            'allow_join' => ['sometimes', 'boolean'],
+            'published' => ['sometimes', 'boolean'],
         ]);
 
         // Handle image uploads
@@ -184,6 +201,22 @@ class EventsController extends BaseController
         } else {
             $event->cover = $validated['cover'] ?? '';
         }
+
+        if (Schema::hasColumn('Wo_Events', 'is_public')) {
+            $event->setAttribute('is_public', $request->boolean('is_public', true));
+        }
+        if (Schema::hasColumn('Wo_Events', 'allow_join')) {
+            $event->setAttribute('allow_join', $request->boolean('allow_join', true));
+        }
+        if (Schema::hasColumn('Wo_Events', 'published')) {
+            $event->setAttribute('published', $request->boolean('published', true));
+        }
+        if (Schema::hasColumn('Wo_Events', 'agreement_accepted')) {
+            $event->setAttribute('agreement_accepted', true);
+        }
+        if (Schema::hasColumn('Wo_Events', 'agreement_accepted_at')) {
+            $event->setAttribute('agreement_accepted_at', now());
+        }
         
         $event->save();
 
@@ -205,6 +238,10 @@ class EventsController extends BaseController
                 'status' => $event->status_text,
                 'is_owner' => true,
                 'created_at' => $event->created_at?->format('c'),
+                'is_public' => (bool) ($event->getAttributes()['is_public'] ?? true),
+                'allow_join' => (bool) ($event->getAttributes()['allow_join'] ?? true),
+                'published' => (bool) ($event->getAttributes()['published'] ?? true),
+                'agreement_accepted' => (bool) ($event->getAttributes()['agreement_accepted'] ?? true),
             ],
         ], 201);
     }

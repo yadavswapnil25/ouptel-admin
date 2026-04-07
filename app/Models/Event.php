@@ -28,6 +28,11 @@ class Event extends Model
         'end_time',
         'poster_id',
         'cover',
+        'is_public',
+        'allow_join',
+        'published',
+        'agreement_accepted',
+        'agreement_accepted_at',
     ];
 
     protected $casts = [
@@ -35,6 +40,11 @@ class Event extends Model
         'end_date' => 'date',
         'start_time' => 'datetime:H:i',
         'end_time' => 'datetime:H:i',
+        'is_public' => 'boolean',
+        'allow_join' => 'boolean',
+        'published' => 'boolean',
+        'agreement_accepted' => 'boolean',
+        'agreement_accepted_at' => 'datetime',
     ];
 
     /**
