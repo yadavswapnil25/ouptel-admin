@@ -53,7 +53,6 @@ class ProfileController extends Controller
         'new_phone',
         'info_file',
         'city',
-        'state',
         'zip',
         'school_completed',
         'avatar_org',
@@ -223,6 +222,10 @@ class ProfileController extends Controller
         
         $userData = (array) $userRaw;
 
+        // Capture location fields before removing non-allowed fields so we can derive location-based assets.
+        $stateName = trim((string) ($userData['state'] ?? ''));
+        $cityName = trim((string) ($userData['city'] ?? ''));
+
         // Remove sensitive fields
         foreach ($this->nonAllowed as $field) {
             unset($userData[$field]);
@@ -345,6 +348,52 @@ class ProfileController extends Controller
         $userData['college'] = $user->college ?? '';
         $userData['university'] = $user->university ?? '';
         $userData['website'] = $user->website ?? '';
+
+        // Add state background image URL from admin-managed Wo_States (if available).
+        // Matching order:
+        // 1) exact state match
+        // 2) exact city match (useful when admin stores city names like "Pune")
+        // 3) partial contains fallback for both
+        $userData['state_background_url'] = null;
+        if (($stateName !== '' || $cityName !== '') && Schema::hasTable('Wo_States')) {
+            try {
+                $stateLower = mb_strtolower($stateName);
+                $cityLower = mb_strtolower($cityName);
+
+                $stateRow = null;
+
+                if ($stateLower !== '') {
+                    $stateRow = DB::table('Wo_States')
+                        ->whereRaw('LOWER(name) = ?', [$stateLower])
+                        ->first();
+                }
+
+                if (!$stateRow && $cityLower !== '') {
+                    $stateRow = DB::table('Wo_States')
+                        ->whereRaw('LOWER(name) = ?', [$cityLower])
+                        ->first();
+                }
+
+                if (!$stateRow && $stateLower !== '') {
+                    $stateRow = DB::table('Wo_States')
+                        ->whereRaw('LOWER(name) LIKE ?', ['%' . $stateLower . '%'])
+                        ->first();
+                }
+
+                if (!$stateRow && $cityLower !== '') {
+                    $stateRow = DB::table('Wo_States')
+                        ->whereRaw('LOWER(name) LIKE ?', ['%' . $cityLower . '%'])
+                        ->first();
+                }
+
+                if ($stateRow && !empty($stateRow->photo)) {
+                    $photoPath = ltrim((string) $stateRow->photo, '/');
+                    $userData['state_background_url'] = asset('storage/' . $photoPath);
+                }
+            } catch (\Exception $e) {
+                // Keep null fallback if lookup fails.
+            }
+        }
 
         return $userData;
     }

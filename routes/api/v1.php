@@ -57,6 +57,7 @@ use App\Http\Controllers\Api\V1\HashtagController;
 use App\Http\Controllers\Api\V1\CommunityPreferenceController;
 use App\Http\Controllers\Api\V1\AdsController;
 use App\Http\Controllers\Api\V1\SurveyController;
+use App\Http\Controllers\Api\V1\StatesController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -412,6 +413,7 @@ Route::get('/search/explore', [SearchController::class, 'explore']); // Explore 
 // Countries routes (for explore page)
 Route::get('/countries', [CountriesController::class, 'index']); // Get countries list
 Route::get('/countries/meta', [CountriesController::class, 'meta']); // Get countries meta (for explore page filters)
+Route::get('/states/background', [StatesController::class, 'background']); // Resolve state/city background image
 
 // Announcements routes (matching old API structure: get-general-data.php with announcement parameter)
 Route::get('/announcements/home', [AnnouncementsController::class, 'getHomeAnnouncement']); // Get home announcement (old API: Wo_GetHomeAnnouncements)
