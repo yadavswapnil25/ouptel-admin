@@ -1730,6 +1730,30 @@ class ProfileController extends Controller
     }
 
     /**
+     * User account registration time from Wo_Users (joined or time column).
+     */
+    private function resolveUserRegistrationTimestamp($user): ?int
+    {
+        foreach (['joined', 'time'] as $field) {
+            if (!isset($user->{$field})) {
+                continue;
+            }
+            $raw = $user->{$field};
+            if ($raw === null || $raw === '' || $raw === '0') {
+                continue;
+            }
+            if (is_numeric($raw)) {
+                $ts = (int) $raw;
+                if ($ts > 0) {
+                    return $ts < 10000000000 ? $ts : (int) floor($ts / 1000);
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Get user data for timeline
      * 
      * @param object $user
@@ -1760,6 +1784,8 @@ class ProfileController extends Controller
         // Check if viewing own profile
         $isOwner = ($user->user_id == $loggedUserId);
 
+        $registeredAt = $this->resolveUserRegistrationTimestamp($user);
+
         return [
             'user_id' => $user->user_id,
             'username' => $user->username ?? '',
@@ -1776,6 +1802,8 @@ class ProfileController extends Controller
             'is_following' => $isFollowing ? 1 : 0,
             'is_owner' => $isOwner ? 1 : 0,
             'post_count' => $postCount,
+            'created_at' => $registeredAt ? date('c', $registeredAt) : null,
+            'joined_at' => $registeredAt,
         ];
     }
 
