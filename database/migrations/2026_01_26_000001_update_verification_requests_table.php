@@ -20,6 +20,8 @@ return new class extends Migration
         Schema::create('Wo_Verification_Requests', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('user_id')->index();
+            $table->string('user_name')->nullable()->comment('User full name');
+            $table->string('type', 100)->default('User')->comment('Verification type');
             
             // ID Proof fields
             $table->string('id_proof_type', 50)->nullable()->comment('Type of ID proof: aadhar, voter_id, passport, driving_license, pan_card');
@@ -28,7 +30,7 @@ return new class extends Migration
             $table->string('id_proof_back_image', 255)->nullable()->comment('Back image of ID proof');
             
             // Badge type
-            $table->enum('badge_type', ['blue', 'golden'])->default('blue')->comment('Type of badge requested: blue (regular users) or golden (VIPs/celebrities)');
+            $table->enum('badge_type', ['blue', 'golden'])->nullable()->comment('Type of badge requested: blue (regular users) or golden (VIPs/celebrities)');
             
             // Verification status
             $table->enum('status', ['pending', 'approved', 'rejected'])->default('pending')->comment('Verification status');
@@ -39,6 +41,7 @@ return new class extends Migration
             $table->timestamp('reviewed_at')->nullable()->comment('When the verification was reviewed');
             $table->timestamp('approved_at')->nullable()->comment('When the verification was approved');
             $table->unsignedBigInteger('reviewed_by')->nullable()->comment('Admin user who reviewed the verification');
+            $table->tinyInteger('seen')->default(0)->comment('Whether admin has seen this request');
             
             // Indexes for faster queries
             $table->index(['user_id', 'status'], 'idx_user_status');
