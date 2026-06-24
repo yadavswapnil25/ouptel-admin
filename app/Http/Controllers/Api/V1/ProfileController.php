@@ -339,6 +339,18 @@ class ProfileController extends Controller
         $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/placeholders/user-avatar.svg');
         $userData['cover_url'] = $user->cover ? asset('storage/' . $user->cover) : asset('images/default-cover.jpg');
 
+        // Add badge information if user is verified
+        $approvedVerification = DB::table('Wo_VerificationRequests')
+            ->where('user_id', $user->user_id)
+            ->where('status', 'approved')
+            ->whereNotNull('badge_type')
+            ->latest('approved_at')
+            ->first();
+        
+        $userData['badge'] = $approvedVerification ? 1 : null;
+        $userData['badge_type'] = $approvedVerification?->badge_type ?? null;
+        $userData['is_verified'] = $approvedVerification ? 1 : null;
+
         // Explicitly ensure address, working, working_link, school, college, university are included
         // These fields might not be in fillable but should be retrieved from database
         $userData['address'] = $user->address ?? '';
