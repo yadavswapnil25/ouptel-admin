@@ -345,7 +345,7 @@ class ProfileController extends Controller
                 ->where('user_id', $user->user_id)
                 ->where('status', 'approved')
                 ->whereNotNull('badge_type')
-                ->latest('approved_at')
+                ->orderByDesc('approved_at')
                 ->first();
             
             $userData['badge'] = $approvedVerification ? 1 : null;
