@@ -340,16 +340,23 @@ class ProfileController extends Controller
         $userData['cover_url'] = $user->cover ? asset('storage/' . $user->cover) : asset('images/default-cover.jpg');
 
         // Add badge information if user is verified
-        $approvedVerification = DB::table('Wo_VerificationRequests')
-            ->where('user_id', $user->user_id)
-            ->where('status', 'approved')
-            ->whereNotNull('badge_type')
-            ->latest('approved_at')
-            ->first();
-        
-        $userData['badge'] = $approvedVerification ? 1 : null;
-        $userData['badge_type'] = $approvedVerification?->badge_type ?? null;
-        $userData['is_verified'] = $approvedVerification ? 1 : null;
+        try {
+            $approvedVerification = DB::table('Wo_VerificationRequests')
+                ->where('user_id', $user->user_id)
+                ->where('status', 'approved')
+                ->whereNotNull('badge_type')
+                ->latest('approved_at')
+                ->first();
+            
+            $userData['badge'] = $approvedVerification ? 1 : null;
+            $userData['badge_type'] = $approvedVerification?->badge_type ?? null;
+            $userData['is_verified'] = $approvedVerification ? 1 : null;
+        } catch (\Exception $e) {
+            // If table doesn't exist yet, set null values
+            $userData['badge'] = null;
+            $userData['badge_type'] = null;
+            $userData['is_verified'] = null;
+        }
 
         // Explicitly ensure address, working, working_link, school, college, university are included
         // These fields might not be in fillable but should be retrieved from database
