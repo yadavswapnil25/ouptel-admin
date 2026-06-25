@@ -424,6 +424,7 @@ Route::get('/announcements', [AnnouncementsController::class, 'getAllActive']); 
 // Settings -> Verify Account feature for end users
 Route::get('/verification/options', [AccountVerificationController::class, 'getVerificationOptions']); // Get available ID proof types and badge types
 Route::post('/verification/submit', [AccountVerificationController::class, 'submit']); // Submit verification request
+Route::post('/verification/submit-with-video', [AccountVerificationController::class, 'submitWithVideo']); // Submit verification with video
 Route::get('/verification/status', [AccountVerificationController::class, 'getStatus']); // Get current verification status
 Route::get('/verification/history', [AccountVerificationController::class, 'getHistory']); // Get verification history
 Route::post('/verification/resubmit', [AccountVerificationController::class, 'resubmit']); // Resubmit after rejection

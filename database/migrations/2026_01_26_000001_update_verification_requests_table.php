@@ -39,9 +39,15 @@ return new class extends Migration
             // Timestamps
             $table->timestamp('submitted_at')->nullable()->comment('When the verification was submitted');
             $table->timestamp('reviewed_at')->nullable()->comment('When the verification was reviewed');
-            $table->timestamp('approved_at')->nullable()->comment('When the verification was approved');
-            $table->unsignedBigInteger('reviewed_by')->nullable()->comment('Admin user who reviewed the verification');
-            $table->tinyInteger('seen')->default(0)->comment('Whether admin has seen this request');
+                $table->timestamp('approved_at')->nullable()->comment('When the verification was approved');
+                $table->unsignedBigInteger('reviewed_by')->nullable()->comment('Admin user who reviewed the verification');
+                $table->tinyInteger('seen')->default(0)->comment('Whether admin has seen this request');
+                
+                // Video verification fields
+                $table->string('verification_video', 255)->nullable()->comment('Path to verification video file');
+                $table->integer('video_size')->nullable()->comment('Video file size in bytes');
+                $table->integer('video_duration')->nullable()->comment('Video duration in seconds');
+                $table->timestamp('video_uploaded_at')->nullable()->comment('When the video was uploaded');
             
             // Indexes for faster queries
             $table->index(['user_id', 'status'], 'idx_user_status');

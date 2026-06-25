@@ -178,6 +178,151 @@ class AccountVerificationController extends Controller
     }
 
     /**
+     * Submit account verification with video
+     * 
+     * Endpoint: POST /api/v1/verification/submit-with-video
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function submitWithVideo(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $authResult = $this->authenticateUser($request);
+        if ($authResult['error']) {
+            return response()->json($authResult['response'], $authResult['status']);
+        }
+        $tokenUserId = $authResult['user_id'];
+
+        // Validate request
+        $validator = Validator::make($request->all(), [
+            'id_proof_type' => 'required|string|in:' . implode(',', array_keys(VerificationRequest::ID_PROOF_TYPES)),
+            'id_proof_number' => 'required|string|max:100',
+            'id_proof_front_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
+            'id_proof_back_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
+            'badge_type' => 'required|string|in:blue,golden',
+            'verification_video' => 'required|file|mimes:mp4,webm,mov,avi|max:52428800', // 50MB max
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'api_status' => 400,
+                'api_text' => 'failed',
+                'errors' => [
+                    'error_id' => 7,
+                    'error_text' => 'Validation failed',
+                    'validation_errors' => $validator->errors()->all()
+                ]
+            ], 422);
+        }
+
+        // Check if user exists
+        $user = User::where('user_id', $tokenUserId)->first();
+        if (!$user) {
+            return response()->json([
+                'api_status' => 400,
+                'api_text' => 'failed',
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'User not found.'
+                ]
+            ], 404);
+        }
+
+        // Check if user already has a verified badge
+        if ($user->verified === '1') {
+            return response()->json([
+                'api_status' => 400,
+                'api_text' => 'failed',
+                'errors' => [
+                    'error_id' => 8,
+                    'error_text' => 'Your account is already verified.'
+                ]
+            ], 400);
+        }
+
+        // Check if user has a pending verification request
+        $pendingRequest = VerificationRequest::where('user_id', $tokenUserId)
+            ->whereNotNull('badge_type')
+            ->where('status', VerificationRequest::STATUS_PENDING)
+            ->first();
+
+        if ($pendingRequest) {
+            return response()->json([
+                'api_status' => 400,
+                'api_text' => 'failed',
+                'errors' => [
+                    'error_id' => 9,
+                    'error_text' => 'You already have a pending verification request. Please wait for admin review.'
+                ]
+            ], 400);
+        }
+
+        try {
+            // Upload front image
+            $frontImage = $request->file('id_proof_front_image');
+            $frontFilename = 'verification_front_' . $tokenUserId . '_' . time() . '.' . $frontImage->getClientOriginalExtension();
+            $frontPath = $frontImage->storeAs('upload/verification/' . date('Y/m'), $frontFilename, 'public');
+
+            // Upload back image
+            $backImage = $request->file('id_proof_back_image');
+            $backFilename = 'verification_back_' . $tokenUserId . '_' . time() . '.' . $backImage->getClientOriginalExtension();
+            $backPath = $backImage->storeAs('upload/verification/' . date('Y/m'), $backFilename, 'public');
+
+            // Upload verification video
+            $video = $request->file('verification_video');
+            $videoFilename = 'verification_video_' . $tokenUserId . '_' . time() . '.' . $video->getClientOriginalExtension();
+            $videoPath = $video->storeAs('upload/verification/videos/' . date('Y/m'), $videoFilename, 'public');
+            
+            // Get video file size and duration (basic info)
+            $videoSize = $video->getSize();
+            $videoDuration = null; // In production, use ffprobe or similar to get actual duration
+            
+            // Create verification request
+            $verification = VerificationRequest::create([
+                'user_id' => $tokenUserId,
+                'user_name' => $user->first_name . ' ' . $user->last_name,
+                'type' => 'User',
+                'id_proof_type' => $request->input('id_proof_type'),
+                'id_proof_number' => $request->input('id_proof_number'),
+                'id_proof_front_image' => $frontPath,
+                'id_proof_back_image' => $backPath,
+                'badge_type' => $request->input('badge_type'),
+                'status' => VerificationRequest::STATUS_PENDING,
+                'submitted_at' => now(),
+                'seen' => 0,
+                'verification_video' => $videoPath,
+                'video_size' => $videoSize,
+                'video_duration' => $videoDuration,
+                'video_uploaded_at' => now(),
+            ]);
+
+            return response()->json([
+                'api_status' => 200,
+                'api_text' => 'success',
+                'message' => 'Verification request submitted successfully with video. Admin will review and verify your account.',
+                'data' => [
+                    'verification_id' => $verification->id,
+                    'badge_type' => $verification->badge_type,
+                    'status' => $verification->status,
+                    'submitted_at' => $verification->submitted_at?->toIso8601String(),
+                    'has_video' => !empty($verification->verification_video),
+                ]
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => 500,
+                'api_text' => 'failed',
+                'errors' => [
+                    'error_id' => 10,
+                    'error_text' => 'Failed to submit verification request with video: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
+    }
+
+    /**
      * Get current verification status
      * 
      * Endpoint: GET /api/v1/verification/status
