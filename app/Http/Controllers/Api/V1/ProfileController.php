@@ -341,7 +341,7 @@ class ProfileController extends Controller
 
         // Add badge information if user is verified
         try {
-            $approvedVerification = DB::table('Wo_VerificationRequests')
+            $approvedVerification = DB::table('Wo_Verification_Requests')
                 ->where('user_id', $user->user_id)
                 ->where('status', 'approved')
                 ->whereNotNull('badge_type')
