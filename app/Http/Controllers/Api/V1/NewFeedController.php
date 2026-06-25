@@ -595,6 +595,8 @@ class NewFeedController extends Controller
                     'avatar_url' => ($user?->avatar) ? asset('storage/' . $user?->avatar) : null,
                     'verified' => (bool) ($user?->verified ?? false),
                     'is_admin' => (bool) ($user?->admin ?? false),
+                    'badge' => $this->getUserBadge($post->user_id),
+                    'badge_type' => $this->getUserBadgeType($post->user_id),
                 ],
                 
                 // Page/Group context
@@ -1535,5 +1537,47 @@ class NewFeedController extends Controller
         }
 
         return $likedUsers;
+    }
+
+    /**
+     * Get user badge status from Wo_VerificationRequests table
+     * 
+     * @param string|int $userId
+     * @return int|null
+     */
+    private function getUserBadge($userId)
+    {
+        try {
+            $badge = DB::table('Wo_VerificationRequests')
+                ->where('user_id', $userId)
+                ->where('status', 'approved')
+                ->whereNotNull('badge_type')
+                ->latest('approved_at')
+                ->value('badge_type');
+            
+            return $badge ? 1 : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Get user badge type (blue or golden) from Wo_VerificationRequests table
+     * 
+     * @param string|int $userId
+     * @return string|null
+     */
+    private function getUserBadgeType($userId)
+    {
+        try {
+            return DB::table('Wo_VerificationRequests')
+                ->where('user_id', $userId)
+                ->where('status', 'approved')
+                ->whereNotNull('badge_type')
+                ->latest('approved_at')
+                ->value('badge_type');
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }
