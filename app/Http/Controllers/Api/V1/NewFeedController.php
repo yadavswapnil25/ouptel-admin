@@ -1540,7 +1540,7 @@ class NewFeedController extends Controller
     }
 
     /**
-     * Get user badge status from Wo_VerificationRequests table
+     * Get user badge status from Wo_Verification_Requests table
      * 
      * @param string|int $userId
      * @return int|null
@@ -1548,7 +1548,7 @@ class NewFeedController extends Controller
     private function getUserBadge($userId)
     {
         try {
-            $badge = DB::table('Wo_VerificationRequests')
+            $badge = DB::table('Wo_Verification_Requests')
                 ->where('user_id', $userId)
                 ->where('status', 'approved')
                 ->whereNotNull('badge_type')
@@ -1562,7 +1562,7 @@ class NewFeedController extends Controller
     }
 
     /**
-     * Get user badge type (blue or golden) from Wo_VerificationRequests table
+     * Get user badge type (blue or golden) from Wo_Verification_Requests table
      * 
      * @param string|int $userId
      * @return string|null
@@ -1570,7 +1570,7 @@ class NewFeedController extends Controller
     private function getUserBadgeType($userId)
     {
         try {
-            return DB::table('Wo_VerificationRequests')
+            return DB::table('Wo_Verification_Requests')
                 ->where('user_id', $userId)
                 ->where('status', 'approved')
                 ->whereNotNull('badge_type')
