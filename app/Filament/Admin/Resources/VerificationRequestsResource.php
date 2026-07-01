@@ -171,6 +171,50 @@ class VerificationRequestsResource extends Resource
                     ->columns(2)
                     ->visible(fn ($record) => $record?->badge_type !== null),
 
+                Section::make('Page Verification Details')
+                    ->schema([
+                        Placeholder::make('page_link')
+                            ->label('Page')
+                            ->content(function ($record) {
+                                if (!$record?->page_id) {
+                                    return $record?->user_name ?: '—';
+                                }
+                                $title = $record->page?->page_title ?? $record->user_name ?? 'Page #' . $record->page_id;
+                                return new \Illuminate\Support\HtmlString(
+                                    '<span class="font-medium">' . e($title) . '</span>'
+                                    . ' <span class="text-gray-500">(ID: ' . (int) $record->page_id . ')</span>'
+                                );
+                            }),
+
+                        Textarea::make('message')
+                            ->label('Why should this page be verified?')
+                            ->rows(4)
+                            ->disabled(),
+
+                        Placeholder::make('supporting_document')
+                            ->label('Supporting document')
+                            ->content(function ($record) {
+                                $path = $record?->passport ?? '';
+                                if (!$path) {
+                                    return 'No document uploaded';
+                                }
+                                $url = asset('storage/' . ltrim($path, '/'));
+                                $lower = strtolower($path);
+                                if (str_ends_with($lower, '.pdf')) {
+                                    return new \Illuminate\Support\HtmlString(
+                                        "<a href=\"{$url}\" target=\"_blank\" rel=\"noopener\" class=\"text-primary-600 underline font-medium\">Open PDF document</a>"
+                                    );
+                                }
+                                return new \Illuminate\Support\HtmlString(
+                                    "<a href=\"{$url}\" target=\"_blank\" rel=\"noopener\">"
+                                    . "<img src=\"{$url}\" alt=\"Supporting document\" class=\"max-w-md max-h-64 rounded-lg shadow-lg cursor-pointer hover:opacity-80\" />"
+                                    . '</a>'
+                                );
+                            }),
+                    ])
+                    ->columns(1)
+                    ->visible(fn ($record) => $record?->isPageVerification()),
+
                 Section::make('Legacy Verification Information')
                     ->schema([
                         TextInput::make('message')
@@ -190,7 +234,7 @@ class VerificationRequestsResource extends Resource
                     ])
                     ->columns(1)
                     ->collapsed()
-                    ->visible(fn ($record) => $record?->badge_type === null),
+                    ->visible(fn ($record) => $record?->badge_type === null && !$record?->isPageVerification()),
             ]);
     }
 
@@ -259,6 +303,14 @@ class VerificationRequestsResource extends Resource
                     ->limit(20)
                     ->toggleable()
                     ->copyable(),
+
+                TextColumn::make('message')
+                    ->label('Verification reason')
+                    ->limit(40)
+                    ->tooltip(fn ($record) => $record->message)
+                    ->toggleable()
+                    ->toggledHiddenByDefault()
+                    ->placeholder('—'),
 
                 TextColumn::make('status')
                     ->label('Status')
