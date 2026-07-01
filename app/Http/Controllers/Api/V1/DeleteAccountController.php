@@ -468,10 +468,18 @@ class DeleteAccountController extends Controller
             });
 
             // Send confirmation email
-            \Mail::raw("Your account deletion request has been submitted and verified. Our admin team will review and process your request shortly.", function ($message) use ($user) {
+            $appName = config('app.name', 'OUPTEL');
+            $userName = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
+            $userName = $userName !== '' ? $userName : ($user->username ?? 'there');
+            $subject = $appName . ' - Account Deletion Request Confirmed';
+            $plainText = "Hello {$userName},\n\nYour {$appName} account deletion request has been verified and submitted successfully.\n\nYour account is temporarily deactivated. Our admin team will review your request and process permanent deletion shortly.\n\nIf you did not request this, please contact support immediately.\n\nThank you for being part of {$appName}.";
+            Mail::send('emails.account-deletion-request-confirmed', [
+                'appName' => $appName,
+                'userName' => $userName,
+            ], function ($message) use ($user, $subject, $plainText) {
                 $message->to($user->email)
-                    ->subject('Account Deletion Request Confirmed')
-                    ->from(config('mail.from.address'));
+                    ->subject($subject)
+                    ->text($plainText);
             });
 
             return response()->json([
