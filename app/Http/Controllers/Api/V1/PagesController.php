@@ -369,6 +369,25 @@ class PagesController extends BaseController
             
             $page->save();
 
+            $imageUpdateData = [];
+            $imageErrors = [];
+            $this->collectPageImageUploads($request, (int) $page->page_id, $page, $imageUpdateData, $imageErrors);
+
+            if (!empty($imageErrors)) {
+                DB::rollBack();
+
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => $imageErrors,
+                ], 400);
+            }
+
+            if (!empty($imageUpdateData)) {
+                DB::table('Wo_Pages')
+                    ->where('page_id', $page->page_id)
+                    ->update($imageUpdateData);
+            }
+
             // Get sub category name if available
             $subCategoryName = '';
             if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
@@ -731,74 +750,7 @@ class PagesController extends BaseController
             }
 
             // Handle avatar upload if provided
-            if ($request->hasFile('avatar')) {
-                $avatar = $request->file('avatar');
-                if ($avatar && $avatar->isValid()) {
-                    // Validate image
-                    $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                    if (!in_array($avatar->getMimeType(), $allowedMimes)) {
-                        $errors[] = 'Avatar must be a valid image (JPEG, PNG, GIF, or WebP)';
-                    } elseif ($avatar->getSize() > 5 * 1024 * 1024) { // 5MB max
-                        $errors[] = 'Avatar file size must be less than 5MB';
-                    } else {
-                        // Delete old avatar if it exists and is not a default image
-                        $oldAvatar = $page->avatar ?? '';
-                        if (!empty($oldAvatar) && 
-                            !str_contains($oldAvatar, 'd-page.jpg') && 
-                            !str_contains($oldAvatar, 'd-avatar.jpg') &&
-                            Storage::disk('public')->exists($oldAvatar)) {
-                            Storage::disk('public')->delete($oldAvatar);
-                        }
-                        
-                        // Store avatar using WoWonder path format (upload/photos/)
-                        $extension = $avatar->getClientOriginalExtension();
-                        $filename = 'page_avatar_' . $id . '_' . time() . '.' . $extension;
-                        $avatarPath = $avatar->storeAs('upload/photos/' . date('Y/m'), $filename, 'public');
-                        if ($avatarPath) {
-                            $updateData['avatar'] = $avatarPath;
-                        } else {
-                            $errors[] = 'Failed to upload avatar';
-                        }
-                    }
-                } else {
-                    $errors[] = 'Invalid avatar file';
-                }
-            }
-
-            // Handle cover upload if provided
-            if ($request->hasFile('cover')) {
-                $cover = $request->file('cover');
-                if ($cover && $cover->isValid()) {
-                    // Validate image
-                    $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-                    if (!in_array($cover->getMimeType(), $allowedMimes)) {
-                        $errors[] = 'Cover must be a valid image (JPEG, PNG, GIF, or WebP)';
-                    } elseif ($cover->getSize() > 10 * 1024 * 1024) { // 10MB max
-                        $errors[] = 'Cover file size must be less than 10MB';
-                    } else {
-                        // Delete old cover if it exists and is not a default image
-                        $oldCover = $page->cover ?? '';
-                        if (!empty($oldCover) && 
-                            !str_contains($oldCover, 'd-cover.jpg') && 
-                            !str_contains($oldCover, 'cover.jpg') &&
-                            Storage::disk('public')->exists($oldCover)) {
-                            Storage::disk('public')->delete($oldCover);
-                        }
-                        
-                        // Store cover using WoWonder path format (upload/photos/)
-                        $extension = $cover->getClientOriginalExtension();
-                        $filename = 'page_cover_' . $id . '_' . time() . '.' . $extension;
-                        $coverPath = $cover->storeAs('upload/photos/' . date('Y/m'), $filename, 'public');
-                        if ($coverPath) {
-                            $updateData['cover'] = $coverPath;
-                        } else {
-                            $errors[] = 'Failed to upload cover';
-                        }
-                    }
-                } else {
-                    $errors[] = 'Invalid cover file';
-                }
-            }
+            $this->collectPageImageUploads($request, (int) $id, $page, $updateData, $errors);
 
             // Return errors if any
             if (!empty($errors)) {
@@ -2558,6 +2510,86 @@ class PagesController extends BaseController
                     'error_text' => 'Failed to get page admins: ' . $e->getMessage()
                 ]
             ], 500);
+        }
+    }
+
+    /**
+     * Handle optional page avatar and cover uploads.
+     *
+     * @param array<string, mixed> $updateData
+     * @param array<int, string> $errors
+     */
+    private function collectPageImageUploads(
+        Request $request,
+        int $pageId,
+        ?Page $page,
+        array &$updateData,
+        array &$errors = []
+    ): void {
+        if ($request->hasFile('avatar')) {
+            $avatar = $request->file('avatar');
+            if ($avatar && $avatar->isValid()) {
+                $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                if (!in_array($avatar->getMimeType(), $allowedMimes, true)) {
+                    $errors[] = 'Avatar must be a valid image (JPEG, PNG, GIF, or WebP)';
+                } elseif ($avatar->getSize() > 5 * 1024 * 1024) {
+                    $errors[] = 'Avatar file size must be less than 5MB';
+                } else {
+                    $oldAvatar = $page->avatar ?? '';
+                    if (
+                        !empty($oldAvatar)
+                        && !str_contains($oldAvatar, 'd-page.jpg')
+                        && !str_contains($oldAvatar, 'd-avatar.jpg')
+                        && Storage::disk('public')->exists($oldAvatar)
+                    ) {
+                        Storage::disk('public')->delete($oldAvatar);
+                    }
+
+                    $extension = $avatar->getClientOriginalExtension();
+                    $filename = 'page_avatar_' . $pageId . '_' . time() . '.' . $extension;
+                    $avatarPath = $avatar->storeAs('upload/photos/' . date('Y/m'), $filename, 'public');
+                    if ($avatarPath) {
+                        $updateData['avatar'] = $avatarPath;
+                    } else {
+                        $errors[] = 'Failed to upload avatar';
+                    }
+                }
+            } else {
+                $errors[] = 'Invalid avatar file';
+            }
+        }
+
+        if ($request->hasFile('cover')) {
+            $cover = $request->file('cover');
+            if ($cover && $cover->isValid()) {
+                $allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+                if (!in_array($cover->getMimeType(), $allowedMimes, true)) {
+                    $errors[] = 'Cover must be a valid image (JPEG, PNG, GIF, or WebP)';
+                } elseif ($cover->getSize() > 10 * 1024 * 1024) {
+                    $errors[] = 'Cover file size must be less than 10MB';
+                } else {
+                    $oldCover = $page->cover ?? '';
+                    if (
+                        !empty($oldCover)
+                        && !str_contains($oldCover, 'd-cover.jpg')
+                        && !str_contains($oldCover, 'cover.jpg')
+                        && Storage::disk('public')->exists($oldCover)
+                    ) {
+                        Storage::disk('public')->delete($oldCover);
+                    }
+
+                    $extension = $cover->getClientOriginalExtension();
+                    $filename = 'page_cover_' . $pageId . '_' . time() . '.' . $extension;
+                    $coverPath = $cover->storeAs('upload/photos/' . date('Y/m'), $filename, 'public');
+                    if ($coverPath) {
+                        $updateData['cover'] = $coverPath;
+                    } else {
+                        $errors[] = 'Failed to upload cover';
+                    }
+                }
+            } else {
+                $errors[] = 'Invalid cover file';
+            }
         }
     }
 
