@@ -93,6 +93,9 @@ Route::get('/pages/search', [PagesController::class, 'search']); // Search pages
 Route::get('/pages/{id}/posts', [PagesController::class, 'getPosts']); // Get posts for a page (must be before /pages/{id})
 Route::get('/pages/{id}/analytics', [PagesController::class, 'analytics']); // Get page analytics (old API: ajax_loading.php?link1=page-setting&page={page_name}&link3=analytics) - Must be before /pages/{id}
 Route::get('/pages/{id}/admins', [PagesController::class, 'getPageAdmins']); // Get page admins (old API: ajax_loading.php?link1=page-setting&page={page_name}&link3=admins) - Must be before /pages/{id}
+Route::get('/pages/{id}/verification', [PagesController::class, 'getPageVerificationStatus']);
+Route::post('/pages/{id}/verification/request', [PagesController::class, 'requestPageVerification']);
+Route::post('/pages/{id}/verification/cancel', [PagesController::class, 'cancelPageVerification']);
 Route::get('/pages/{id}', [PagesController::class, 'show']); // Get page by ID
 Route::post('/pages', [PagesController::class, 'store']);
 Route::put('/pages/{id}', [PagesController::class, 'update']); // Update page (Edit page)

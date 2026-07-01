@@ -725,7 +725,8 @@ class PagesController extends BaseController
                         if ($this->supportsPageVerificationRequests()) {
                             $existingRequest = DB::table('Wo_Verification_Requests')
                                 ->where('page_id', $id)
-                                ->where('seen', 0) // Not yet reviewed
+                                ->where('type', 'Page')
+                                ->where('status', 'pending')
                                 ->first();
                             
                             if (!$existingRequest) {
@@ -734,11 +735,15 @@ class PagesController extends BaseController
                                     'page_id' => $id,
                                     'user_id' => $userId,
                                     'type' => 'Page',
+                                    'status' => 'pending',
                                     'seen' => 0,
                                     'message' => $request->input('verification_message', ''),
-                                    'user_name' => '',
+                                    'user_name' => $page->page_title ?? $page->page_name ?? '',
                                     'passport' => '',
                                     'photo' => '',
+                                    'submitted_at' => now(),
+                                    'created_at' => now(),
+                                    'updated_at' => now(),
                                 ]);
                                 $verificationRequestSubmitted = true;
                             } else {
@@ -791,7 +796,8 @@ class PagesController extends BaseController
             if ($this->supportsPageVerificationRequests()) {
                 $pendingRequest = DB::table('Wo_Verification_Requests')
                     ->where('page_id', $id)
-                    ->where('seen', 0)
+                    ->where('type', 'Page')
+                    ->where('status', 'pending')
                     ->first();
                 
                 if ($pendingRequest) {
@@ -1290,6 +1296,7 @@ class PagesController extends BaseController
                     'is_liked' => $isLiked,
                     'is_owner' => $tokenUserId && $page->user_id == $tokenUserId,
                     'owner' => $owner,
+                    'verification_status' => $this->resolvePageVerificationStatus((int) $id, $page),
                     'created_at' => isset($page->created_at) ? date('c', strtotime($page->created_at)) : null,
                 ]
             ];
@@ -2514,6 +2521,268 @@ class PagesController extends BaseController
                 ]
             ], 500);
         }
+    }
+
+    /**
+     * Get page verification status for the page owner.
+     */
+    public function getPageVerificationStatus(Request $request, $id): JsonResponse
+    {
+        $auth = $this->resolvePagesAuthUser($request);
+        if (!$auth['user_id']) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $page = Page::find($id);
+        if (!$page) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'Page not found'],
+            ], 404);
+        }
+
+        if ((int) $page->user_id !== (int) $auth['user_id']) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'You are not the page owner'],
+            ], 403);
+        }
+
+        return response()->json([
+            'api_status' => 200,
+            'data' => $this->buildPageVerificationPayload((int) $id, $page),
+        ]);
+    }
+
+    /**
+     * Submit a page verification request.
+     */
+    public function requestPageVerification(Request $request, $id): JsonResponse
+    {
+        $auth = $this->resolvePagesAuthUser($request);
+        if (!$auth['user_id']) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $page = Page::find($id);
+        if (!$page) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'Page not found'],
+            ], 404);
+        }
+
+        if ((int) $page->user_id !== (int) $auth['user_id']) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'You are not the page owner'],
+            ], 403);
+        }
+
+        if ($page->verified == '1' || $page->verified === true) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'This page is already verified'],
+            ], 400);
+        }
+
+        if (!$this->supportsPageVerificationRequests()) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'Page verification is not available'],
+            ], 400);
+        }
+
+        $validated = $request->validate([
+            'message' => ['nullable', 'string', 'max:500'],
+            'document' => ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,pdf', 'max:10240'],
+        ]);
+
+        $pendingRequest = DB::table('Wo_Verification_Requests')
+            ->where('page_id', $id)
+            ->where('type', 'Page')
+            ->where('status', 'pending')
+            ->first();
+
+        if ($pendingRequest) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'A verification request is already pending review'],
+            ], 400);
+        }
+
+        $documentPath = '';
+        if ($request->hasFile('document')) {
+            $document = $request->file('document');
+            if ($document && $document->isValid()) {
+                $extension = $document->getClientOriginalExtension();
+                $filename = 'page_verification_' . $id . '_' . time() . '.' . $extension;
+                $stored = $document->storeAs('upload/verification/' . date('Y/m'), $filename, 'public');
+                if ($stored) {
+                    $documentPath = $stored;
+                }
+            }
+        }
+
+        DB::table('Wo_Verification_Requests')->insert([
+            'page_id' => (int) $id,
+            'user_id' => (int) $auth['user_id'],
+            'user_name' => $page->page_title ?? $page->page_name ?? '',
+            'type' => 'Page',
+            'status' => 'pending',
+            'seen' => 0,
+            'message' => $validated['message'] ?? '',
+            'passport' => $documentPath,
+            'photo' => '',
+            'submitted_at' => now(),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        return response()->json([
+            'api_status' => 200,
+            'message' => 'Your verification request was sent successfully',
+            'data' => $this->buildPageVerificationPayload((int) $id, $page->fresh()),
+        ]);
+    }
+
+    /**
+     * Cancel a pending page verification request.
+     */
+    public function cancelPageVerification(Request $request, $id): JsonResponse
+    {
+        $auth = $this->resolvePagesAuthUser($request);
+        if (!$auth['user_id']) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $page = Page::find($id);
+        if (!$page) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'Page not found'],
+            ], 404);
+        }
+
+        if ((int) $page->user_id !== (int) $auth['user_id']) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'You are not the page owner'],
+            ], 403);
+        }
+
+        if (!$this->supportsPageVerificationRequests()) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'Page verification is not available'],
+            ], 400);
+        }
+
+        $deleted = DB::table('Wo_Verification_Requests')
+            ->where('page_id', $id)
+            ->where('type', 'Page')
+            ->where('status', 'pending')
+            ->delete();
+
+        if (!$deleted) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => ['error_text' => 'No pending verification request found'],
+            ], 400);
+        }
+
+        return response()->json([
+            'api_status' => 200,
+            'message' => 'Your verification request was removed successfully',
+            'data' => $this->buildPageVerificationPayload((int) $id, $page),
+        ]);
+    }
+
+    /**
+     * @return array{user_id: int|null}
+     */
+    private function resolvePagesAuthUser(Request $request): array
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return ['user_id' => null];
+        }
+
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+
+        return ['user_id' => $userId ? (int) $userId : null];
+    }
+
+    private function resolvePageVerificationStatus(int $pageId, Page $page): string
+    {
+        if ($page->verified == '1' || $page->verified === true) {
+            return 'verified';
+        }
+
+        if (!$this->supportsPageVerificationRequests()) {
+            return 'not_verified';
+        }
+
+        $pending = DB::table('Wo_Verification_Requests')
+            ->where('page_id', $pageId)
+            ->where('type', 'Page')
+            ->where('status', 'pending')
+            ->exists();
+
+        if ($pending) {
+            return 'pending';
+        }
+
+        $rejected = DB::table('Wo_Verification_Requests')
+            ->where('page_id', $pageId)
+            ->where('type', 'Page')
+            ->where('status', 'rejected')
+            ->orderByDesc('id')
+            ->first();
+
+        return $rejected ? 'rejected' : 'not_verified';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildPageVerificationPayload(int $pageId, Page $page): array
+    {
+        $status = $this->resolvePageVerificationStatus($pageId, $page);
+        $payload = [
+            'page_id' => $pageId,
+            'verified' => (bool) ($page->verified ?? false),
+            'verification_status' => $status,
+            'can_request' => $status === 'not_verified' || $status === 'rejected',
+            'can_cancel' => $status === 'pending',
+        ];
+
+        if (!$this->supportsPageVerificationRequests()) {
+            return $payload;
+        }
+
+        $latestRequest = DB::table('Wo_Verification_Requests')
+            ->where('page_id', $pageId)
+            ->where('type', 'Page')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($latestRequest) {
+            $payload['request'] = [
+                'id' => $latestRequest->id,
+                'status' => $latestRequest->status ?? 'pending',
+                'message' => $latestRequest->message ?? '',
+                'submitted_at' => $latestRequest->submitted_at ?? $latestRequest->created_at ?? null,
+                'reviewed_at' => $latestRequest->reviewed_at ?? null,
+                'rejection_reason' => $latestRequest->rejection_reason ?? null,
+                'document_url' => !empty($latestRequest->passport)
+                    ? $this->getFileUrl($latestRequest->passport)
+                    : null,
+            ];
+        }
+
+        return $payload;
     }
 
     /**

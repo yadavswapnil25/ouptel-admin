@@ -279,20 +279,31 @@ class VerificationRequest extends Model
      * @param int $adminUserId Admin user who approved
      * @return bool
      */
+    public function isPageVerification(): bool
+    {
+        return strcasecmp((string) ($this->type ?? ''), 'Page') === 0
+            && !empty($this->page_id);
+    }
+
     public function approve(int $adminUserId): bool
     {
         $this->status = self::STATUS_APPROVED;
         $this->reviewed_at = now();
         $this->reviewed_by = $adminUserId;
         $this->rejection_reason = null;
+        $this->seen = 1;
         
         if ($this->save()) {
-            // Update user's verified status
-            \Illuminate\Support\Facades\DB::table('Wo_Users')
-                ->where('user_id', $this->user_id)
-                ->update(['verified' => '1']);
+            if ($this->isPageVerification()) {
+                \Illuminate\Support\Facades\DB::table('Wo_Pages')
+                    ->where('page_id', $this->page_id)
+                    ->update(['verified' => '1']);
+            } elseif ($this->badge_type) {
+                \Illuminate\Support\Facades\DB::table('Wo_Users')
+                    ->where('user_id', $this->user_id)
+                    ->update(['verified' => '1']);
+            }
             
-            // Send notification to user
             $this->sendVerificationNotification(true);
             
             return true;
@@ -314,6 +325,7 @@ class VerificationRequest extends Model
         $this->reviewed_at = now();
         $this->reviewed_by = $adminUserId;
         $this->rejection_reason = $reason;
+        $this->seen = 1;
         
         if ($this->save()) {
             // Send notification to user
@@ -333,13 +345,22 @@ class VerificationRequest extends Model
      */
     protected function sendVerificationNotification(bool $approved): void
     {
-        $badgeName = $this->badge_type === 'golden' ? 'golden' : 'blue';
-        
-        if ($approved) {
-            $text = "Your account has been verified. Now you have a {$badgeName} badge.";
+        if ($this->isPageVerification()) {
+            if ($approved) {
+                $text = 'Your page verification request has been approved. Your page is now verified.';
+            } else {
+                $reasonText = self::REJECTION_REASONS[$this->rejection_reason] ?? $this->rejection_reason;
+                $text = "Your page verification request was rejected because {$reasonText} You may submit a new request.";
+            }
         } else {
-            $reasonText = self::REJECTION_REASONS[$this->rejection_reason] ?? $this->rejection_reason;
-            $text = "Your account verification is unsuccessful because {$reasonText} Kindly resubmit Account Verification.";
+            $badgeName = $this->badge_type === 'golden' ? 'golden' : 'blue';
+            
+            if ($approved) {
+                $text = "Your account has been verified. Now you have a {$badgeName} badge.";
+            } else {
+                $reasonText = self::REJECTION_REASONS[$this->rejection_reason] ?? $this->rejection_reason;
+                $text = "Your account verification is unsuccessful because {$reasonText} Kindly resubmit Account Verification.";
+            }
         }
 
         // Insert notification into Wo_Notifications table

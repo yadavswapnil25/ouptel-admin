@@ -219,6 +219,20 @@ class VerificationRequestsResource extends Resource
                     ->sortable()
                     ->limit(30),
 
+                TextColumn::make('type')
+                    ->label('Type')
+                    ->badge()
+                    ->color(fn (?string $state): string => strcasecmp((string) $state, 'Page') === 0 ? 'info' : 'gray')
+                    ->formatStateUsing(fn (?string $state): string => strcasecmp((string) $state, 'Page') === 0 ? '📄 Page' : '👤 User')
+                    ->toggleable(),
+
+                TextColumn::make('page.page_title')
+                    ->label('Page')
+                    ->searchable()
+                    ->limit(30)
+                    ->toggleable()
+                    ->placeholder('—'),
+
                 TextColumn::make('badge_type')
                     ->label('Badge Type')
                     ->badge()
@@ -288,6 +302,13 @@ class VerificationRequestsResource extends Resource
                     ->toggledHiddenByDefault(),
             ])
             ->filters([
+                SelectFilter::make('type')
+                    ->label('Verification Type')
+                    ->options([
+                        'User' => 'User Verification',
+                        'Page' => 'Page Verification',
+                    ]),
+
                 SelectFilter::make('status')
                     ->label('Status')
                     ->options([
@@ -322,16 +343,20 @@ class VerificationRequestsResource extends Resource
                     ->color('success')
                     ->requiresConfirmation()
                     ->modalHeading('Approve Verification Request')
-                    ->modalDescription(fn ($record) => "Are you sure you want to approve this verification request for {$record->user_name}? They will receive a {$record->badge_type} badge.")
+                    ->modalDescription(fn ($record) => $record->isPageVerification()
+                        ? "Are you sure you want to approve verification for page \"{$record->user_name}\"?"
+                        : "Are you sure you want to approve this verification request for {$record->user_name}? They will receive a {$record->badge_type} badge.")
                     ->modalSubmitActionLabel('Yes, Approve')
-                    ->visible(fn ($record) => $record->badge_type !== null && $record->status === 'pending')
+                    ->visible(fn ($record) => $record->status === 'pending' && ($record->badge_type !== null || $record->isPageVerification()))
                     ->action(function ($record) {
                         $adminUserId = Auth::id() ?? 1; // Get current admin user ID
                         
                         if ($record->approve($adminUserId)) {
                             Notification::make()
                                 ->title('Verification Approved')
-                                ->body("User {$record->user_name} has been verified with a {$record->badge_type} badge.")
+                                ->body($record->isPageVerification()
+                                    ? "Page \"{$record->user_name}\" has been verified."
+                                    : "User {$record->user_name} has been verified with a {$record->badge_type} badge.")
                                 ->success()
                                 ->send();
                         } else {
@@ -359,7 +384,7 @@ class VerificationRequestsResource extends Resource
                             ->helperText('The user will be notified with this reason.'),
                     ])
                     ->modalSubmitActionLabel('Reject Request')
-                    ->visible(fn ($record) => $record->badge_type !== null && $record->status === 'pending')
+                    ->visible(fn ($record) => $record->status === 'pending' && ($record->badge_type !== null || $record->isPageVerification()))
                     ->action(function ($record, array $data) {
                         $adminUserId = Auth::id() ?? 1; // Get current admin user ID
                         
