@@ -32,12 +32,12 @@ class AccountVerificationController extends Controller
                     [
                         'key' => 'blue',
                         'name' => 'Blue Badge',
-                        'description' => 'For all regular users who want to verify their identity.',
+                        'description' => 'For regular users who want to verify their identity, build trust, and let others know their profile is authentic. Perfect for individuals, professionals, and everyday users.',
                     ],
                     [
                         'key' => 'golden',
                         'name' => 'Golden Badge',
-                        'description' => 'For VIPs, Celebrities and Well Known People only.',
+                        'description' => 'Reserved for VIPs, celebrities, public figures, renowned professionals, and well-known personalities. The Golden Badge signifies a highly recognized and officially verified profile.',
                     ],
                 ],
                 'rejection_reasons' => array_map(function ($key, $value) {
