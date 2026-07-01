@@ -307,6 +307,20 @@ class DeleteAccountController extends Controller
                 ], 422);
             }
 
+            $hasPendingRequest = DB::table('Wo_AccountDeletionRequests')
+                ->where('user_id', $tokenUserId)
+                ->where('status', 'pending')
+                ->exists();
+
+            if ($hasPendingRequest || (string) $user->active === '2') {
+                return response()->json([
+                    'api_status' => '400',
+                    'api_text' => 'failed',
+                    'api_version' => '1.0',
+                    'errors' => ['error_text' => 'An account deletion request is already pending for this account.']
+                ], 409);
+            }
+
             // Generate 6-digit OTP
             $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
@@ -422,23 +436,36 @@ class DeleteAccountController extends Controller
                 ], 403);
             }
 
-            // Store deletion request with reason
-            DB::table('Wo_AccountDeletionRequests')->insert([
-                'user_id' => $tokenUserId,
-                'deletion_reason' => $request->input('deletion_reason'),
-                'deletion_reason_other' => $request->input('deletion_reason_other'),
-                'status' => 'pending',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
+            $hasPendingRequest = DB::table('Wo_AccountDeletionRequests')
+                ->where('user_id', $tokenUserId)
+                ->where('status', 'pending')
+                ->exists();
 
-            // Soft-delete: mark account as pending deletion
-            DB::table('Wo_Users')->where('user_id', $tokenUserId)->update([
-                'active' => '2',
-            ]);
+            if ($hasPendingRequest || (string) $user->active === '2') {
+                return response()->json([
+                    'api_status' => '400',
+                    'api_text' => 'failed',
+                    'api_version' => '1.0',
+                    'errors' => ['error_text' => 'An account deletion request is already pending for this user.']
+                ], 409);
+            }
 
-            // End all sessions immediately
-            DB::table('Wo_AppsSessions')->where('user_id', $tokenUserId)->delete();
+            DB::transaction(function () use ($tokenUserId, $request) {
+                DB::table('Wo_AccountDeletionRequests')->insert([
+                    'user_id' => $tokenUserId,
+                    'deletion_reason' => $request->input('deletion_reason'),
+                    'deletion_reason_other' => $request->input('deletion_reason_other'),
+                    'status' => 'pending',
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+
+                DB::table('Wo_Users')->where('user_id', $tokenUserId)->update([
+                    'active' => '2',
+                ]);
+
+                DB::table('Wo_AppsSessions')->where('user_id', $tokenUserId)->delete();
+            });
 
             // Send confirmation email
             \Mail::raw("Your account deletion request has been submitted and verified. Our admin team will review and process your request shortly.", function ($message) use ($user) {
