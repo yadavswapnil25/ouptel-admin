@@ -8,6 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 
 class DeleteAccountController extends Controller
@@ -307,16 +308,19 @@ class DeleteAccountController extends Controller
             }
 
             // Generate 6-digit OTP
-            $otp = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
+            $otp = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
 
             // Store OTP in cache with 10-minute expiry
             cache()->put('deletion_otp_' . $tokenUserId, $otp, now()->addMinutes(10));
 
-            // Send OTP email
-            \Mail::raw("Your account deletion OTP is: $otp\n\nThis OTP expires in 10 minutes.", function ($message) use ($user) {
+            // Send OTP email (same template style as signup verification)
+            $appName = config('app.name', 'OUPTEL');
+            $subject = $appName . ' - Account Deletion Verification Code';
+            $plainText = "Your {$appName} account deletion verification code is: {$otp}\n\nThis code expires in 10 minutes. Do not share it with anyone.";
+            Mail::send('emails.account-deletion-verification-code', ['code' => $otp, 'appName' => $appName], function ($message) use ($user, $subject, $plainText) {
                 $message->to($user->email)
-                    ->subject('Account Deletion Verification - OTP')
-                    ->from(config('mail.from.address'));
+                    ->subject($subject)
+                    ->text($plainText);
             });
 
             return response()->json([
