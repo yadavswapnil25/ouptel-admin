@@ -722,7 +722,7 @@ class PagesController extends BaseController
                     } elseif (in_array($normalized, ['pending', 'request', 'pending_request'])) {
                         // For pending/request status, check if verification request table exists
                         // and create a verification request record if it doesn't exist
-                        if (DB::getSchemaBuilder()->hasTable('Wo_Verification_Requests')) {
+                        if ($this->supportsPageVerificationRequests()) {
                             $existingRequest = DB::table('Wo_Verification_Requests')
                                 ->where('page_id', $id)
                                 ->where('seen', 0) // Not yet reviewed
@@ -788,7 +788,7 @@ class PagesController extends BaseController
             $verificationRequestStatus = null;
             $verificationStatus = 'not_verified'; // Default status
             
-            if (DB::getSchemaBuilder()->hasTable('Wo_Verification_Requests')) {
+            if ($this->supportsPageVerificationRequests()) {
                 $pendingRequest = DB::table('Wo_Verification_Requests')
                     ->where('page_id', $id)
                     ->where('seen', 0)
@@ -2514,6 +2514,15 @@ class PagesController extends BaseController
                 ]
             ], 500);
         }
+    }
+
+    /**
+     * Legacy page verification used Wo_Verification_Requests.page_id; user badge flow uses user_id only.
+     */
+    private function supportsPageVerificationRequests(): bool
+    {
+        return Schema::hasTable('Wo_Verification_Requests')
+            && Schema::hasColumn('Wo_Verification_Requests', 'page_id');
     }
 
     /**
