@@ -226,6 +226,16 @@ class DeleteAccountController extends Controller
                 'message' => 'Account deletion request submitted. Your account is temporarily deactivated and pending admin confirmation for permanent deletion.'
             ]);
 
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => '500',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => '10',
+                    'error_text' => 'Failed to request account deletion: ' . $e->getMessage()
+                ]
+            ], 500);
         }
     }
 
