@@ -402,6 +402,8 @@ Route::post('/my-information/download', [MyInformationController::class, 'downlo
 // Delete account routes (mimics old WoWonder API)
 Route::post('/account/delete', [DeleteAccountController::class, 'deleteAccount']);
 Route::post('/account/delete-request', [DeleteAccountController::class, 'requestAccountDeletion']);
+Route::post('/account/request-deletion-otp', [DeleteAccountController::class, 'requestDeletionOtp']);
+Route::post('/account/delete-with-otp', [DeleteAccountController::class, 'deleteAccountWithOtp']);
 Route::delete('/account', [DeleteAccountController::class, 'deleteAccount']);
 
 // Search routes (matching old API structure: search.php, search_for_posts.php, recent_search.php)
