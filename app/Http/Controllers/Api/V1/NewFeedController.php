@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Helpers\PostMediaHelper;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -496,6 +497,8 @@ class NewFeedController extends Controller
             if (!empty($post->postFeeling)) {
                 $feelingData = $this->getFeelingData($post->postFeeling);
             }
+
+            $postType = $this->getPostType($post);
             
             return [
                 'id' => $post->id,
@@ -506,7 +509,7 @@ class NewFeedController extends Controller
                 'tagged_friends' => $taggedFriends,
                 'tagged_friends_count' => count($taggedFriends),
                 'post_text' => $post->postText ?? '',
-                'post_type' => $this->getPostType($post),
+                'post_type' => $postType,
                 'post_privacy' => $post->postPrivacy ?? '0',
                 'post_privacy_text' => $this->getPostPrivacyText($post->postPrivacy ?? '0'),
                 
@@ -519,7 +522,7 @@ class NewFeedController extends Controller
                 'post_video_url' => $this->getPostVideoUrl($post),
                 'post_record' => $post->postRecord ?? '',
                 'post_record_url' => $this->getPostRecordUrl($post),
-                'post_youtube' => $post->postYoutube ?? '',
+                'post_youtube' => PostMediaHelper::sanitizeYoutubeForResponse($post, $postType),
                 'post_vimeo' => $post->postVimeo ?? '',
                 'post_dailymotion' => $post->postDailymotion ?? '',
                 'post_facebook' => $post->postFacebook ?? '',
