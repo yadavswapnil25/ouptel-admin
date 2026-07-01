@@ -435,7 +435,6 @@ class DeleteAccountController extends Controller
             // Soft-delete: mark account as pending deletion
             DB::table('Wo_Users')->where('user_id', $tokenUserId)->update([
                 'active' => '2',
-                'updated_at' => now(),
             ]);
 
             // End all sessions immediately
