@@ -51,19 +51,17 @@ class ManageReports extends Page implements HasTable
                     ->getStateUsing(fn ($record) => $record->report_type_display)
                     ->badge()
                     ->color(fn ($record) => match($record->report_type) {
-                        'post' => 'blue',
-                        'profile' => 'green',
-                        'page' => 'yellow',
-                        'group' => 'purple',
-                        'comment' => 'orange',
+                        'post' => 'info',
+                        'profile' => 'success',
+                        'page' => 'warning',
+                        'group' => 'primary',
+                        'comment' => 'gray',
                         default => 'gray',
                     }),
 
                 TextColumn::make('reporter.username')
                     ->label('Reporter')
-                    ->getStateUsing(fn ($record) => $record->reporter ? $record->reporter->username : 'Unknown')
-                    ->sortable()
-                    ->searchable(),
+                    ->getStateUsing(fn ($record) => $record->reporter ? $record->reporter->username : 'Unknown'),
 
                 TextColumn::make('reported_content')
                     ->label('Reported Content')
@@ -83,7 +81,7 @@ class ManageReports extends Page implements HasTable
                 TextColumn::make('reported_at_human')
                     ->label('Reported')
                     ->getStateUsing(fn ($record) => $record->reported_at_human)
-                    ->sortable(),
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('time', $direction)),
 
                 IconColumn::make('is_seen')
                     ->label('Status')
@@ -105,7 +103,10 @@ class ManageReports extends Page implements HasTable
                         'comment' => 'Comment',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
-                        return $query->byType($data['value'] ?? null);
+                        return $query->when(
+                            filled($data['value'] ?? null),
+                            fn (Builder $q): Builder => $q->byType($data['value'])
+                        );
                     }),
 
                 SelectFilter::make('reason')
@@ -121,7 +122,10 @@ class ManageReports extends Page implements HasTable
                         'r_other' => 'Other',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
-                        return $query->byReason($data['value'] ?? null);
+                        return $query->when(
+                            filled($data['value'] ?? null),
+                            fn (Builder $q): Builder => $q->byReason($data['value'])
+                        );
                     }),
 
                 TernaryFilter::make('seen')
