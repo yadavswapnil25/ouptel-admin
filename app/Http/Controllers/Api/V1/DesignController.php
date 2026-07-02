@@ -7,6 +7,8 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
@@ -92,8 +94,8 @@ class DesignController extends Controller
                 'avatar' => $path
             ]);
 
-            // Get updated user data
-            $updatedUser = User::where('user_id', $tokenUserId)->first();
+            // Auto-publish a timeline post for the new profile picture (Facebook-style)
+            $newPostId = $this->createProfileMediaPost($tokenUserId, 'profile_picture', $path);
 
             return response()->json([
                 'api_status' => '200',
@@ -101,7 +103,8 @@ class DesignController extends Controller
                 'api_version' => '1.0',
                 'message' => 'Avatar updated successfully',
                 'avatar' => asset('storage/' . $path),
-                'avatar_path' => $path
+                'avatar_path' => $path,
+                'post_id' => $newPostId,
             ]);
 
         } catch (\Exception $e) {
@@ -196,13 +199,17 @@ class DesignController extends Controller
                 'cover' => $path
             ]);
 
+            // Auto-publish a timeline post for the new cover (Facebook-style)
+            $newPostId = $this->createProfileMediaPost($tokenUserId, 'profile_cover_picture', $path);
+
             return response()->json([
                 'api_status' => '200',
                 'api_text' => 'success',
                 'api_version' => '1.0',
                 'message' => 'Cover photo updated successfully',
                 'cover' => asset('storage/' . $path),
-                'cover_path' => $path
+                'cover_path' => $path,
+                'post_id' => $newPostId,
             ]);
 
         } catch (\Exception $e) {
@@ -466,6 +473,51 @@ class DesignController extends Controller
                     'error_text' => 'Failed to get design settings: ' . $e->getMessage()
                 ]
             ], 500);
+        }
+    }
+
+    /**
+     * Publish a timeline post when the user changes their profile/cover picture.
+     * Mimics WoWonder behaviour where updating avatar/cover creates a feed post.
+     *
+     * @param int|string $userId
+     * @param string $postType 'profile_picture' or 'profile_cover_picture'
+     * @param string $photoPath Storage-relative path of the new image
+     * @return int|null The new post id, or null if the post could not be created
+     */
+    private function createProfileMediaPost($userId, string $postType, string $photoPath): ?int
+    {
+        try {
+            $insertData = [
+                'user_id' => $userId,
+                'postText' => '',
+                'postType' => $postType,
+                'postPhoto' => $photoPath,
+                'postPrivacy' => '0',
+                'page_id' => 0,
+                'group_id' => 0,
+                'event_id' => 0,
+                'recipient_id' => 0,
+                'time' => time(),
+                'active' => 1,
+            ];
+
+            $newPostId = DB::table('Wo_Posts')->insertGetId($insertData);
+
+            // Keep post_id aligned with the primary key (WoWonder uses post_id as the public id)
+            if ($newPostId && Schema::hasColumn('Wo_Posts', 'post_id')) {
+                DB::table('Wo_Posts')->where('id', $newPostId)->update(['post_id' => $newPostId]);
+            }
+
+            return $newPostId ?: null;
+        } catch (\Throwable $e) {
+            // Never let auto-posting break the avatar/cover update itself
+            Log::warning('Failed to auto-create profile media post', [
+                'user_id' => $userId,
+                'post_type' => $postType,
+                'error' => $e->getMessage(),
+            ]);
+            return null;
         }
     }
 }
