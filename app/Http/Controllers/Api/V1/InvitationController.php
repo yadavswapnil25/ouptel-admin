@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
-use App\Models\EmailTemplate;
 use App\Models\Setting;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -78,51 +77,35 @@ class InvitationController extends Controller
             ], 404);
         }
 
-        $siteName = (string) (Setting::get('siteName') ?: config('app.name', 'Ouptel'));
+        $appName = (string) (Setting::get('siteName') ?: config('app.name', 'Ouptel'));
         $frontendBase = rtrim((string) config('app.frontend_url', config('app.url', '')), '/');
         $siteUrl = $frontendBase !== '' ? $frontendBase : rtrim((string) config('app.url', ''), '/');
-        $profileUrl = $siteUrl . '/profile/' . $user->user_id;
-        $inviterName = $user->full_name ?: $user->username ?: $siteName;
-        $backgroundColor = (string) (Setting::get('btn_background_color') ?: '#088dcd');
-
-        $template = EmailTemplate::getByName('invite');
-        $subject = $template?->subject ?: 'You have been invited';
-        $messageBody = $template?->message ?: (
-            '<p>Hi there,</p>'
-            . '<p>You have received an invitation request from your friend '
-            . '<a href="{{URL}}">{{NAME}}</a> to join {{SITE_NAME}}!</p>'
-            . '<p>Click the link below to accept the invitation:</p>'
-            . '<p><a href="{{URL}}">Accept Invitation</a></p>'
-            . '<p>Best regards,<br>{{SITE_NAME}} Team</p>'
-        );
-
-        $replacements = [
-            '{{USERNAME}}' => (string) ($user->username ?? ''),
-            '{{SITE_URL}}' => $siteUrl,
-            '{{NAME}}' => $inviterName,
-            '{{URL}}' => $profileUrl,
-            '{{SITE_NAME}}' => $siteName,
-            '{{BACKGOUND_COLOR}}' => $backgroundColor,
-        ];
-
-        $htmlBody = str_replace(array_keys($replacements), array_values($replacements), $messageBody);
-        $plainText = trim(preg_replace('/\s+/', ' ', strip_tags($htmlBody)) ?? '');
+        $joinLink = $siteUrl . '/signup';
+        $inviterName = $user->full_name ?: $user->username ?: $appName;
+        $accentColor = (string) (Setting::get('btn_background_color') ?: '#2457d3');
+        $subject = $appName . ' - You have been invited';
+        $plainText = "Hi there,\n\n{$inviterName} invited you to join {$appName}.\n\nCreate your account: {$joinLink}\n\nIf you were not expecting this invitation, you can safely ignore this email.";
 
         try {
-            Mail::send([], [], function ($mail) use ($email, $subject, $htmlBody, $plainText, $siteName) {
-                $mail->to($email)
-                    ->subject($subject)
-                    ->html($htmlBody);
+            Mail::send(
+                'emails.invite',
+                [
+                    'appName' => $appName,
+                    'inviterName' => $inviterName,
+                    'joinLink' => $joinLink,
+                    'accentColor' => $accentColor,
+                ],
+                function ($mail) use ($email, $subject, $plainText, $appName) {
+                    $mail->to($email)
+                        ->subject($subject)
+                        ->text($plainText);
 
-                if ($plainText !== '') {
-                    $mail->text($plainText);
+                    $fromEmail = Setting::get('siteEmail');
+                    if ($fromEmail) {
+                        $mail->from($fromEmail, $appName);
+                    }
                 }
-
-                $fromEmail = Setting::get('siteEmail');
-                if ($fromEmail) {
-                    $mail->from($fromEmail, $siteName);
-                }
-            });
+            );
         } catch (\Exception $e) {
             Log::error('Failed to send invite email: ' . $e->getMessage(), [
                 'inviter_id' => $userId,

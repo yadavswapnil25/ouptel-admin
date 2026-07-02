@@ -21,7 +21,7 @@ class EmailTemplateSeeder extends Seeder
             [
                 'email_to' => 'invite',
                 'subject' => 'You have been invited',
-                'message' => '<p>Hi there,</p><p>You have received an invitation request from your friend <a href="{{URL}}">{{NAME}}</a> to join {{SITE_NAME}}!</p><p>Click the link below to accept the invitation:</p><p><a href="{{URL}}">Accept Invitation</a></p><p>Best regards,<br>{{SITE_NAME}} Team</p>',
+                'message' => '<p>Hi there,</p><p><strong>{{NAME}}</strong> invited you to join <strong>{{SITE_NAME}}</strong>. Create your account and connect with colleagues on the platform.</p><p><a href="{{SITE_URL}}/signup" style="display:inline-block;background:{{BACKGOUND_COLOR}};color:#ffffff;text-decoration:none;padding:10px 16px;border-radius:8px;font-weight:600;">Join {{SITE_NAME}}</a></p><p style="font-size:13px;color:#6b7280;">If you were not expecting this invitation, you can safely ignore this email.</p>',
             ],
             [
                 'email_to' => 'login_with',
