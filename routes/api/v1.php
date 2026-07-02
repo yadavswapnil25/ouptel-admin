@@ -57,6 +57,7 @@ use App\Http\Controllers\Api\V1\HashtagController;
 use App\Http\Controllers\Api\V1\CommunityPreferenceController;
 use App\Http\Controllers\Api\V1\AdsController;
 use App\Http\Controllers\Api\V1\SurveyController;
+use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Api\V1\StatesController;
 
 Route::get('/ping', [PingController::class, 'index']);
@@ -447,4 +448,7 @@ Route::get('/ads/sponsored', [AdsController::class, 'sponsored']);
 // Survey popup routes
 Route::post('/survey/status', [SurveyController::class, 'status']);
 Route::post('/survey/submit', [SurveyController::class, 'submit']);
+
+// Invite colleague by email
+Route::post('/invitations/send-email', [InvitationController::class, 'sendEmail']);
 
