@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Helpers\SponsoredAdsHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
@@ -82,9 +83,7 @@ class AdsController extends Controller
     public function sponsored(): JsonResponse
     {
         try {
-            $item1 = $this->buildSponsoredItem(1);
-            $item2 = $this->buildSponsoredItem(2);
-            $items = array_values(array_filter([$item1, $item2], fn ($item) => !empty($item)));
+            $items = SponsoredAdsHelper::getForApi();
 
             return response()->json([
                 'api_status' => '200',
@@ -132,27 +131,6 @@ class AdsController extends Controller
         }
 
         return Storage::disk('public')->url($value);
-    }
-
-    private function buildSponsoredItem(int $index): array
-    {
-        $name = trim((string) Setting::get("sponsored_{$index}_name", ''));
-        $url = trim((string) Setting::get("sponsored_{$index}_url", ''));
-        $imageUpload = trim((string) Setting::get("sponsored_{$index}_image_upload", ''));
-        $image = trim((string) Setting::get("sponsored_{$index}_image", ''));
-
-        $imageUrl = $imageUpload !== '' ? $imageUpload : $image;
-        $imageUrl = $this->toPublicUrl($imageUrl);
-
-        if ($name === '' && $url === '' && $imageUrl === '') {
-            return [];
-        }
-
-        return [
-            'name' => $name !== '' ? $name : 'Sponsored',
-            'url' => $url !== '' ? $url : '#',
-            'image_url' => $imageUrl,
-        ];
     }
 }
 

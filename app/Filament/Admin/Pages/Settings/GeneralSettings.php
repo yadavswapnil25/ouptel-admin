@@ -8,11 +8,13 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Form;
 use Filament\Pages\Page;
 use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Models\Setting;
+use App\Helpers\SponsoredAdsHelper;
 use App\Filament\Admin\Concerns\HasPageAccess;
 
 class GeneralSettings extends Page
@@ -56,14 +58,7 @@ class GeneralSettings extends Page
             'sidebar_ad_image' => Setting::get('sidebar_ad_image', ''),
             'sidebar_ad_image_upload' => Setting::get('sidebar_ad_image_upload', ''),
             'sidebar_ad_url' => Setting::get('sidebar_ad_url', ''),
-            'sponsored_1_name' => Setting::get('sponsored_1_name', ''),
-            'sponsored_1_url' => Setting::get('sponsored_1_url', ''),
-            'sponsored_1_image' => Setting::get('sponsored_1_image', ''),
-            'sponsored_1_image_upload' => Setting::get('sponsored_1_image_upload', ''),
-            'sponsored_2_name' => Setting::get('sponsored_2_name', ''),
-            'sponsored_2_url' => Setting::get('sponsored_2_url', ''),
-            'sponsored_2_image' => Setting::get('sponsored_2_image', ''),
-            'sponsored_2_image_upload' => Setting::get('sponsored_2_image_upload', ''),
+            'sponsored_items' => SponsoredAdsHelper::loadForForm(),
         ]);
     }
 
@@ -230,44 +225,43 @@ class GeneralSettings extends Page
                     ->columns(1),
 
                 Section::make('Sponsored Section')
+                    ->description('Add multiple sponsored ads. They appear in the sidebar sponsored slider on the website.')
                     ->schema([
-                        TextInput::make('sponsored_1_name')
-                            ->label('Sponsored Item 1 Name')
-                            ->placeholder('IQ Options Broker'),
-                        TextInput::make('sponsored_1_url')
-                            ->label('Sponsored Item 1 URL')
-                            ->url()
-                            ->placeholder('https://example.com'),
-                        FileUpload::make('sponsored_1_image_upload')
-                            ->label('Sponsored Item 1 Image Upload')
-                            ->image()
-                            ->disk('public')
-                            ->directory('ads/sponsored')
-                            ->visibility('public'),
-                        TextInput::make('sponsored_1_image')
-                            ->label('Sponsored Item 1 Image URL')
-                            ->placeholder('https://example.com/sponsor-1.jpg')
-                            ->helperText('Optional URL fallback if upload is not used.'),
-
-                        TextInput::make('sponsored_2_name')
-                            ->label('Sponsored Item 2 Name')
-                            ->placeholder('BM Fashion Designer'),
-                        TextInput::make('sponsored_2_url')
-                            ->label('Sponsored Item 2 URL')
-                            ->url()
-                            ->placeholder('https://example.com'),
-                        FileUpload::make('sponsored_2_image_upload')
-                            ->label('Sponsored Item 2 Image Upload')
-                            ->image()
-                            ->disk('public')
-                            ->directory('ads/sponsored')
-                            ->visibility('public'),
-                        TextInput::make('sponsored_2_image')
-                            ->label('Sponsored Item 2 Image URL')
-                            ->placeholder('https://example.com/sponsor-2.jpg')
-                            ->helperText('Optional URL fallback if upload is not used.'),
+                        Repeater::make('sponsored_items')
+                            ->label('Sponsored Ads')
+                            ->schema([
+                                TextInput::make('name')
+                                    ->label('Ad Name')
+                                    ->placeholder('IQ Options Broker')
+                                    ->required()
+                                    ->columnSpan(1),
+                                TextInput::make('url')
+                                    ->label('Click URL')
+                                    ->url()
+                                    ->placeholder('https://example.com')
+                                    ->required()
+                                    ->columnSpan(1),
+                                FileUpload::make('image_upload')
+                                    ->label('Image Upload')
+                                    ->image()
+                                    ->disk('public')
+                                    ->directory('ads/sponsored')
+                                    ->visibility('public')
+                                    ->columnSpan(1),
+                                TextInput::make('image_url')
+                                    ->label('Image URL (fallback)')
+                                    ->placeholder('https://example.com/sponsor.jpg')
+                                    ->helperText('Used if no uploaded image is set.')
+                                    ->columnSpan(1),
+                            ])
+                            ->columns(2)
+                            ->defaultItems(0)
+                            ->addActionLabel('Add sponsored ad')
+                            ->reorderable()
+                            ->collapsible()
+                            ->itemLabel(fn (array $state): ?string => $state['name'] ?? null),
                     ])
-                    ->columns(2),
+                    ->columns(1),
             ])
             ->statePath('data');
     }
@@ -285,6 +279,12 @@ class GeneralSettings extends Page
     {
         try {
             $data = $this->form->getState();
+
+            if (array_key_exists('sponsored_items', $data)) {
+                SponsoredAdsHelper::saveFromForm(is_array($data['sponsored_items']) ? $data['sponsored_items'] : []);
+                unset($data['sponsored_items']);
+            }
+
             foreach ($data as $name => $value) {
                 Setting::set($name, $value);
             }
