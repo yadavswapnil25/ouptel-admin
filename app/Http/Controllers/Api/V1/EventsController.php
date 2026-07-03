@@ -52,14 +52,46 @@ class EventsController extends BaseController
         return (string) $time;
     }
 
-    private function mapEvent(Event $event): array
+    /**
+     * Resolve the authenticated user id from the Bearer token (Wo_AppsSessions).
+     */
+    private function resolveUserId(Request $request): ?int
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return null;
+        }
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+
+        return $userId ? (int) $userId : null;
+    }
+
+    private function mapEvent(Event $event, ?int $userId = null): array
     {
         // Determine if cover field contains an image path or text
         $isImagePath = $event->cover && (
             str_contains($event->cover, 'events/images/') || 
             str_contains($event->cover, 'events/covers/')
         );
-        
+
+        $isGoing = false;
+        $isInterested = false;
+        if ($userId) {
+            if (DB::getSchemaBuilder()->hasTable('Wo_Egoing')) {
+                $isGoing = DB::table('Wo_Egoing')
+                    ->where('event_id', $event->id)
+                    ->where('user_id', $userId)
+                    ->exists();
+            }
+            if (DB::getSchemaBuilder()->hasTable('Wo_Einterested')) {
+                $isInterested = DB::table('Wo_Einterested')
+                    ->where('event_id', $event->id)
+                    ->where('user_id', $userId)
+                    ->exists();
+            }
+        }
+
         return [
             'id' => $event->id,
             'name' => $event->name,
@@ -73,6 +105,8 @@ class EventsController extends BaseController
             'image_url' => $isImagePath ? asset('storage/' . $event->cover) : null,
             'cover_image_url' => null, // Since we store only one image in cover field
             'status' => $event->status_text,
+            'is_going' => $isGoing,
+            'is_interested' => $isInterested,
             'counts' => [
                 'going' => $event->going_count,
                 'interested' => $event->interested_count,
@@ -116,7 +150,8 @@ class EventsController extends BaseController
 
         $paginator = $query->paginate($perPage);
 
-        $data = $paginator->getCollection()->map(fn (Event $e) => $this->mapEvent($e));
+        $currentUserId = $this->resolveUserId($request);
+        $data = $paginator->getCollection()->map(fn (Event $e) => $this->mapEvent($e, $currentUserId));
 
         return response()->json([
             'data' => $data,
@@ -268,7 +303,7 @@ class EventsController extends BaseController
             ->select('Wo_Events.*');
 
         $paginator = $query->paginate($perPage);
-        $data = $paginator->getCollection()->map(fn ($e) => $this->mapEvent($e));
+        $data = $paginator->getCollection()->map(fn ($e) => $this->mapEvent($e, (int) $userId));
 
         return response()->json([
             'data' => $data,
@@ -303,7 +338,7 @@ class EventsController extends BaseController
             ->select('Wo_Events.*');
 
         $paginator = $query->paginate($perPage);
-        $data = $paginator->getCollection()->map(fn ($e) => $this->mapEvent($e));
+        $data = $paginator->getCollection()->map(fn ($e) => $this->mapEvent($e, (int) $userId));
 
         return response()->json([
             'data' => $data,
@@ -338,7 +373,7 @@ class EventsController extends BaseController
             ->select('Wo_Events.*');
 
         $paginator = $query->paginate($perPage);
-        $data = $paginator->getCollection()->map(fn ($e) => $this->mapEvent($e));
+        $data = $paginator->getCollection()->map(fn ($e) => $this->mapEvent($e, (int) $userId));
 
         return response()->json([
             'data' => $data,
@@ -368,7 +403,7 @@ class EventsController extends BaseController
 
         $query = Event::query()->where('poster_id', $userId)->orderByDesc('id');
         $paginator = $query->paginate($perPage);
-        $data = $paginator->getCollection()->map(fn ($e) => $this->mapEvent($e));
+        $data = $paginator->getCollection()->map(fn ($e) => $this->mapEvent($e, (int) $userId));
 
         return response()->json([
             'data' => $data,
@@ -481,6 +516,81 @@ class EventsController extends BaseController
             'go_status' => $goStatus,
             'data' => [
                 'going' => $goStatus === 'going',
+            ],
+        ]);
+    }
+
+    public function interestEvent(Request $request): JsonResponse
+    {
+        // Auth via Wo_AppsSessions
+        $userId = $this->resolveUserId($request);
+        if (!$userId) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'event_id' => ['required', 'integer'],
+        ]);
+
+        $eventId = $validated['event_id'];
+
+        $event = Event::find($eventId);
+        if (!$event) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Event not found',
+                ],
+            ], 400);
+        }
+
+        if (!DB::getSchemaBuilder()->hasTable('Wo_Einterested')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Event interested table does not exist',
+                ],
+            ], 400);
+        }
+
+        $isInterested = DB::table('Wo_Einterested')
+            ->where('event_id', $eventId)
+            ->where('user_id', $userId)
+            ->exists();
+
+        if ($isInterested) {
+            DB::table('Wo_Einterested')
+                ->where('event_id', $eventId)
+                ->where('user_id', $userId)
+                ->delete();
+
+            $interestStatus = 'not-interested';
+        } else {
+            DB::table('Wo_Einterested')->insert([
+                'event_id' => $eventId,
+                'user_id' => $userId,
+            ]);
+
+            // Going takes precedence over interested — remove from going if present.
+            if (DB::getSchemaBuilder()->hasTable('Wo_Egoing')) {
+                DB::table('Wo_Egoing')
+                    ->where('event_id', $eventId)
+                    ->where('user_id', $userId)
+                    ->delete();
+            }
+
+            $interestStatus = 'interested';
+        }
+
+        return response()->json([
+            'api_status' => 200,
+            'api_text' => 'success',
+            'api_version' => '1.0',
+            'interest_status' => $interestStatus,
+            'data' => [
+                'interested' => $interestStatus === 'interested',
             ],
         ]);
     }
