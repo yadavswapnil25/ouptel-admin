@@ -86,6 +86,13 @@ Route::delete('/pokes/{pokeId}', [PokeController::class, 'destroy']);
 Route::get('/groups', [GroupsController::class, 'index']);
 Route::get('/groups/meta', [GroupsController::class, 'meta']); // Must be before /groups/{id} to avoid route conflict
 Route::post('/groups/join', [GroupsController::class, 'joinGroup']); // Join/leave group (old API: requests.php?f=join_group)
+Route::get('/groups/{id}/posts', [GroupsController::class, 'getPosts']);
+Route::get('/groups/{id}/members', [GroupsController::class, 'getMembers']);
+Route::post('/groups/{id}/members/{userId}/approve', [GroupsController::class, 'approveMember']);
+Route::post('/groups/{id}/members/{userId}/reject', [GroupsController::class, 'rejectMember']);
+Route::delete('/groups/{id}/members/{userId}', [GroupsController::class, 'removeMember']);
+Route::put('/groups/{id}', [GroupsController::class, 'update']);
+Route::patch('/groups/{id}', [GroupsController::class, 'update']);
 Route::get('/groups/{id}', [GroupsController::class, 'show']); // Get single group by ID
 Route::post('/groups', [GroupsController::class, 'store']);
 Route::get('/pages', [PagesController::class, 'index']);

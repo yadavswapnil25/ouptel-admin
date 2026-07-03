@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use App\Models\GroupCategory;
 use App\Models\GroupSubCategory;
 
@@ -547,9 +548,384 @@ class GroupsController extends BaseController
         return response()->json([
             'ok' => true,
             'join_status' => $joinStatus,
+            'message' => match ($joinStatus) {
+                'joined' => 'Joined group successfully',
+                'requested' => 'Join request sent',
+                'left' => 'Left group successfully',
+                default => 'OK',
+            },
             'data' => [
                 'join' => $joinStatus === 'left' ? 'left' : ($joinStatus === 'requested' ? 'requested' : 'joined'),
+                'is_joined' => $joinStatus === 'joined',
+                'is_pending' => $joinStatus === 'requested',
             ],
         ]);
+    }
+
+    /**
+     * Get posts for a group feed.
+     */
+    public function getPosts(Request $request, $id): JsonResponse
+    {
+        $tokenUserId = $this->resolveUserId($request);
+        $group = Group::find($id);
+
+        if (!$group || !$this->isGroupActiveForUser($group, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Group not found'], 404);
+        }
+
+        if (!$this->canViewGroup($group, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'You must be a member to view this group'], 403);
+        }
+
+        $perPage = max(1, min((int) $request->query('per_page', 10), 50));
+        $pageNum = max(1, (int) $request->query('page', 1));
+        $offset = ($pageNum - 1) * $perPage;
+
+        $query = DB::table('Wo_Posts')
+            ->where('group_id', $id)
+            ->where('active', '1')
+            ->orderByDesc('time');
+
+        $total = (clone $query)->count();
+        $posts = $query->offset($offset)->limit($perPage)->get();
+
+        $formatter = app(PagesController::class);
+        $formattedPosts = $posts->map(
+            fn ($post) => $formatter->formatPostRowForApi($post, $tokenUserId)
+        )->values()->all();
+
+        $lastPage = $total > 0 ? (int) ceil($total / $perPage) : 1;
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'group_id' => (int) $id,
+                'posts' => $formattedPosts,
+                'pagination' => [
+                    'current_page' => $pageNum,
+                    'per_page' => $perPage,
+                    'total' => $total,
+                    'last_page' => $lastPage,
+                    'has_more' => $pageNum < $lastPage,
+                ],
+            ],
+        ]);
+    }
+
+    /**
+     * List group members or pending join requests.
+     */
+    public function getMembers(Request $request, $id): JsonResponse
+    {
+        $tokenUserId = $this->resolveUserId($request);
+        $group = Group::find($id);
+
+        if (!$group || !$this->isGroupActiveForUser($group, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Group not found'], 404);
+        }
+
+        if (!$this->canViewGroup($group, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'You must be a member to view members'], 403);
+        }
+
+        if (!Schema::hasTable('Wo_Group_Members')) {
+            return response()->json(['ok' => true, 'data' => []]);
+        }
+
+        $status = $request->query('status', 'active');
+        $activeValue = $status === 'pending' ? '0' : '1';
+
+        $rows = DB::table('Wo_Group_Members')
+            ->where('group_id', $id)
+            ->where('active', $activeValue)
+            ->orderByDesc('time')
+            ->get();
+
+        $adminIds = [];
+        if (Schema::hasTable('Wo_GroupAdmins')) {
+            $adminIds = DB::table('Wo_GroupAdmins')
+                ->where('group_id', $id)
+                ->pluck('user_id')
+                ->map(fn ($uid) => (string) $uid)
+                ->all();
+        }
+
+        $ownerId = (string) $group->user_id;
+        $members = $rows->map(function ($row) use ($ownerId, $adminIds) {
+            $user = DB::table('Wo_Users')->where('user_id', $row->user_id)->first();
+            $userIdStr = (string) $row->user_id;
+
+            return [
+                'user_id' => $userIdStr,
+                'username' => $user->username ?? 'Unknown',
+                'name' => $user->name ?? $user->username ?? 'Unknown User',
+                'avatar_url' => !empty($user->avatar) ? asset('storage/' . $user->avatar) : null,
+                'joined_at' => is_numeric($row->time) ? (int) $row->time : null,
+                'is_owner' => $userIdStr === $ownerId,
+                'is_admin' => in_array($userIdStr, $adminIds, true) || $userIdStr === $ownerId,
+                'status' => $row->active === '1' || $row->active === 1 ? 'active' : 'pending',
+            ];
+        })->values();
+
+        return response()->json([
+            'ok' => true,
+            'data' => $members,
+            'meta' => [
+                'status' => $status,
+                'count' => $members->count(),
+            ],
+        ]);
+    }
+
+    /**
+     * Approve a pending join request.
+     */
+    public function approveMember(Request $request, $id, $userId): JsonResponse
+    {
+        $tokenUserId = $this->resolveUserId($request);
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $group = Group::find($id);
+        if (!$group || !$this->canManageGroup($group, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Permission denied'], 403);
+        }
+
+        $updated = DB::table('Wo_Group_Members')
+            ->where('group_id', $id)
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', (string) $userId)->orWhere('user_id', (int) $userId);
+            })
+            ->where('active', '0')
+            ->update(['active' => '1']);
+
+        if (!$updated) {
+            return response()->json(['ok' => false, 'message' => 'No pending request found'], 404);
+        }
+
+        return response()->json(['ok' => true, 'message' => 'Member approved']);
+    }
+
+    /**
+     * Reject a pending join request.
+     */
+    public function rejectMember(Request $request, $id, $userId): JsonResponse
+    {
+        $tokenUserId = $this->resolveUserId($request);
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $group = Group::find($id);
+        if (!$group || !$this->canManageGroup($group, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Permission denied'], 403);
+        }
+
+        $deleted = DB::table('Wo_Group_Members')
+            ->where('group_id', $id)
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', (string) $userId)->orWhere('user_id', (int) $userId);
+            })
+            ->where('active', '0')
+            ->delete();
+
+        if (!$deleted) {
+            return response()->json(['ok' => false, 'message' => 'No pending request found'], 404);
+        }
+
+        return response()->json(['ok' => true, 'message' => 'Request declined']);
+    }
+
+    /**
+     * Remove an active member from the group.
+     */
+    public function removeMember(Request $request, $id, $userId): JsonResponse
+    {
+        $tokenUserId = $this->resolveUserId($request);
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $group = Group::find($id);
+        if (!$group || !$this->canManageGroup($group, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Permission denied'], 403);
+        }
+
+        if ((string) $group->user_id === (string) $userId) {
+            return response()->json(['ok' => false, 'message' => 'Cannot remove the group owner'], 400);
+        }
+
+        $deleted = DB::table('Wo_Group_Members')
+            ->where('group_id', $id)
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', (string) $userId)->orWhere('user_id', (int) $userId);
+            })
+            ->delete();
+
+        if (!$deleted) {
+            return response()->json(['ok' => false, 'message' => 'Member not found'], 404);
+        }
+
+        if (Schema::hasTable('Wo_GroupAdmins')) {
+            DB::table('Wo_GroupAdmins')
+                ->where('group_id', $id)
+                ->where(function ($q) use ($userId) {
+                    $q->where('user_id', (string) $userId)->orWhere('user_id', (int) $userId);
+                })
+                ->delete();
+        }
+
+        return response()->json(['ok' => true, 'message' => 'Member removed']);
+    }
+
+    /**
+     * Update group settings (owner or admin).
+     */
+    public function update(Request $request, $id): JsonResponse
+    {
+        $tokenUserId = $this->resolveUserId($request);
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $group = Group::find($id);
+        if (!$group) {
+            return response()->json(['ok' => false, 'message' => 'Group not found'], 404);
+        }
+
+        if (!$this->canManageGroup($group, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Permission denied'], 403);
+        }
+
+        $validated = $request->validate([
+            'group_title' => ['sometimes', 'string', 'max:100'],
+            'about' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'privacy' => ['sometimes', 'in:public,private'],
+            'join_privacy' => ['sometimes', 'in:public,private'],
+            'category' => ['sometimes', 'integer'],
+            'sub_category' => ['sometimes', 'nullable', 'integer'],
+            'avatar' => ['sometimes', 'image', 'max:10240'],
+            'cover' => ['sometimes', 'image', 'max:10240'],
+        ]);
+
+        if (isset($validated['group_title'])) {
+            $group->group_title = $validated['group_title'];
+        }
+        if (array_key_exists('about', $validated)) {
+            $group->about = $validated['about'] ?? '';
+        }
+        if (isset($validated['privacy'])) {
+            $group->privacy = $validated['privacy'];
+        }
+        if (isset($validated['join_privacy'])) {
+            $group->join_privacy = $validated['join_privacy'];
+        }
+        if (isset($validated['category'])) {
+            $group->category = $validated['category'];
+        }
+        if (isset($validated['sub_category'])) {
+            $group->sub_category = $validated['sub_category'] ?? 0;
+        }
+
+        if ($request->hasFile('avatar')) {
+            $path = $request->file('avatar')->store('upload/photos/' . date('Y/m'), 'public');
+            $group->avatar = $path;
+        }
+        if ($request->hasFile('cover')) {
+            $path = $request->file('cover')->store('upload/photos/' . date('Y/m'), 'public');
+            $group->cover = $path;
+        }
+
+        $group->save();
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Group updated successfully',
+            'data' => [
+                'id' => $group->id,
+                'group_title' => $group->group_title,
+                'about' => $group->about,
+                'privacy' => $group->privacy,
+                'join_privacy' => $group->join_privacy,
+                'avatar_url' => $group->avatar_url,
+                'cover_url' => $group->cover_url,
+            ],
+        ]);
+    }
+
+    private function resolveUserId(Request $request): ?string
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return null;
+        }
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+
+        return $userId ? (string) $userId : null;
+    }
+
+    private function isGroupActiveForUser(Group $group, ?string $userId): bool
+    {
+        if ($group->active == '1' || $group->active == 1) {
+            return true;
+        }
+
+        return $userId && (string) $group->user_id === $userId;
+    }
+
+    private function isActiveMember(int $groupId, ?string $userId): bool
+    {
+        if (!$userId || !Schema::hasTable('Wo_Group_Members')) {
+            return false;
+        }
+
+        return DB::table('Wo_Group_Members')
+            ->where('group_id', $groupId)
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)->orWhere('user_id', (int) $userId);
+            })
+            ->where('active', '1')
+            ->exists();
+    }
+
+    private function isGroupOwner(Group $group, ?string $userId): bool
+    {
+        return $userId && (string) $group->user_id === $userId;
+    }
+
+    private function isGroupAdmin(int $groupId, ?string $userId): bool
+    {
+        if (!$userId || !Schema::hasTable('Wo_GroupAdmins')) {
+            return false;
+        }
+
+        return DB::table('Wo_GroupAdmins')
+            ->where('group_id', $groupId)
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)->orWhere('user_id', (int) $userId);
+            })
+            ->exists();
+    }
+
+    private function canManageGroup(Group $group, ?string $userId): bool
+    {
+        return $this->isGroupOwner($group, $userId)
+            || $this->isGroupAdmin((int) $group->id, $userId);
+    }
+
+    private function canViewGroup(Group $group, ?string $userId): bool
+    {
+        $rawPrivacy = $group->getAttributes()['privacy'] ?? $group->privacy;
+        $isPublic = $rawPrivacy === '1' || $rawPrivacy === 1 || $group->privacy === 'public';
+
+        if ($isPublic) {
+            return true;
+        }
+
+        return $this->isGroupOwner($group, $userId)
+            || $this->isActiveMember((int) $group->id, $userId);
     }
 }

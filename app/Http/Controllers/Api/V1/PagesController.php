@@ -1589,6 +1589,14 @@ class PagesController extends BaseController
     }
 
     /**
+     * Public wrapper for formatting a post row (used by group posts, etc.).
+     */
+    public function formatPostRowForApi($post, $userId = null): array
+    {
+        return $this->formatPostForPage($post, $userId);
+    }
+
+    /**
      * Format post data for page posts response
      * 
      * @param object $post
