@@ -64,8 +64,6 @@ class NotificationsController extends Controller
         // Types to EXCLUDE from the count (same list used in the old WoWonder API)
         $excludedTypes = [
             'requested_to_join_group',
-            'interested_event',
-            'going_event',
             'invited_event',
             'forum_reply',
             'admin_notification',
@@ -345,8 +343,6 @@ class NotificationsController extends Controller
         // Types to EXCLUDE from results (match Wo_GetNotifications remove_notification list)
         $excludedTypes = [
             'requested_to_join_group',
-            'interested_event',
-            'going_event',
             'invited_event',
             'forum_reply',
             'admin_notification',
@@ -742,6 +738,28 @@ class NotificationsController extends Controller
             case 'reacted_story':
                 $notification['type_text'] = 'reacted to your story';
                 $notification['icon'] = 'thumbs-up';
+                break;
+            case 'interested_event':
+                $eventName = 'your event';
+                if (!empty($notification['event_id'])) {
+                    $eventRow = DB::table('Wo_Events')->where('id', $notification['event_id'])->value('name');
+                    if ($eventRow) {
+                        $eventName = $eventRow;
+                    }
+                }
+                $notification['type_text'] = 'is interested in ' . $eventName;
+                $notification['icon'] = 'star';
+                break;
+            case 'going_event':
+                $eventName = 'your event';
+                if (!empty($notification['event_id'])) {
+                    $eventRow = DB::table('Wo_Events')->where('id', $notification['event_id'])->value('name');
+                    if ($eventRow) {
+                        $eventName = $eventRow;
+                    }
+                }
+                $notification['type_text'] = 'is going to ' . $eventName;
+                $notification['icon'] = 'calendar';
                 break;
             default:
                 $notification['type_text'] = 'sent you a notification';

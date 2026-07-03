@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Models\Event;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
@@ -416,6 +417,75 @@ class EventsController extends BaseController
         ]);
     }
 
+    public function show(Request $request, int $id): JsonResponse
+    {
+        $event = Event::find($id);
+        if (!$event) {
+            return response()->json(['ok' => false, 'message' => 'Event not found'], 404);
+        }
+
+        $currentUserId = $this->resolveUserId($request);
+        $data = $this->mapEvent($event, $currentUserId);
+        $poster = User::find($event->poster_id);
+        $data['poster'] = $poster ? $this->mapUserForEventGuest($poster) : null;
+        $data['is_owner'] = $currentUserId !== null && (int) $event->poster_id === (int) $currentUserId;
+
+        return response()->json(['data' => $data]);
+    }
+
+    public function guests(Request $request, int $id): JsonResponse
+    {
+        $event = Event::find($id);
+        if (!$event) {
+            return response()->json(['ok' => false, 'message' => 'Event not found'], 404);
+        }
+
+        $type = $request->query('type', 'going');
+        if (!in_array($type, ['going', 'interested'], true)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Invalid guest type. Use going or interested.',
+            ], 400);
+        }
+
+        $table = $type === 'interested' ? 'Wo_Einterested' : 'Wo_Egoing';
+        if (!Schema::hasTable($table)) {
+            return response()->json([
+                'data' => [],
+                'meta' => [
+                    'current_page' => 1,
+                    'per_page' => 20,
+                    'total' => 0,
+                    'last_page' => 1,
+                ],
+                'type' => $type,
+            ]);
+        }
+
+        $perPage = (int) ($request->query('per_page', 20));
+        $perPage = max(1, min($perPage, 50));
+
+        $paginator = DB::table($table)
+            ->join('Wo_Users', "{$table}.user_id", '=', 'Wo_Users.user_id')
+            ->where("{$table}.event_id", $id)
+            ->select('Wo_Users.*')
+            ->orderByDesc("{$table}.id")
+            ->paginate($perPage);
+
+        $data = collect($paginator->items())->map(fn ($user) => $this->mapUserForEventGuest($user));
+
+        return response()->json([
+            'data' => $data,
+            'meta' => [
+                'current_page' => $paginator->currentPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
+                'last_page' => $paginator->lastPage(),
+            ],
+            'type' => $type,
+        ]);
+    }
+
     public function goEvent(Request $request): JsonResponse
     {
         // Auth via Wo_AppsSessions
@@ -509,6 +579,10 @@ class EventsController extends BaseController
             $goStatus = 'going';
         }
 
+        if ($goStatus === 'going') {
+            $this->notifyEventHost($event, (int) $userId, 'going_event');
+        }
+
         return response()->json([
             'api_status' => 200,
             'api_text' => 'success',
@@ -584,6 +658,10 @@ class EventsController extends BaseController
             $interestStatus = 'interested';
         }
 
+        if ($interestStatus === 'interested') {
+            $this->notifyEventHost($event, (int) $userId, 'interested_event');
+        }
+
         return response()->json([
             'api_status' => 200,
             'api_text' => 'success',
@@ -593,6 +671,52 @@ class EventsController extends BaseController
                 'interested' => $interestStatus === 'interested',
             ],
         ]);
+    }
+
+    private function mapUserForEventGuest(object $user): array
+    {
+        $name = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
+        if ($name === '') {
+            $name = $user->name ?? $user->username ?? 'User';
+        }
+
+        return [
+            'user_id' => $user->user_id,
+            'username' => $user->username ?? '',
+            'name' => $name,
+            'avatar_url' => !empty($user->avatar) ? asset('storage/' . $user->avatar) : null,
+        ];
+    }
+
+    private function notifyEventHost(Event $event, int $actorUserId, string $type): void
+    {
+        $hostId = (int) ($event->poster_id ?? 0);
+        if ($hostId <= 0 || $hostId === $actorUserId) {
+            return;
+        }
+        if (!in_array($type, ['interested_event', 'going_event'], true)) {
+            return;
+        }
+        if (!Schema::hasTable('Wo_Notifications')) {
+            return;
+        }
+
+        try {
+            $payload = [
+                'notifier_id' => $actorUserId,
+                'recipient_id' => $hostId,
+                'type' => $type,
+                'url' => 'index.php?link1=show-event&eid=' . $event->id,
+                'time' => time(),
+                'seen' => 0,
+            ];
+            if (Schema::hasColumn('Wo_Notifications', 'event_id')) {
+                $payload['event_id'] = $event->id;
+            }
+            DB::table('Wo_Notifications')->insert($payload);
+        } catch (\Exception $e) {
+            // Notification failure should not block RSVP.
+        }
     }
 }
 

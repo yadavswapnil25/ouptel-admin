@@ -133,6 +133,8 @@ Route::get('/events/interested', [EventsController::class, 'interested']);
 Route::get('/my-events', [EventsController::class, 'mine']);
 Route::post('/events/go', [EventsController::class, 'goEvent']); // Go/not going to event (old API: requests.php?f=go_event)
 Route::post('/events/interest', [EventsController::class, 'interestEvent']); // Toggle interested (old API: interest-event.php)
+Route::get('/events/{id}/guests', [EventsController::class, 'guests']);
+Route::get('/events/{id}', [EventsController::class, 'show']);
 Route::get('/games', [GamesController::class, 'index']); // Legacy endpoint
 Route::post('/games', [GamesController::class, 'store']); // Legacy endpoint
 Route::post('/games/handle', [GamesController::class, 'handle']); // Unified endpoint (old API: games.php with type parameter)
