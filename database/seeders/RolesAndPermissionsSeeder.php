@@ -31,6 +31,7 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'manage-funding', 'label' => 'Funding', 'group' => 'Manage Features'],
             ['key' => 'manage-posts', 'label' => 'Posts', 'group' => 'Manage Features'],
             ['key' => 'manage-post-reactions', 'label' => 'Post Reactions', 'group' => 'Manage Features'],
+            ['key' => 'manage-colored-posts', 'label' => 'Colored Posts', 'group' => 'Manage Features'],
             ['key' => 'manage-user-stories', 'label' => 'User Stories', 'group' => 'Manage Features'],
             ['key' => 'manage-community-preferences', 'label' => 'Community Preferences', 'group' => 'Manage Features'],
 
