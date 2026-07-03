@@ -93,6 +93,7 @@ Route::post('/groups/{id}/members/{userId}/reject', [GroupsController::class, 'r
 Route::delete('/groups/{id}/members/{userId}', [GroupsController::class, 'removeMember']);
 Route::put('/groups/{id}', [GroupsController::class, 'update']);
 Route::patch('/groups/{id}', [GroupsController::class, 'update']);
+Route::post('/groups/{id}', [GroupsController::class, 'update']); // Multipart update (avatar/cover) - PHP can't parse PUT bodies
 Route::get('/groups/{id}', [GroupsController::class, 'show']); // Get single group by ID
 Route::post('/groups', [GroupsController::class, 'store']);
 Route::get('/pages', [PagesController::class, 'index']);

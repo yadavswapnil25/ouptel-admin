@@ -58,8 +58,21 @@ class ImageHelper
      */
     public static function getCoverUrl(?string $coverPath): string
     {
-        if ($coverPath && file_exists(public_path($coverPath))) {
-            return asset($coverPath);
+        if ($coverPath) {
+            $normalized = ltrim($coverPath, '/');
+
+            // Direct public path (e.g. upload/photos/... served from web root)
+            if (file_exists(public_path($normalized))) {
+                return asset($normalized);
+            }
+            // Storage symlink path (files saved on the public disk → public/storage/...)
+            if (file_exists(public_path('storage/' . $normalized))) {
+                return asset('storage/' . $normalized);
+            }
+            // Already a full URL
+            if (filter_var($coverPath, FILTER_VALIDATE_URL)) {
+                return $coverPath;
+            }
         }
 
         return asset('images/placeholders/group-cover.svg');
