@@ -180,6 +180,15 @@ class AuthController extends BaseController
             // Create the user
             $user = User::create($userData);
 
+            $now = time();
+            DB::table('Wo_Users')
+                ->where('user_id', $user->user_id)
+                ->update([
+                    'joined' => $now,
+                    'registered' => date('n') . '/' . date('Y'),
+                ]);
+            $user->joined = $now;
+
             // Create session token
             $token = Str::random(64);
             DB::table('Wo_AppsSessions')->insert([

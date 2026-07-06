@@ -424,6 +424,90 @@ class ProfileController extends Controller
     }
 
     /**
+     * Normalize assorted Wo_Users fields into a unix registration timestamp.
+     */
+    private function resolveUserRegistrationTimestamp($user): ?int
+    {
+        if (!$user) {
+            return null;
+        }
+
+        foreach (['joined', 'time'] as $field) {
+            $ts = $this->normalizeUnixTimestamp($user->{$field} ?? null);
+            if ($ts) {
+                return $ts;
+            }
+        }
+
+        $registered = trim((string) ($user->registered ?? ''));
+        if ($registered !== '' && !in_array($registered, ['0/0000', '0/0'], true)) {
+            if (preg_match('/^(\d{1,2})\/(\d{4})$/', $registered, $matches)) {
+                $month = (int) $matches[1];
+                $year = (int) $matches[2];
+                if ($month >= 1 && $month <= 12 && $year >= 1970 && $year <= 2100) {
+                    return mktime(0, 0, 0, $month, 1, $year);
+                }
+            }
+        }
+
+        foreach (['avatar', 'cover'] as $mediaField) {
+            $ts = $this->extractTimestampFromMediaPath((string) ($user->{$mediaField} ?? ''));
+            if ($ts) {
+                return $ts;
+            }
+        }
+
+        foreach (['last_avatar_mod', 'last_cover_mod'] as $field) {
+            $ts = $this->normalizeUnixTimestamp($user->{$field} ?? null);
+            if ($ts) {
+                return $ts;
+            }
+        }
+
+        return null;
+    }
+
+    private function normalizeUnixTimestamp(mixed $raw): ?int
+    {
+        if ($raw === null || $raw === '' || $raw === '0' || $raw === 0) {
+            return null;
+        }
+        if (!is_numeric($raw)) {
+            return null;
+        }
+        $ts = (int) $raw;
+        if ($ts <= 0) {
+            return null;
+        }
+
+        return $ts < 10000000000 ? $ts : (int) floor($ts / 1000);
+    }
+
+    private function extractTimestampFromMediaPath(string $path): ?int
+    {
+        if ($path === '') {
+            return null;
+        }
+
+        if (preg_match('/_(\d{9,13})\.(jpg|jpeg|png|gif|webp)$/i', $path, $matches)) {
+            $ts = $this->normalizeUnixTimestamp($matches[1]);
+            if ($ts) {
+                return $ts;
+            }
+        }
+
+        if (preg_match('#/photos/(\d{4})/(\d{1,2})/#', $path, $matches)) {
+            $year = (int) $matches[1];
+            $month = (int) $matches[2];
+            if ($month >= 1 && $month <= 12 && $year >= 1970 && $year <= 2100) {
+                return mktime(0, 0, 0, $month, 1, $year);
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Get user followers
      */
     private function getFollowers(int $userId, int $loggedUserId, int $limit = 50): array
@@ -1755,30 +1839,6 @@ class ProfileController extends Controller
     }
 
     /**
-     * User account registration time from Wo_Users (joined or time column).
-     */
-    private function resolveUserRegistrationTimestamp($user): ?int
-    {
-        foreach (['joined', 'time'] as $field) {
-            if (!isset($user->{$field})) {
-                continue;
-            }
-            $raw = $user->{$field};
-            if ($raw === null || $raw === '' || $raw === '0') {
-                continue;
-            }
-            if (is_numeric($raw)) {
-                $ts = (int) $raw;
-                if ($ts > 0) {
-                    return $ts < 10000000000 ? $ts : (int) floor($ts / 1000);
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /**
      * Get user data for timeline
      * 
      * @param object $user
@@ -1829,6 +1889,7 @@ class ProfileController extends Controller
             'post_count' => $postCount,
             'created_at' => $registeredAt ? date('c', $registeredAt) : null,
             'joined_at' => $registeredAt,
+            'joined_at_text' => $registeredAt ? date('F Y', $registeredAt) : null,
         ];
     }
 
