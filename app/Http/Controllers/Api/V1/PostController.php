@@ -1835,17 +1835,28 @@ class PostController extends Controller
      */
     private function formatSavedPostData(Post $post, string $userId): array
     {
+        $colorData = null;
+        $colorId = (int) ($post->color_id ?? 0);
+        if ($colorId > 0) {
+            $colorData = $this->getColorData($colorId);
+        }
+
+        $postType = $post->postType ?? 'text';
+        if ($colorId > 0) {
+            $postType = 'colored';
+        }
+
         return [
             'id' => $post->id,
             'post_id' => $post->post_id,
             'user_id' => $post->user_id,
             'post_text' => $post->postText ?? '',
             'post_text_preview' => $post->post_text_preview,
-            'post_type' => $post->postType,
+            'post_type' => $postType,
             'post_privacy' => $post->postPrivacy,
             'post_privacy_text' => $post->post_privacy_text,
-            'post_photo' => $post->postPhoto,
-            'post_photo_url' => $this->getPostPhotoUrl($post),
+            'post_photo' => $colorId > 0 ? null : $post->postPhoto,
+            'post_photo_url' => $colorId > 0 ? null : $this->getPostPhotoUrl($post),
             'post_file' => $post->postFile,
             'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
             'post_youtube' => $post->postYoutube,
@@ -1878,6 +1889,100 @@ class PostController extends Controller
             'reaction_counts' => $this->getPostReactionCounts($post->post_id),
             'total_reactions' => array_sum($this->getPostReactionCounts($post->post_id)),
             'user_reaction' => $this->getUserReaction($post->post_id, $userId),
+            'color_id' => $colorId > 0 ? $colorId : null,
+            'color' => $colorData,
+            'color_data' => $colorData,
+        ];
+    }
+
+    /**
+     * Get color preset data for a colored post.
+     */
+    private function getColorData(int $colorId): ?array
+    {
+        if ($colorId <= 0) {
+            return null;
+        }
+
+        if (Schema::hasTable('Wo_Colored_Posts')) {
+            try {
+                $coloredPost = DB::table('Wo_Colored_Posts')
+                    ->where('id', $colorId)
+                    ->first();
+
+                if ($coloredPost) {
+                    return $this->mapColoredPostRow($coloredPost);
+                }
+            } catch (\Exception $e) {
+                // Fall through to default presets
+            }
+        }
+
+        foreach ($this->getDefaultColoredPostPresets() as $preset) {
+            $presetId = (int) ($preset['color_id'] ?? $preset['id'] ?? 0);
+            if ($presetId === $colorId) {
+                return $preset;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param object $coloredPost
+     */
+    private function mapColoredPostRow($coloredPost): array
+    {
+        return [
+            'color_id' => $coloredPost->id,
+            'color_1' => $coloredPost->color_1 ?? '',
+            'color_2' => $coloredPost->color_2 ?? '',
+            'text_color' => $coloredPost->text_color ?? '',
+            'image' => $coloredPost->image ?? '',
+            'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+        ];
+    }
+
+    /**
+     * Default presets when Wo_Colored_Posts is empty (matches getColoredPosts fallback).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function getDefaultColoredPostPresets(): array
+    {
+        $now = time();
+
+        return [
+            [
+                'id' => 1,
+                'color_id' => 1,
+                'color_1' => '#26ACE2',
+                'color_2' => '#0B7CBD',
+                'text_color' => '#FFFFFF',
+                'image' => '',
+                'image_url' => null,
+                'time' => $now,
+            ],
+            [
+                'id' => 2,
+                'color_id' => 2,
+                'color_1' => '#FF6B6B',
+                'color_2' => '#F06595',
+                'text_color' => '#FFFFFF',
+                'image' => '',
+                'image_url' => null,
+                'time' => $now,
+            ],
+            [
+                'id' => 3,
+                'color_id' => 3,
+                'color_1' => '#FFE66D',
+                'color_2' => '#FFA41B',
+                'text_color' => '#333333',
+                'image' => '',
+                'image_url' => null,
+                'time' => $now,
+            ],
         ];
     }
 
@@ -2774,39 +2879,7 @@ class PostController extends Controller
 
             // If no records in DB, provide a few sample color presets
             if ($coloredPosts->isEmpty()) {
-                $now = time();
-                $coloredPosts = collect([
-                    [
-                        'id' => 1,
-                        'color_id' => 1,
-                        'color_1' => '#26ACE2',
-                        'color_2' => '#0B7CBD',
-                        'text_color' => '#FFFFFF',
-                        'image' => '',
-                        'image_url' => null,
-                        'time' => $now,
-                    ],
-                    [
-                        'id' => 2,
-                        'color_id' => 2,
-                        'color_1' => '#FF6B6B',
-                        'color_2' => '#F06595',
-                        'text_color' => '#FFFFFF',
-                        'image' => '',
-                        'image_url' => null,
-                        'time' => $now,
-                    ],
-                    [
-                        'id' => 3,
-                        'color_id' => 3,
-                        'color_1' => '#FFE66D',
-                        'color_2' => '#FFA41B',
-                        'text_color' => '#333333',
-                        'image' => '',
-                        'image_url' => null,
-                        'time' => $now,
-                    ],
-                ]);
+                $coloredPosts = collect($this->getDefaultColoredPostPresets());
             }
 
             return response()->json([
