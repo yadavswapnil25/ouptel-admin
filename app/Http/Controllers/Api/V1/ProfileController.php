@@ -414,6 +414,12 @@ class ProfileController extends Controller
             }
         }
 
+        $registeredAt = $this->resolveUserRegistrationTimestamp($userRaw);
+        if ($registeredAt) {
+            $userData['joined_at'] = $registeredAt;
+            $userData['joined_at_text'] = date('F Y', $registeredAt);
+        }
+
         return $userData;
     }
 
