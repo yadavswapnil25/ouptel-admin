@@ -154,6 +154,8 @@ class GroupsController extends BaseController
             'sub_category' => ['nullable', 'integer'],
             'privacy' => ['required', 'in:public,private'],
             'join_privacy' => ['required', 'in:public,private'],
+            'avatar' => ['sometimes', 'image', 'max:10240'],
+            'cover' => ['sometimes', 'image', 'max:10240'],
         ]);
 
         // Check if group name is already taken
@@ -180,6 +182,16 @@ class GroupsController extends BaseController
         if (Schema::hasColumn('Wo_Groups', 'agreement_accepted_at')) {
             $group->setAttribute('agreement_accepted_at', now());
         }
+
+        if ($request->hasFile('avatar')) {
+            $path = $request->file('avatar')->store('upload/photos/' . date('Y/m'), 'public');
+            $group->avatar = $path;
+        }
+        if ($request->hasFile('cover')) {
+            $path = $request->file('cover')->store('upload/photos/' . date('Y/m'), 'public');
+            $group->cover = $path;
+        }
+
         $group->save();
 
         // Add creator as member
