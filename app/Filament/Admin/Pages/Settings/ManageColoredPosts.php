@@ -55,6 +55,12 @@ class ManageColoredPosts extends Page
 
     public ?array $imageData = [];
 
+    public ?int $editingColorId = null;
+
+    public bool $editingIsImage = false;
+
+    public ?array $editData = [];
+
     /** @var array<int, array<string, mixed>> */
     public array $coloredPosts = [];
 
@@ -85,6 +91,7 @@ class ManageColoredPosts extends Page
             'settingsForm',
             'gradientForm',
             'imageForm',
+            'editForm',
         ];
     }
 
@@ -169,6 +176,46 @@ class ManageColoredPosts extends Page
             ->statePath('imageData');
     }
 
+    public function editForm(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Section::make('Edit Color Preset')
+                    ->description('Update gradient colors or replace the background image.')
+                    ->schema([
+                        ColorPicker::make('color_1')
+                            ->label('Color 1')
+                            ->live()
+                            ->visible(fn (): bool => !$this->editingIsImage)
+                            ->required(fn (): bool => !$this->editingIsImage),
+
+                        ColorPicker::make('color_2')
+                            ->label('Color 2')
+                            ->live()
+                            ->visible(fn (): bool => !$this->editingIsImage)
+                            ->required(fn (): bool => !$this->editingIsImage),
+
+                        FileUpload::make('image')
+                            ->label('Background Image')
+                            ->image()
+                            ->live()
+                            ->disk('public')
+                            ->directory('colored-posts')
+                            ->visibility('public')
+                            ->visible(fn (): bool => $this->editingIsImage)
+                            ->maxSize(5120)
+                            ->helperText('Leave unchanged to keep the current image, or upload a new one.'),
+
+                        ColorPicker::make('text_color')
+                            ->label('Text Color')
+                            ->live()
+                            ->required(),
+                    ])
+                    ->columns(1),
+            ])
+            ->statePath('editData');
+    }
+
     public function saveSettings(): void
     {
         try {
@@ -183,6 +230,96 @@ class ManageColoredPosts extends Page
         } catch (\Exception $e) {
             Notification::make()
                 ->title('Error saving settings')
+                ->body($e->getMessage())
+                ->danger()
+                ->send();
+        }
+    }
+
+    public function editColor(int $id): void
+    {
+        if (!$this->ensureColoredPostsTable()) {
+            return;
+        }
+
+        $color = ColoredPost::find($id);
+        if (!$color) {
+            Notification::make()
+                ->title('Color preset not found')
+                ->warning()
+                ->send();
+            return;
+        }
+
+        $this->editingColorId = $id;
+        $this->editingIsImage = $color->isImageBackground();
+
+        $this->editForm->fill([
+            'color_1' => $color->color_1 ?: '#26ACE2',
+            'color_2' => $color->color_2 ?: '#0B7CBD',
+            'text_color' => $color->text_color ?: '#FFFFFF',
+            'image' => $color->image ? [$color->image] : null,
+        ]);
+    }
+
+    public function cancelEditColor(): void
+    {
+        $this->editingColorId = null;
+        $this->editingIsImage = false;
+        $this->editData = [];
+        $this->editForm->fill([]);
+    }
+
+    public function saveEditedColor(): void
+    {
+        if (!$this->editingColorId || !$this->ensureColoredPostsTable()) {
+            return;
+        }
+
+        try {
+            $color = ColoredPost::find($this->editingColorId);
+            if (!$color) {
+                Notification::make()
+                    ->title('Color preset not found')
+                    ->warning()
+                    ->send();
+                $this->cancelEditColor();
+                return;
+            }
+
+            $data = $this->editForm->getState();
+
+            if ($color->isImageBackground()) {
+                $newImagePath = $this->resolveUploadedImagePath($data['image'] ?? null);
+                if ($newImagePath && $newImagePath !== $color->image) {
+                    $color->deleteStoredImage();
+                    $color->image = $newImagePath;
+                }
+
+                $color->color_1 = '';
+                $color->color_2 = '';
+                $color->text_color = $data['text_color'];
+            } else {
+                $color->color_1 = $data['color_1'];
+                $color->color_2 = $data['color_2'];
+                $color->text_color = $data['text_color'];
+                $color->image = '';
+            }
+
+            $color->save();
+
+            Notification::make()
+                ->title('Color preset updated successfully!')
+                ->success()
+                ->send();
+
+            $this->cancelEditColor();
+            $this->loadColoredPosts();
+        } catch (\Exception $e) {
+            Log::error('Failed to update colored post: ' . $e->getMessage(), ['id' => $this->editingColorId]);
+
+            Notification::make()
+                ->title('Failed to update color preset')
                 ->body($e->getMessage())
                 ->danger()
                 ->send();
@@ -237,9 +374,7 @@ class ManageColoredPosts extends Page
 
         try {
             $data = $this->imageForm->getState();
-            $imagePath = is_array($data['image'] ?? null)
-                ? ($data['image'][0] ?? null)
-                : ($data['image'] ?? null);
+            $imagePath = $this->resolveUploadedImagePath($data['image'] ?? null);
 
             if (empty($imagePath)) {
                 Notification::make()
@@ -295,6 +430,10 @@ class ManageColoredPosts extends Page
                 return;
             }
 
+            if ($this->editingColorId === $id) {
+                $this->cancelEditColor();
+            }
+
             $color->deleteStoredImage();
             $color->delete();
 
@@ -338,6 +477,20 @@ class ManageColoredPosts extends Page
                 ];
             })
             ->all();
+    }
+
+    private function resolveUploadedImagePath(mixed $imageField): ?string
+    {
+        if (empty($imageField)) {
+            return null;
+        }
+
+        if (is_array($imageField)) {
+            $first = $imageField[0] ?? null;
+            return $first ? (string) $first : null;
+        }
+
+        return (string) $imageField;
     }
 
     private function ensureColoredPostsTable(): bool

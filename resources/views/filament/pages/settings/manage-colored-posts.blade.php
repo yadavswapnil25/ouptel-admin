@@ -90,6 +90,59 @@
             </div>
         </div>
 
+        {{-- Edit preset --}}
+        @if($editingColorId)
+            <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h3 class="text-base font-semibold text-gray-900 dark:text-white">Edit Color Preset</h3>
+                        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                            Update this preset's colors or background image.
+                        </p>
+                    </div>
+                    <x-filament::button wire:click="cancelEditColor" color="gray" size="sm">
+                        Cancel
+                    </x-filament::button>
+                </div>
+
+                <div class="mt-4">
+                    {{ $this->editForm }}
+                </div>
+
+                @php
+                    $editPreviewImage = $editData['image'] ?? null;
+                    if (is_array($editPreviewImage)) {
+                        $editPreviewImage = $editPreviewImage[0] ?? null;
+                    }
+                    $editPreviewImageUrl = $editPreviewImage
+                        ? \Illuminate\Support\Facades\Storage::disk('public')->url($editPreviewImage)
+                        : null;
+                @endphp
+
+                <div
+                    class="mt-4 flex min-h-[220px] items-center justify-center rounded-xl bg-cover bg-center p-6 text-center"
+                    wire:key="edit-preview-{{ $editingColorId }}-{{ md5(json_encode($editData ?? [])) }}"
+                    style="@if($editingIsImage && $editPreviewImageUrl)background-image: url('{{ $editPreviewImageUrl }}');@elseif(!$editingIsImage && !empty($editData['color_1']) && !empty($editData['color_2']))background: linear-gradient(135deg, {{ $editData['color_1'] }} 0%, {{ $editData['color_2'] }} 100%);@else background: #e5e7eb; @endif"
+                >
+                    <h2
+                        class="text-2xl font-semibold drop-shadow"
+                        style="color: {{ $editData['text_color'] ?? '#111827' }};"
+                    >
+                        Hello World !!
+                    </h2>
+                </div>
+
+                <div class="mt-4 flex justify-end gap-3">
+                    <x-filament::button wire:click="cancelEditColor" color="gray">
+                        Cancel
+                    </x-filament::button>
+                    <x-filament::button wire:click="saveEditedColor" color="primary">
+                        Save Changes
+                    </x-filament::button>
+                </div>
+            </div>
+        @endif
+
         {{-- Existing presets --}}
         <div class="rounded-xl bg-white p-6 shadow-sm ring-1 ring-gray-950/5 dark:bg-gray-900 dark:ring-white/10">
             <h3 class="text-base font-semibold text-gray-900 dark:text-white">Color Presets</h3>
@@ -104,19 +157,7 @@
             @else
                 <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     @foreach($coloredPosts as $color)
-                        <div class="group relative overflow-hidden rounded-xl ring-1 ring-gray-200 dark:ring-gray-700">
-                            <button
-                                type="button"
-                                wire:click="deleteColor({{ $color['id'] }})"
-                                wire:confirm="Delete this color preset?"
-                                class="absolute right-2 top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/50 text-white opacity-0 transition hover:bg-black/70 group-hover:opacity-100"
-                                title="Delete"
-                            >
-                                <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-
+                        <div class="overflow-hidden rounded-xl ring-1 ring-gray-200 dark:ring-gray-700">
                             <div
                                 class="flex min-h-[140px] items-center justify-center p-4 text-center"
                                 @if($color['is_gradient'])
@@ -133,6 +174,24 @@
                                 >
                                     Hello World !!
                                 </h3>
+                            </div>
+
+                            <div class="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50 px-3 py-2 dark:border-gray-700 dark:bg-gray-800">
+                                <x-filament::button
+                                    wire:click="editColor({{ $color['id'] }})"
+                                    color="gray"
+                                    size="sm"
+                                >
+                                    Edit
+                                </x-filament::button>
+                                <x-filament::button
+                                    wire:click="deleteColor({{ $color['id'] }})"
+                                    wire:confirm="Delete this color preset? This cannot be undone."
+                                    color="danger"
+                                    size="sm"
+                                >
+                                    Delete
+                                </x-filament::button>
                             </div>
                         </div>
                     @endforeach
