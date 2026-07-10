@@ -250,24 +250,20 @@ class ProfileController extends Controller
         if ($isFollowing) {
             $userData['is_following'] = 1;
             $userData['can_follow'] = 1;
-            if ($this->hasOutgoingFriendTablePending((string) $loggedUserId, (string) $user->user_id)) {
-                $userData['friend_request_sent'] = 1;
-            }
         } else {
-            // Check if friend request is pending (active = 0 means pending request)
-            $isPendingRequest = DB::table('Wo_Followers')
-                ->where('following_id', $user->user_id) // Profile user receives the request
-                ->where('follower_id', $loggedUserId) // Logged user sent the request
+            // Pending follow request only (active = 0 in Wo_Followers) — separate from friend requests
+            $isPendingFollowRequest = DB::table('Wo_Followers')
+                ->where('following_id', $user->user_id)
+                ->where('follower_id', $loggedUserId)
                 ->where(function($q) {
                     $q->where('active', '=', '0')
                       ->orWhere('active', '=', 0);
                 })
                 ->exists();
 
-            if ($isPendingRequest) {
-                $userData['is_following'] = 2; // Pending request
+            if ($isPendingFollowRequest) {
+                $userData['is_following'] = 2;
                 $userData['can_follow'] = 1;
-                $userData['friend_request_sent'] = 1; // Request sent by logged user
             } else {
                 // Check follow privacy
                 if ($user->follow_privacy == 1) {
@@ -334,6 +330,11 @@ class ProfileController extends Controller
 
         // Check if users are friends
         $userData['is_friend'] = $this->isFriend($user->user_id, $loggedUserId) ? 1 : 0;
+
+        // Friend request sent (Wo_Friends pending) — independent from follow status
+        if ($this->hasOutgoingFriendTablePending((string) $loggedUserId, (string) $user->user_id)) {
+            $userData['friend_request_sent'] = 1;
+        }
 
         // Add profile and cover URLs
         $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/placeholders/user-avatar.svg');

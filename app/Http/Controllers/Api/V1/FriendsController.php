@@ -690,35 +690,19 @@ class FriendsController extends Controller
                     $followMessage = 'requested';
                 }
             } else {
-                // Friend requests should ALWAYS require approval (pending state)
-                // This creates a proper "friend request" system where users must accept requests
-                // All requests are stored as pending (active = 0) until recipient accepts
-                $requiresApproval = true;
+                // Not following yet: friend requests live in Wo_Friends only (Facebook-style — independent from Follow)
+                $fromId = (string) $tokenUserId;
+                $toId = (string) $recipientId;
 
-                // Register follow (matching old API: Wo_RegisterFollow)
-                // Always use 0 for pending requests
-                $activeValue = 0; // Always pending until accepted
-                
-                $followData = [
-                    'follower_id' => $tokenUserId,
-                    'following_id' => $recipientId,
-                    'active' => $activeValue, // 0 = pending, 1 = accepted
-                    'time' => time(),
-                ];
-
-                DB::table('Wo_Followers')->insert($followData);
-
-                // Update follow counts
-                $this->updateFollowCounts($tokenUserId, $recipientId);
-
-                // Send notification for follow/follow request
-                $this->sendFollowNotification($tokenUserId, $recipientId, $requiresApproval);
-
-                // Check if it's a request or direct follow
-                if ($requiresApproval) {
-                    $followMessage = 'requested';
+                if ($this->isFriend($fromId, $toId)) {
+                    $followMessage = 'already_friends';
+                } elseif ($this->hasFriendTablePendingRequestFrom($fromId, $toId)) {
+                    $this->deleteFriendTablePendingRequestFrom($fromId, $toId);
+                    $followMessage = 'unfollowed';
                 } else {
-                    $followMessage = 'followed';
+                    $this->insertFriendTablePendingRequest($fromId, $toId);
+                    $this->sendFriendInviteNotification($fromId, $toId);
+                    $followMessage = 'requested';
                 }
             }
 
