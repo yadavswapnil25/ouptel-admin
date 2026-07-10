@@ -77,7 +77,6 @@ Route::post('/check-email', [AuthController::class, 'checkEmail']);
 Route::get('/debug-users', [AuthController::class, 'debugUsers']);
 Route::get('/watch', [WatchController::class, 'index']);
 Route::get('/reels', [ReelsController::class, 'index']);
-Route::get('/saved-posts', [SavedPostsController::class, 'index']);
 Route::get('/popular-posts', [PopularPostsController::class, 'index']);
 Route::get('/memories', [MemoriesController::class, 'index']);
 Route::get('/pokes', [PokeController::class, 'index']);

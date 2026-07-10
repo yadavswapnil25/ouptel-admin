@@ -1849,6 +1849,17 @@ class PostController extends Controller
         if ($colorId > 0) {
             $postType = 'colored';
         }
+        if (!empty($post->postMap) && $postType !== 'colored') {
+            $postType = 'location';
+        }
+        if (!empty($post->postLink) && $postType !== 'colored' && empty($post->postMap)) {
+            $postType = 'link';
+        }
+
+        $authorUser = $post->user;
+        $authorName = $authorUser
+            ? (trim(($authorUser->first_name ?? '') . ' ' . ($authorUser->last_name ?? '')) ?: ($authorUser->name ?? 'Unknown User'))
+            : 'Unknown User';
 
         return [
             'id' => $post->id,
@@ -1879,10 +1890,13 @@ class PostController extends Controller
             'is_boosted' => $post->is_boosted,
             'is_saved' => true, // All posts in this list are saved
             'author' => [
-                'user_id' => $post->user->user_id ?? $post->user_id,
-                'username' => $post->user->username ?? 'Unknown',
-                'name' => $post->user->name ?? 'Unknown User',
-                'avatar_url' => $post->user->avatar ? asset('storage/' . $post->user->avatar) : null,
+                'user_id' => $authorUser->user_id ?? $post->user_id,
+                'username' => $authorUser->username ?? 'Unknown',
+                'name' => $authorName,
+                'avatar_url' => ($authorUser && $authorUser->avatar) ? asset('storage/' . $authorUser->avatar) : null,
+                'verified' => (bool) ($authorUser->verified ?? false),
+                'badge' => $this->getUserBadge($post->user_id),
+                'badge_type' => $this->getUserBadgeType($post->user_id),
             ],
             'page_id' => $post->page_id,
             'group_id' => $post->group_id,
@@ -3700,5 +3714,35 @@ class PostController extends Controller
         }
 
         return true;
+    }
+
+    private function getUserBadge($userId): ?int
+    {
+        try {
+            $badge = DB::table('Wo_Verification_Requests')
+                ->where('user_id', $userId)
+                ->where('status', 'approved')
+                ->whereNotNull('badge_type')
+                ->latest('approved_at')
+                ->value('badge_type');
+
+            return $badge ? 1 : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    private function getUserBadgeType($userId): ?string
+    {
+        try {
+            return DB::table('Wo_Verification_Requests')
+                ->where('user_id', $userId)
+                ->where('status', 'approved')
+                ->whereNotNull('badge_type')
+                ->latest('approved_at')
+                ->value('badge_type');
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }
