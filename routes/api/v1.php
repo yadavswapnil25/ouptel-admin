@@ -270,6 +270,7 @@ Route::post('/feelings/post', [FeelingsController::class, 'createFeelingPost']);
 Route::post('/posts/gif', [PostController::class, 'createGifPost']); // Create GIF post (use POST /posts?type=gif)
 Route::get('/posts', [PostController::class, 'getPosts']); // Get posts with optional type filter (playing, travelling, watching, listening, feeling)
 Route::get('/posts/colored', [PostController::class, 'getColoredPosts']); // Get available colored posts
+Route::get('/posts/link-preview', [PostController::class, 'previewLink']); // Fetch OG metadata for composer link preview
 Route::get('/posts/{postId}', [PostController::class, 'getPost']);
 Route::post('/posts/get-data', [PostController::class, 'getPostData']); // Get post data for new tab (old API: get-post-data.php)
 

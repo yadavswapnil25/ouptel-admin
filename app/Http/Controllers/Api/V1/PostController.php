@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -60,7 +61,7 @@ class PostController extends Controller
             'group_id' => 'nullable|integer',
             'event_id' => 'nullable|integer',
             'recipient_id' => 'nullable|integer',
-            'postLink' => 'nullable|url',
+            'postLink' => 'nullable|string|max:500',
             'postLinkTitle' => 'nullable|string|max:255',
             'postLinkImage' => 'nullable|string|max:500',
             'postLinkContent' => 'nullable|string|max:1000',
@@ -194,7 +195,10 @@ class PostController extends Controller
         $postVimeo = $request->input('postVimeo', '');
         $postFacebook = $request->input('postFacebook', '');
         $postPlaytube = $request->input('postPlaytube', '');
-        $postLink = $request->input('postLink', '');
+        $postLink = trim((string) $request->input('postLink', ''));
+        if ($postLink !== '' && !preg_match('/^https?:\/\//i', $postLink)) {
+            $postLink = 'https://' . $postLink;
+        }
         $postMap = $request->input('postMap', '');
         $postSticker = $request->input('postSticker', '');
         $postGif = $request->input('postGif', '');
@@ -3533,5 +3537,168 @@ class PostController extends Controller
                 ]
             ], 500);
         }
+    }
+
+    /**
+     * Fetch Open Graph metadata for link preview while composing a post.
+     */
+    public function previewLink(Request $request): JsonResponse
+    {
+        $rawUrl = trim((string) $request->query('url', ''));
+        if ($rawUrl === '') {
+            return response()->json(['ok' => false, 'message' => 'URL is required'], 422);
+        }
+
+        $url = preg_match('/^https?:\/\//i', $rawUrl) ? $rawUrl : 'https://' . $rawUrl;
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            return response()->json(['ok' => false, 'message' => 'Invalid URL'], 422);
+        }
+
+        if (!$this->isSafePublicLinkUrl($url)) {
+            return response()->json(['ok' => false, 'message' => 'URL is not allowed'], 422);
+        }
+
+        try {
+            $response = Http::timeout(12)
+                ->withHeaders([
+                    'User-Agent' => 'Mozilla/5.0 (compatible; OuptelLinkPreview/1.0)',
+                    'Accept' => 'text/html,application/xhtml+xml',
+                ])
+                ->get($url);
+
+            if (!$response->successful()) {
+                return response()->json([
+                    'ok' => true,
+                    'data' => $this->fallbackLinkPreviewData($url),
+                ]);
+            }
+
+            return response()->json([
+                'ok' => true,
+                'data' => $this->parseLinkPreviewFromHtml($response->body(), $url),
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('Link preview fetch failed', ['url' => $url, 'error' => $e->getMessage()]);
+
+            return response()->json([
+                'ok' => true,
+                'data' => $this->fallbackLinkPreviewData($url),
+            ]);
+        }
+    }
+
+    private function fallbackLinkPreviewData(string $url): array
+    {
+        $host = parse_url($url, PHP_URL_HOST) ?: $url;
+
+        return [
+            'url' => $url,
+            'title' => $host,
+            'description' => '',
+            'image' => '',
+        ];
+    }
+
+    private function parseLinkPreviewFromHtml(string $html, string $url): array
+    {
+        $title = $this->extractHtmlMetaContent($html, 'og:title')
+            ?: $this->extractHtmlTitleTag($html)
+            ?: (parse_url($url, PHP_URL_HOST) ?: $url);
+        $description = $this->extractHtmlMetaContent($html, 'og:description')
+            ?: $this->extractHtmlMetaContent($html, 'description');
+        $image = $this->extractHtmlMetaContent($html, 'og:image')
+            ?: $this->extractHtmlMetaContent($html, 'twitter:image');
+
+        if ($image !== '' && !preg_match('/^https?:\/\//i', $image)) {
+            $image = $this->resolveRelativeLinkUrl($url, $image);
+        }
+
+        return [
+            'url' => $url,
+            'title' => mb_substr(trim(html_entity_decode($title, ENT_QUOTES | ENT_HTML5, 'UTF-8')), 0, 255),
+            'description' => mb_substr(trim(html_entity_decode($description, ENT_QUOTES | ENT_HTML5, 'UTF-8')), 0, 1000),
+            'image' => $image,
+        ];
+    }
+
+    private function extractHtmlMetaContent(string $html, string $key): string
+    {
+        $patterns = [
+            '/<meta[^>]+(?:property|name)=["\']' . preg_quote($key, '/') . '["\'][^>]+content=["\']([^"\']+)["\']/i',
+            '/<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name)=["\']' . preg_quote($key, '/') . '["\']/i',
+        ];
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $html, $matches)) {
+                return trim($matches[1]);
+            }
+        }
+
+        return '';
+    }
+
+    private function extractHtmlTitleTag(string $html): string
+    {
+        if (preg_match('/<title[^>]*>([^<]+)<\/title>/i', $html, $matches)) {
+            return trim($matches[1]);
+        }
+
+        return '';
+    }
+
+    private function resolveRelativeLinkUrl(string $baseUrl, string $relativeUrl): string
+    {
+        if (preg_match('/^https?:\/\//i', $relativeUrl)) {
+            return $relativeUrl;
+        }
+
+        $parts = parse_url($baseUrl);
+        if (!$parts || empty($parts['scheme']) || empty($parts['host'])) {
+            return $relativeUrl;
+        }
+
+        $origin = $parts['scheme'] . '://' . $parts['host'];
+        if (!empty($parts['port'])) {
+            $origin .= ':' . $parts['port'];
+        }
+
+        if (str_starts_with($relativeUrl, '//')) {
+            return $parts['scheme'] . ':' . $relativeUrl;
+        }
+
+        if (str_starts_with($relativeUrl, '/')) {
+            return $origin . $relativeUrl;
+        }
+
+        $basePath = $parts['path'] ?? '/';
+        $directory = str_contains($basePath, '/') ? substr($basePath, 0, (int) strrpos($basePath, '/')) : '';
+
+        return $origin . ($directory ?: '') . '/' . ltrim($relativeUrl, '/');
+    }
+
+    private function isSafePublicLinkUrl(string $url): bool
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+        if (!$host) {
+            return false;
+        }
+
+        $blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1'];
+        if (in_array(strtolower($host), $blockedHosts, true)) {
+            return false;
+        }
+
+        if (filter_var($host, FILTER_VALIDATE_IP)) {
+            return (bool) filter_var($host, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE);
+        }
+
+        $ips = @gethostbynamel($host) ?: [];
+        foreach ($ips as $ip) {
+            if (!filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }
