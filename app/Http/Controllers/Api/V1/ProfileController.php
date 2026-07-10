@@ -1734,6 +1734,10 @@ class ProfileController extends Controller
             if ($isAlbumPost && $postType !== 'colored') {
                 $postType = 'album';
             }
+
+            if (!empty($post->postMap) && $postType !== 'colored' && !$isAlbumPost) {
+                $postType = 'location';
+            }
             
             // Get album images if it's an album post (match new-feed format)
             $albumImages = [];
@@ -1755,6 +1759,7 @@ class ProfileController extends Controller
                 ],
                 'postText' => $post->postText ?? '',
                 'postType' => $postType,
+                'post_type' => $postType,
                 'postPrivacy' => $post->postPrivacy ?? '0',
                 'postPhoto' => $post->postPhoto ?? '',
                 'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
@@ -1768,6 +1773,8 @@ class ProfileController extends Controller
                 'postLinkTitle' => $post->postLinkTitle ?? '',
                 'postLinkImage' => $post->postLinkImage ?? '',
                 'postLinkContent' => $post->postLinkContent ?? '',
+                'postMap' => $post->postMap ?? '',
+                'post_map' => $post->postMap ?? '',
                 // Album data (match new-feed format)
                 'album_name' => $post->album_name ?? '',
                 'multi_image_post' => (bool) ($post->multi_image_post ?? false),
