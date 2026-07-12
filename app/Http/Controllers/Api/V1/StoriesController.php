@@ -105,7 +105,7 @@ class StoriesController extends Controller
 
     /**
      * Search music catalog for stories (Instagram-style).
-     * Proxies Deezer public search / chart API and returns 30s previews.
+     * Uses Deezer + iTunes (third-party only). Audio is never stored on our servers.
      */
     public function searchMusic(Request $request): JsonResponse
     {
@@ -136,59 +136,32 @@ class StoriesController extends Controller
         $limit = min(25, max(1, (int) $request->query('limit', 20)));
 
         try {
-            if ($query !== '') {
-                $response = Http::timeout(12)->get('https://api.deezer.com/search', [
-                    'q' => $query,
-                    'limit' => $limit,
-                ]);
-            } else {
-                // Trending / suggested tracks when search is empty
-                $response = Http::timeout(12)->get('https://api.deezer.com/chart/0/tracks', [
-                    'limit' => $limit,
-                ]);
-            }
+            $tracks = $this->searchDeezerTracks($query, $limit);
 
-            if (!$response->successful()) {
-                return response()->json([
-                    'api_status' => 400,
-                    'errors' => [
-                        'error_id' => 10,
-                        'error_text' => 'Music search unavailable right now'
-                    ]
-                ], 502);
-            }
-
-            $payload = $response->json();
-            $rawTracks = $payload['data'] ?? [];
-
-            $tracks = [];
-            foreach ($rawTracks as $track) {
-                $preview = $track['preview'] ?? null;
-                if (empty($preview)) {
-                    continue;
+            // iTunes fallback when Deezer is blocked/empty from the server
+            if (count($tracks) < 3) {
+                $itunesTracks = $this->searchItunesTracks($query, $limit);
+                $seen = [];
+                foreach ($tracks as $t) {
+                    $seen[strtolower(($t['title'] ?? '') . '|' . ($t['artist'] ?? ''))] = true;
                 }
-
-                $artist = $track['artist']['name'] ?? '';
-                $albumCover = $track['album']['cover_medium']
-                    ?? $track['album']['cover_small']
-                    ?? $track['album']['cover']
-                    ?? null;
-
-                $tracks[] = [
-                    'id' => (string) ($track['id'] ?? ''),
-                    'title' => $track['title'] ?? $track['title_short'] ?? 'Unknown',
-                    'artist' => $artist,
-                    'preview_url' => $preview,
-                    'duration' => (int) ($track['duration'] ?? 30),
-                    'cover' => $albumCover,
-                    'source' => 'deezer',
-                ];
+                foreach ($itunesTracks as $t) {
+                    $key = strtolower(($t['title'] ?? '') . '|' . ($t['artist'] ?? ''));
+                    if (isset($seen[$key])) {
+                        continue;
+                    }
+                    $tracks[] = $t;
+                    $seen[$key] = true;
+                    if (count($tracks) >= $limit) {
+                        break;
+                    }
+                }
             }
 
             return response()->json([
                 'api_status' => 200,
                 'query' => $query,
-                'tracks' => $tracks,
+                'tracks' => array_values(array_slice($tracks, 0, $limit)),
             ]);
         } catch (\Throwable $e) {
             return response()->json([
@@ -198,6 +171,119 @@ class StoriesController extends Controller
                     'error_text' => 'Music search failed: ' . $e->getMessage()
                 ]
             ], 500);
+        }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function searchDeezerTracks(string $query, int $limit): array
+    {
+        try {
+            if ($query !== '') {
+                $response = Http::timeout(10)
+                    ->withHeaders(['Accept' => 'application/json'])
+                    ->get('https://api.deezer.com/search', [
+                        'q' => $query,
+                        'limit' => $limit,
+                    ]);
+            } else {
+                $response = Http::timeout(10)
+                    ->withHeaders(['Accept' => 'application/json'])
+                    ->get('https://api.deezer.com/chart/0/tracks', [
+                        'limit' => $limit,
+                    ]);
+            }
+
+            if (!$response->successful()) {
+                return [];
+            }
+
+            $payload = $response->json();
+            if (!is_array($payload) || !empty($payload['error'])) {
+                return [];
+            }
+
+            $rawTracks = $payload['data'] ?? [];
+            $tracks = [];
+            foreach ($rawTracks as $track) {
+                $preview = $track['preview'] ?? null;
+                if (empty($preview)) {
+                    continue;
+                }
+
+                $tracks[] = [
+                    'id' => (string) ($track['id'] ?? ''),
+                    'title' => $track['title'] ?? $track['title_short'] ?? 'Unknown',
+                    'artist' => $track['artist']['name'] ?? '',
+                    'preview_url' => $preview,
+                    'duration' => (int) ($track['duration'] ?? 30),
+                    'cover' => $track['album']['cover_medium']
+                        ?? $track['album']['cover_small']
+                        ?? $track['album']['cover']
+                        ?? null,
+                    'source' => 'deezer',
+                ];
+            }
+
+            return $tracks;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function searchItunesTracks(string $query, int $limit): array
+    {
+        try {
+            $term = $query !== '' ? $query : 'top hits';
+            $response = Http::timeout(10)
+                ->withHeaders(['Accept' => 'application/json'])
+                ->get('https://itunes.apple.com/search', [
+                    'term' => $term,
+                    'media' => 'music',
+                    'entity' => 'song',
+                    'limit' => $limit,
+                ]);
+
+            if (!$response->successful()) {
+                return [];
+            }
+
+            $payload = $response->json();
+            $rawTracks = $payload['results'] ?? [];
+            $tracks = [];
+
+            foreach ($rawTracks as $track) {
+                $preview = $track['previewUrl'] ?? null;
+                if (empty($preview)) {
+                    continue;
+                }
+
+                $cover = $track['artworkUrl100'] ?? $track['artworkUrl60'] ?? null;
+                if ($cover) {
+                    // Prefer larger artwork
+                    $cover = str_replace('100x100bb', '300x300bb', $cover);
+                }
+
+                $tracks[] = [
+                    'id' => (string) ($track['trackId'] ?? ''),
+                    'title' => $track['trackName'] ?? 'Unknown',
+                    'artist' => $track['artistName'] ?? '',
+                    'preview_url' => $preview,
+                    'duration' => isset($track['trackTimeMillis'])
+                        ? (int) round(((int) $track['trackTimeMillis']) / 1000)
+                        : 30,
+                    'cover' => $cover,
+                    'source' => 'itunes',
+                ];
+            }
+
+            return $tracks;
+        } catch (\Throwable $e) {
+            return [];
         }
     }
 
@@ -243,11 +329,12 @@ class StoriesController extends Controller
             'story_description' => 'nullable|string',
             'cover' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240',
             // Third-party track only (Deezer) — never upload/host audio files
-            'music_url' => 'nullable|url|max:500',
+            'music_url' => 'nullable|url|max:2000',
             'music_title' => 'nullable|string|max:150',
             'music_artist' => 'nullable|string|max:150',
             'music_cover' => 'nullable|url|max:500',
             'music_id' => 'nullable|string|max:64',
+            'music_source' => 'nullable|in:deezer,itunes',
         ]);
 
         if ($validator->fails()) {
@@ -322,11 +409,15 @@ class StoriesController extends Controller
             $musicArtist = trim((string) $request->input('music_artist', ''));
             $musicId = trim((string) $request->input('music_id', ''));
             $musicUrl = trim((string) $request->input('music_url', ''));
+            $musicSource = strtolower(trim((string) $request->input('music_source', 'deezer')));
+            if (!in_array($musicSource, ['deezer', 'itunes'], true)) {
+                $musicSource = 'deezer';
+            }
 
             if ($musicId !== '' || $musicUrl !== '') {
-                // Prefer stable third-party id: "deezer:{id}" — audio stays on Deezer CDN
+                // Prefer stable third-party id — audio stays on Deezer/iTunes CDN
                 if ($musicId !== '' && preg_match('/^\d+$/', $musicId)) {
-                    $musicRef = 'deezer:' . $musicId;
+                    $musicRef = $musicSource . ':' . $musicId;
                 } elseif ($musicUrl !== '' && $this->isAllowedThirdPartyMusicUrl($musicUrl)) {
                     // Fallback: store preview URL from allowed CDN only (still not hosted by us)
                     $musicRef = $musicUrl;
@@ -1798,9 +1889,12 @@ class StoriesController extends Controller
         $musicId = null;
         $musicUrl = null;
 
-        if (preg_match('/^deezer:(\d+)$/', $musicRef, $m)) {
-            $musicId = $m[1];
-            $musicUrl = $this->resolveDeezerPreviewUrl($musicId);
+        if (preg_match('/^(deezer|itunes):(\d+)$/', $musicRef, $m)) {
+            $source = $m[1];
+            $musicId = $m[2];
+            $musicUrl = $source === 'itunes'
+                ? $this->resolveItunesPreviewUrl($musicId)
+                : $this->resolveDeezerPreviewUrl($musicId);
         } elseif ($this->isAllowedThirdPartyMusicUrl($musicRef)) {
             $musicUrl = $musicRef;
         }
@@ -1836,42 +1930,23 @@ class StoriesController extends Controller
         }
 
         $host = strtolower((string) parse_url($url, PHP_URL_HOST));
-        $allowed = [
-            'cdns-preview-a.dzcdn.net',
-            'cdns-preview-b.dzcdn.net',
-            'cdns-preview-c.dzcdn.net',
-            'cdns-preview-d.dzcdn.net',
-            'cdns-preview-e.dzcdn.net',
-            'cdns-preview-f.dzcdn.net',
-            'cdns-preview-g.dzcdn.net',
-            'cdns-preview-h.dzcdn.net',
-            'cdns-preview-i.dzcdn.net',
-            'cdns-preview-j.dzcdn.net',
-            'cdns-preview-k.dzcdn.net',
-            'cdns-preview-l.dzcdn.net',
-            'cdns-preview-m.dzcdn.net',
-            'cdns-preview-n.dzcdn.net',
-            'cdns-preview-o.dzcdn.net',
-            'cdns-preview-p.dzcdn.net',
-            'cdns-preview-q.dzcdn.net',
-            'cdns-preview-r.dzcdn.net',
-            'cdns-preview-s.dzcdn.net',
-            'cdns-preview-t.dzcdn.net',
-            'cdns-preview-u.dzcdn.net',
-            'cdns-preview-v.dzcdn.net',
-            'cdns-preview-w.dzcdn.net',
-            'cdns-preview-x.dzcdn.net',
-            'cdns-preview-y.dzcdn.net',
-            'cdns-preview-z.dzcdn.net',
-            'e-cdns-preview.dzcdn.net',
-        ];
 
-        if (in_array($host, $allowed, true)) {
+        // Deezer preview CDNs (including newer cdnt-preview.dzcdn.net)
+        if ($host && preg_match('/(^|\.)dzcdn\.net$/', $host)) {
             return true;
         }
 
-        // Broader Deezer preview CDN pattern
-        return (bool) preg_match('/(^|\.)dzcdn\.net$/', $host);
+        // Apple iTunes preview hosts
+        if ($host && (
+            preg_match('/(^|\.)itunes\.apple\.com$/', $host) ||
+            preg_match('/(^|\.)mzstatic\.com$/', $host) ||
+            preg_match('/^audio-ssl\.itunes\.apple\.com$/', $host) ||
+            preg_match('/^audio\.itunes\.apple\.com$/', $host)
+        )) {
+            return true;
+        }
+
+        return false;
     }
 
     /**
@@ -1881,7 +1956,7 @@ class StoriesController extends Controller
     {
         static $cache = [];
 
-        if (isset($cache[$trackId])) {
+        if (array_key_exists($trackId, $cache)) {
             return $cache[$trackId];
         }
 
@@ -1892,6 +1967,36 @@ class StoriesController extends Controller
                 return null;
             }
             $preview = $response->json('preview');
+            $cache[$trackId] = !empty($preview) ? $preview : null;
+            return $cache[$trackId];
+        } catch (\Throwable $e) {
+            $cache[$trackId] = null;
+            return null;
+        }
+    }
+
+    /**
+     * Resolve an iTunes track id to its preview URL.
+     */
+    private function resolveItunesPreviewUrl(string $trackId): ?string
+    {
+        static $cache = [];
+
+        if (array_key_exists($trackId, $cache)) {
+            return $cache[$trackId];
+        }
+
+        try {
+            $response = Http::timeout(8)->get('https://itunes.apple.com/lookup', [
+                'id' => $trackId,
+                'entity' => 'song',
+            ]);
+            if (!$response->successful()) {
+                $cache[$trackId] = null;
+                return null;
+            }
+            $results = $response->json('results') ?? [];
+            $preview = $results[0]['previewUrl'] ?? null;
             $cache[$trackId] = !empty($preview) ? $preview : null;
             return $cache[$trackId];
         } catch (\Throwable $e) {
