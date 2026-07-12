@@ -1158,16 +1158,27 @@ class FriendsController extends Controller
 
                 // Remove friend relationship if exists (if Wo_Friends table exists)
                 if (Schema::hasTable('Wo_Friends')) {
-                    DB::table('Wo_Friends')
-                        ->where(function($query) use ($blockerId, $recipientId) {
-                            $query->where('from_id', $blockerId)
-                                  ->where('to_id', $recipientId);
-                        })
-                        ->orWhere(function($query) use ($blockerId, $recipientId) {
-                            $query->where('from_id', $recipientId)
-                                  ->where('to_id', $blockerId);
-                        })
-                        ->delete();
+                    if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                        DB::table('Wo_Friends')
+                            ->where(function ($query) use ($blockerId, $recipientId) {
+                                $query->where(function ($q) use ($blockerId, $recipientId) {
+                                    $q->where('user_id', $blockerId)->where('friend_id', $recipientId);
+                                })->orWhere(function ($q) use ($blockerId, $recipientId) {
+                                    $q->where('user_id', $recipientId)->where('friend_id', $blockerId);
+                                });
+                            })
+                            ->delete();
+                    } elseif (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                        DB::table('Wo_Friends')
+                            ->where(function ($query) use ($blockerId, $recipientId) {
+                                $query->where(function ($q) use ($blockerId, $recipientId) {
+                                    $q->where('from_id', $blockerId)->where('to_id', $recipientId);
+                                })->orWhere(function ($q) use ($blockerId, $recipientId) {
+                                    $q->where('from_id', $recipientId)->where('to_id', $blockerId);
+                                });
+                            })
+                            ->delete();
+                    }
                 }
 
                 $blocked = 'blocked';
@@ -1527,37 +1538,59 @@ class FriendsController extends Controller
 
         $friendIds = [$userId];
 
-        // Get user's following/friends (use Wo_Followers if Wo_Friends doesn't exist)
+        // Exclude friends / pending requests — support both Wo_Friends column layouts
         if (Schema::hasTable('Wo_Friends')) {
-            $userFriends = DB::table('Wo_Friends')
-                ->where(function($q) use ($userId) {
-                    $q->where('from_id', $userId)
-                      ->orWhere('to_id', $userId);
-                })
-                ->get();
+            try {
+                if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                    $userFriends = DB::table('Wo_Friends')
+                        ->where(function ($q) use ($userId) {
+                            $q->where('user_id', $userId)->orWhere('friend_id', $userId);
+                        })
+                        ->get();
 
-            foreach ($userFriends as $friend) {
-                if ($friend->from_id != $userId) {
-                    $friendIds[] = $friend->from_id;
+                    foreach ($userFriends as $friend) {
+                        if ((string) $friend->user_id !== (string) $userId) {
+                            $friendIds[] = $friend->user_id;
+                        }
+                        if ((string) $friend->friend_id !== (string) $userId) {
+                            $friendIds[] = $friend->friend_id;
+                        }
+                    }
+                } elseif (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                    $userFriends = DB::table('Wo_Friends')
+                        ->where(function ($q) use ($userId) {
+                            $q->where('from_id', $userId)->orWhere('to_id', $userId);
+                        })
+                        ->get();
+
+                    foreach ($userFriends as $friend) {
+                        if ((string) $friend->from_id !== (string) $userId) {
+                            $friendIds[] = $friend->from_id;
+                        }
+                        if ((string) $friend->to_id !== (string) $userId) {
+                            $friendIds[] = $friend->to_id;
+                        }
+                    }
                 }
-                if ($friend->to_id != $userId) {
-                    $friendIds[] = $friend->to_id;
-                }
+            } catch (\Exception $e) {
+                // fall through to followers
             }
-        } elseif (Schema::hasTable('Wo_Followers')) {
-            // Use Wo_Followers table (following relationships)
+        }
+
+        if (Schema::hasTable('Wo_Followers')) {
+            // Also exclude people already followed / following
             $following = DB::table('Wo_Followers')
                 ->where('follower_id', $userId)
-                ->where('active', 1)
+                ->whereIn('active', ['1', 1])
                 ->pluck('following_id')
                 ->toArray();
-            
+
             $followers = DB::table('Wo_Followers')
                 ->where('following_id', $userId)
-                ->where('active', 1)
+                ->whereIn('active', ['1', 1])
                 ->pluck('follower_id')
                 ->toArray();
-            
+
             $friendIds = array_merge($friendIds, $following, $followers);
         }
 
