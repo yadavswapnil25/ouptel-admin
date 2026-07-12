@@ -242,7 +242,7 @@ class StoriesController extends Controller
             'story_title' => 'nullable|string|max:100',
             'story_description' => 'nullable|string',
             'cover' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240',
-            'music' => 'nullable|file|mimes:mp3,mpeg,mpga,wav,ogg,m4a,aac|max:10240',
+            // Third-party track only (Deezer) — never upload/host audio files
             'music_url' => 'nullable|url|max:500',
             'music_title' => 'nullable|string|max:150',
             'music_artist' => 'nullable|string|max:150',
@@ -316,27 +316,25 @@ class StoriesController extends Controller
         try {
             DB::beginTransaction();
 
-            // Optional story music — uploaded file OR searched catalog track URL
-            $musicPath = '';
-            if ($request->hasFile('music') && Schema::hasColumn('Wo_UserStory', 'music')) {
-                $musicFile = $request->file('music');
-                $musicExt = $musicFile->getClientOriginalExtension() ?: 'mp3';
-                $musicPath = 'stories/music/' . date('Y/m') . '/' . uniqid() . '_' . time() . '.' . $musicExt;
-                Storage::disk('public')->put($musicPath, file_get_contents($musicFile));
-            } elseif ($request->filled('music_url') && Schema::hasColumn('Wo_UserStory', 'music')) {
-                $remoteUrl = trim((string) $request->input('music_url'));
-                if (filter_var($remoteUrl, FILTER_VALIDATE_URL)) {
-                    $musicPath = $remoteUrl;
-                }
-            }
-
+            // Third-party music only: store Deezer track id reference (not the audio file)
+            $musicRef = null;
             $musicTitle = trim((string) $request->input('music_title', ''));
             $musicArtist = trim((string) $request->input('music_artist', ''));
-            if ($musicPath && $musicTitle === '' && $request->hasFile('music')) {
-                $musicTitle = pathinfo($request->file('music')->getClientOriginalName(), PATHINFO_FILENAME) ?: 'Original audio';
-            }
-            if ($musicPath && $musicTitle === '') {
-                $musicTitle = 'Original audio';
+            $musicId = trim((string) $request->input('music_id', ''));
+            $musicUrl = trim((string) $request->input('music_url', ''));
+
+            if ($musicId !== '' || $musicUrl !== '') {
+                // Prefer stable third-party id: "deezer:{id}" — audio stays on Deezer CDN
+                if ($musicId !== '' && preg_match('/^\d+$/', $musicId)) {
+                    $musicRef = 'deezer:' . $musicId;
+                } elseif ($musicUrl !== '' && $this->isAllowedThirdPartyMusicUrl($musicUrl)) {
+                    // Fallback: store preview URL from allowed CDN only (still not hosted by us)
+                    $musicRef = $musicUrl;
+                }
+
+                if ($musicRef && $musicTitle === '') {
+                    $musicTitle = 'Original audio';
+                }
             }
 
             // Create story record
@@ -348,13 +346,13 @@ class StoriesController extends Controller
                 'description' => $request->input('story_description', ''),
             ];
             if (Schema::hasColumn('Wo_UserStory', 'music')) {
-                $storyInsert['music'] = $musicPath ?: null;
+                $storyInsert['music'] = $musicRef;
             }
             if (Schema::hasColumn('Wo_UserStory', 'music_title')) {
-                $storyInsert['music_title'] = $musicPath ? $musicTitle : null;
+                $storyInsert['music_title'] = $musicRef ? $musicTitle : null;
             }
             if (Schema::hasColumn('Wo_UserStory', 'music_artist')) {
-                $storyInsert['music_artist'] = $musicPath ? $musicArtist : null;
+                $storyInsert['music_artist'] = $musicRef ? $musicArtist : null;
             }
 
             $storyId = DB::table('Wo_UserStory')->insertGetId($storyInsert);
@@ -1776,28 +1774,130 @@ class StoriesController extends Controller
      * @param object $story
      * @return array
      */
+    /**
+     * Story music fields for API responses.
+     * Audio is never hosted locally — resolve Deezer track id to a CDN preview URL.
+     *
+     * @param object $story
+     * @return array
+     */
     private function formatStoryMusic(object $story): array
     {
-        $musicPath = $story->music ?? '';
-        if (empty($musicPath)) {
+        $musicRef = $story->music ?? '';
+        if (empty($musicRef)) {
             return [
                 'music' => null,
                 'music_url' => null,
                 'music_title' => null,
                 'music_artist' => null,
+                'music_id' => null,
                 'has_music' => false,
             ];
         }
 
-        $isRemote = str_starts_with($musicPath, 'http://') || str_starts_with($musicPath, 'https://');
+        $musicId = null;
+        $musicUrl = null;
+
+        if (preg_match('/^deezer:(\d+)$/', $musicRef, $m)) {
+            $musicId = $m[1];
+            $musicUrl = $this->resolveDeezerPreviewUrl($musicId);
+        } elseif ($this->isAllowedThirdPartyMusicUrl($musicRef)) {
+            $musicUrl = $musicRef;
+        }
+
+        if (!$musicUrl) {
+            return [
+                'music' => $musicRef,
+                'music_url' => null,
+                'music_title' => $story->music_title ?: null,
+                'music_artist' => $story->music_artist ?: null,
+                'music_id' => $musicId,
+                'has_music' => false,
+            ];
+        }
 
         return [
-            'music' => $musicPath,
-            'music_url' => $isRemote ? $musicPath : asset('storage/' . $musicPath),
+            'music' => $musicRef,
+            'music_url' => $musicUrl,
             'music_title' => $story->music_title ?: 'Original audio',
             'music_artist' => $story->music_artist ?: '',
+            'music_id' => $musicId,
             'has_music' => true,
         ];
+    }
+
+    /**
+     * Only allow known third-party preview CDNs (never trust arbitrary URLs).
+     */
+    private function isAllowedThirdPartyMusicUrl(string $url): bool
+    {
+        if (!filter_var($url, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+
+        $host = strtolower((string) parse_url($url, PHP_URL_HOST));
+        $allowed = [
+            'cdns-preview-a.dzcdn.net',
+            'cdns-preview-b.dzcdn.net',
+            'cdns-preview-c.dzcdn.net',
+            'cdns-preview-d.dzcdn.net',
+            'cdns-preview-e.dzcdn.net',
+            'cdns-preview-f.dzcdn.net',
+            'cdns-preview-g.dzcdn.net',
+            'cdns-preview-h.dzcdn.net',
+            'cdns-preview-i.dzcdn.net',
+            'cdns-preview-j.dzcdn.net',
+            'cdns-preview-k.dzcdn.net',
+            'cdns-preview-l.dzcdn.net',
+            'cdns-preview-m.dzcdn.net',
+            'cdns-preview-n.dzcdn.net',
+            'cdns-preview-o.dzcdn.net',
+            'cdns-preview-p.dzcdn.net',
+            'cdns-preview-q.dzcdn.net',
+            'cdns-preview-r.dzcdn.net',
+            'cdns-preview-s.dzcdn.net',
+            'cdns-preview-t.dzcdn.net',
+            'cdns-preview-u.dzcdn.net',
+            'cdns-preview-v.dzcdn.net',
+            'cdns-preview-w.dzcdn.net',
+            'cdns-preview-x.dzcdn.net',
+            'cdns-preview-y.dzcdn.net',
+            'cdns-preview-z.dzcdn.net',
+            'e-cdns-preview.dzcdn.net',
+        ];
+
+        if (in_array($host, $allowed, true)) {
+            return true;
+        }
+
+        // Broader Deezer preview CDN pattern
+        return (bool) preg_match('/(^|\.)dzcdn\.net$/', $host);
+    }
+
+    /**
+     * Resolve a Deezer track id to its temporary preview URL (audio stays on Deezer).
+     */
+    private function resolveDeezerPreviewUrl(string $trackId): ?string
+    {
+        static $cache = [];
+
+        if (isset($cache[$trackId])) {
+            return $cache[$trackId];
+        }
+
+        try {
+            $response = Http::timeout(8)->get('https://api.deezer.com/track/' . $trackId);
+            if (!$response->successful()) {
+                $cache[$trackId] = null;
+                return null;
+            }
+            $preview = $response->json('preview');
+            $cache[$trackId] = !empty($preview) ? $preview : null;
+            return $cache[$trackId];
+        } catch (\Throwable $e) {
+            $cache[$trackId] = null;
+            return null;
+        }
     }
 
     /**

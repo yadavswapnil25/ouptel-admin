@@ -7,7 +7,8 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration
 {
     /**
-     * Instagram-style story music metadata on Wo_UserStory.
+     * Instagram-style story music: store third-party track reference only
+     * (e.g. deezer:{id} + title/artist). Audio files are never hosted locally.
      */
     public function up(): void
     {
