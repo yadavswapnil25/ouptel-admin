@@ -143,6 +143,9 @@ class StoriesController extends Controller
             'story_title' => 'nullable|string|max:100',
             'story_description' => 'nullable|string',
             'cover' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240',
+            'music' => 'nullable|file|mimes:mp3,mpeg,mpga,wav,ogg,m4a,aac|max:10240',
+            'music_title' => 'nullable|string|max:150',
+            'music_artist' => 'nullable|string|max:150',
         ]);
 
         if ($validator->fails()) {
@@ -211,14 +214,40 @@ class StoriesController extends Controller
         try {
             DB::beginTransaction();
 
+            // Optional story music (Instagram-style)
+            $musicPath = '';
+            if ($request->hasFile('music') && Schema::hasColumn('Wo_UserStory', 'music')) {
+                $musicFile = $request->file('music');
+                $musicExt = $musicFile->getClientOriginalExtension() ?: 'mp3';
+                $musicPath = 'stories/music/' . date('Y/m') . '/' . uniqid() . '_' . time() . '.' . $musicExt;
+                Storage::disk('public')->put($musicPath, file_get_contents($musicFile));
+            }
+
+            $musicTitle = trim((string) $request->input('music_title', ''));
+            $musicArtist = trim((string) $request->input('music_artist', ''));
+            if ($musicPath && $musicTitle === '') {
+                $musicTitle = pathinfo($request->file('music')->getClientOriginalName(), PATHINFO_FILENAME) ?: 'Original audio';
+            }
+
             // Create story record
-            $storyId = DB::table('Wo_UserStory')->insertGetId([
+            $storyInsert = [
                 'user_id' => $tokenUserId,
                 'posted' => time(),
                 'expire' => time() + (60 * 60 * 24), // 24 hours
                 'title' => $request->input('story_title', ''),
                 'description' => $request->input('story_description', ''),
-            ]);
+            ];
+            if (Schema::hasColumn('Wo_UserStory', 'music')) {
+                $storyInsert['music'] = $musicPath ?: null;
+            }
+            if (Schema::hasColumn('Wo_UserStory', 'music_title')) {
+                $storyInsert['music_title'] = $musicPath ? $musicTitle : null;
+            }
+            if (Schema::hasColumn('Wo_UserStory', 'music_artist')) {
+                $storyInsert['music_artist'] = $musicPath ? $musicArtist : null;
+            }
+
+            $storyId = DB::table('Wo_UserStory')->insertGetId($storyInsert);
 
             // Handle file upload
             $filename = '';
@@ -405,6 +434,7 @@ class StoriesController extends Controller
                 ];
             })->toArray(),
         ];
+        $storyData = array_merge($storyData, $this->formatStoryMusic($story));
 
         // Check if story is viewed and mark as viewed
         $isViewed = false;
@@ -1430,7 +1460,7 @@ class StoriesController extends Controller
                 $thumbnail = $user->avatar ?? '';
             }
 
-            $formattedStories[] = [
+            $formattedStories[] = array_merge([
                 'id' => $story->id,
                 'user_id' => $story->user_id,
                 'title' => $story->title ?? '',
@@ -1448,7 +1478,7 @@ class StoriesController extends Controller
                     'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                     'verified' => (bool) ($user->verified ?? false),
                 ] : null,
-            ];
+            ], $this->formatStoryMusic($story));
         }
 
         return $formattedStories;
@@ -1609,7 +1639,7 @@ class StoriesController extends Controller
                         ->count();
                 }
 
-                $userData['stories'][] = [
+                $userData['stories'][] = array_merge([
                     'id' => $story->id,
                     'user_id' => $story->user_id,
                     'title' => $story->title ?? '',
@@ -1621,13 +1651,41 @@ class StoriesController extends Controller
                     'media_url' => $mediaUrl, // Full URL to the image or video file
                     'time_text' => $this->getTimeElapsedString($story->posted),
                     'view_count' => $viewCount,
-                ];
+                ], $this->formatStoryMusic($story));
             }
 
             $dataArray[] = $userData;
         }
 
         return $dataArray;
+    }
+
+    /**
+     * Story music fields for API responses.
+     *
+     * @param object $story
+     * @return array
+     */
+    private function formatStoryMusic(object $story): array
+    {
+        $musicPath = $story->music ?? '';
+        if (empty($musicPath)) {
+            return [
+                'music' => null,
+                'music_url' => null,
+                'music_title' => null,
+                'music_artist' => null,
+                'has_music' => false,
+            ];
+        }
+
+        return [
+            'music' => $musicPath,
+            'music_url' => asset('storage/' . $musicPath),
+            'music_title' => $story->music_title ?: 'Original audio',
+            'music_artist' => $story->music_artist ?: '',
+            'has_music' => true,
+        ];
     }
 
     /**
