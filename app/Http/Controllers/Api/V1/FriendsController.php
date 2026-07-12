@@ -1697,65 +1697,43 @@ class FriendsController extends Controller
     }
 
     /**
-     * Check if two users are friends
-     * 
-     * @param string $userId1
-     * @param string $userId2
-     * @return bool
+     * Check if two users are accepted friends (Wo_Friends status = 2 only).
+     * Follow relationships are independent and must not count as friends.
      */
     private function isFriend(string $userId1, string $userId2): bool
     {
-        if (Schema::hasTable('Wo_Friends')) {
-            try {
-                if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
-                    $accepted = DB::table('Wo_Friends')
-                        ->where(function ($q) use ($userId1, $userId2) {
-                            $q->where('user_id', $userId1)->where('friend_id', $userId2);
-                        })
-                        ->orWhere(function ($q) use ($userId1, $userId2) {
-                            $q->where('user_id', $userId2)->where('friend_id', $userId1);
-                        })
-                        ->whereIn('status', ['2', 2])
-                        ->exists();
-                    if ($accepted) {
-                        return true;
-                    }
-                }
-
-                if (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
-                    $q = DB::table('Wo_Friends')
-                        ->where(function ($q) use ($userId1, $userId2) {
-                            $q->where('from_id', $userId1)->where('to_id', $userId2);
-                        })
-                        ->orWhere(function ($q) use ($userId1, $userId2) {
-                            $q->where('from_id', $userId2)->where('to_id', $userId1);
-                        });
-                    if (Schema::hasColumn('Wo_Friends', 'status')) {
-                        $q->whereIn('status', ['2', 2]);
-                    }
-                    if ($q->exists()) {
-                        return true;
-                    }
-                }
-            } catch (\Exception $e) {
-                // fall through
-            }
+        if (! Schema::hasTable('Wo_Friends') || ! Schema::hasColumn('Wo_Friends', 'status')) {
+            return false;
         }
 
-        if (Schema::hasTable('Wo_Followers')) {
-            $user1FollowingUser2 = DB::table('Wo_Followers')
-                ->where('follower_id', $userId1)
-                ->where('following_id', $userId2)
-                ->whereIn('active', ['1', 1])
-                ->exists();
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                return DB::table('Wo_Friends')
+                    ->where(function ($q) use ($userId1, $userId2) {
+                        $q->where(function ($q2) use ($userId1, $userId2) {
+                            $q2->where('user_id', $userId1)->where('friend_id', $userId2);
+                        })->orWhere(function ($q2) use ($userId1, $userId2) {
+                            $q2->where('user_id', $userId2)->where('friend_id', $userId1);
+                        });
+                    })
+                    ->whereIn('status', ['2', 2])
+                    ->exists();
+            }
 
-            $user2FollowingUser1 = DB::table('Wo_Followers')
-                ->where('follower_id', $userId2)
-                ->where('following_id', $userId1)
-                ->whereIn('active', ['1', 1])
-                ->exists();
-
-            return $user1FollowingUser2 && $user2FollowingUser1;
+            if (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                return DB::table('Wo_Friends')
+                    ->where(function ($q) use ($userId1, $userId2) {
+                        $q->where(function ($q2) use ($userId1, $userId2) {
+                            $q2->where('from_id', $userId1)->where('to_id', $userId2);
+                        })->orWhere(function ($q2) use ($userId1, $userId2) {
+                            $q2->where('from_id', $userId2)->where('to_id', $userId1);
+                        });
+                    })
+                    ->whereIn('status', ['2', 2])
+                    ->exists();
+            }
+        } catch (\Exception $e) {
+            return false;
         }
 
         return false;

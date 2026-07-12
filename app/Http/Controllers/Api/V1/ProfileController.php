@@ -923,114 +923,46 @@ class ProfileController extends Controller
     }
 
     /**
-     * Check if two users are friends (accepted Wo_Friends and/or mutual active follow).
-     *
-     * @param  int|string  $userId1  Profile / first user
-     * @param  int|string  $userId2  Viewer / second user
+     * Check if two users are accepted friends (Wo_Friends status = 2 only).
+     * Follow relationships are independent and must not count as friends.
      */
     private function isFriend(int|string $userId1, int|string $userId2): bool
     {
         $a = (string) $userId1;
         $b = (string) $userId2;
 
-        // Check Wo_Friends table first (if it exists)
-        if (Schema::hasTable('Wo_Friends')) {
-            try {
-                if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
-                    $q = DB::table('Wo_Friends')
-                        ->where(function ($q) use ($a, $b) {
-                            $q->where('user_id', $a)->where('friend_id', $b);
-                        })
-                        ->orWhere(function ($q) use ($a, $b) {
-                            $q->where('user_id', $b)->where('friend_id', $a);
-                        });
-                    if (Schema::hasColumn('Wo_Friends', 'status')) {
-                        // status 2 = accepted friends; 0/1 = pending request
-                        $q->whereIn('status', ['2', 2]);
-                    }
-                    if ($q->exists()) {
-                        return true;
-                    }
-                }
-
-                if (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
-                    $q = DB::table('Wo_Friends')
-                        ->where(function ($q) use ($a, $b) {
-                            $q->where('from_id', $a)->where('to_id', $b);
-                        })
-                        ->orWhere(function ($q) use ($a, $b) {
-                            $q->where('from_id', $b)->where('to_id', $a);
-                        });
-                    if (Schema::hasColumn('Wo_Friends', 'status')) {
-                        $q->whereIn('status', ['2', 2]);
-                    }
-
-                    if ($q->exists()) {
-                        return true;
-                    }
-                }
-            } catch (\Exception $e) {
-                // Table exists but query failed, fall through to followers check
-            }
+        if (! Schema::hasTable('Wo_Friends') || ! Schema::hasColumn('Wo_Friends', 'status')) {
+            return false;
         }
 
-        // Fallback: mutual active follow (both sides active=1)
-        if (Schema::hasTable('Wo_Followers')) {
-            try {
-                $user1FollowingUser2 = DB::table('Wo_Followers')
-                    ->where('follower_id', $a)
-                    ->where('following_id', $b)
-                    ->where(function ($q) {
-                        $q->where('active', 1)->orWhere('active', '1');
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                return DB::table('Wo_Friends')
+                    ->where(function ($q) use ($a, $b) {
+                        $q->where(function ($q2) use ($a, $b) {
+                            $q2->where('user_id', $a)->where('friend_id', $b);
+                        })->orWhere(function ($q2) use ($a, $b) {
+                            $q2->where('user_id', $b)->where('friend_id', $a);
+                        });
                     })
+                    ->whereIn('status', ['2', 2])
                     ->exists();
-
-                $user2FollowingUser1 = DB::table('Wo_Followers')
-                    ->where('follower_id', $b)
-                    ->where('following_id', $a)
-                    ->where(function ($q) {
-                        $q->where('active', 1)->orWhere('active', '1');
-                    })
-                    ->exists();
-
-                if ($user1FollowingUser2 && $user2FollowingUser1) {
-                    return true;
-                }
-
-                // One-sided active follow: treat as friends if the other side also
-                // has an active follow that was created when their request was accepted.
-                // This covers cases where ensureMutualFollowActive() hadn't run yet.
-                if ($user1FollowingUser2 || $user2FollowingUser1) {
-                    // Check Wo_Friends for any relationship record (even without status column)
-                    if (Schema::hasTable('Wo_Friends')) {
-                        $hasFriendRecord = false;
-                        if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
-                            $hasFriendRecord = DB::table('Wo_Friends')
-                                ->where(function ($q) use ($a, $b) {
-                                    $q->where('user_id', $a)->where('friend_id', $b);
-                                })
-                                ->orWhere(function ($q) use ($a, $b) {
-                                    $q->where('user_id', $b)->where('friend_id', $a);
-                                })
-                                ->exists();
-                        } elseif (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
-                            $hasFriendRecord = DB::table('Wo_Friends')
-                                ->where(function ($q) use ($a, $b) {
-                                    $q->where('from_id', $a)->where('to_id', $b);
-                                })
-                                ->orWhere(function ($q) use ($a, $b) {
-                                    $q->where('from_id', $b)->where('to_id', $a);
-                                })
-                                ->exists();
-                        }
-                        if ($hasFriendRecord) {
-                            return true;
-                        }
-                    }
-                }
-            } catch (\Exception $e) {
-                // Table exists but query failed
             }
+
+            if (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                return DB::table('Wo_Friends')
+                    ->where(function ($q) use ($a, $b) {
+                        $q->where(function ($q2) use ($a, $b) {
+                            $q2->where('from_id', $a)->where('to_id', $b);
+                        })->orWhere(function ($q2) use ($a, $b) {
+                            $q2->where('from_id', $b)->where('to_id', $a);
+                        });
+                    })
+                    ->whereIn('status', ['2', 2])
+                    ->exists();
+            }
+        } catch (\Exception $e) {
+            return false;
         }
 
         return false;
