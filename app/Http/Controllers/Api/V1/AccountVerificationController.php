@@ -64,12 +64,12 @@ class AccountVerificationController extends Controller
         }
         $tokenUserId = $authResult['user_id'];
 
-        // Validate request
+        // Validate request (PAN Card: front image only)
         $validator = Validator::make($request->all(), [
             'id_proof_type' => 'required|string|in:' . implode(',', array_keys(VerificationRequest::ID_PROOF_TYPES)),
             'id_proof_number' => 'required|string|max:100',
             'id_proof_front_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
-            'id_proof_back_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
+            'id_proof_back_image' => 'required_unless:id_proof_type,pan_card|nullable|image|mimes:jpeg,png,jpg|max:5120',
             'badge_type' => 'required|string|in:blue,golden',
         ]);
 
@@ -133,10 +133,13 @@ class AccountVerificationController extends Controller
             $frontFilename = 'verification_front_' . $tokenUserId . '_' . time() . '.' . $frontImage->getClientOriginalExtension();
             $frontPath = $frontImage->storeAs('upload/verification/' . date('Y/m'), $frontFilename, 'public');
 
-            // Upload back image
-            $backImage = $request->file('id_proof_back_image');
-            $backFilename = 'verification_back_' . $tokenUserId . '_' . time() . '.' . $backImage->getClientOriginalExtension();
-            $backPath = $backImage->storeAs('upload/verification/' . date('Y/m'), $backFilename, 'public');
+            // Upload back image (optional for PAN Card)
+            $backPath = null;
+            if ($request->hasFile('id_proof_back_image')) {
+                $backImage = $request->file('id_proof_back_image');
+                $backFilename = 'verification_back_' . $tokenUserId . '_' . time() . '.' . $backImage->getClientOriginalExtension();
+                $backPath = $backImage->storeAs('upload/verification/' . date('Y/m'), $backFilename, 'public');
+            }
 
             // Create verification request
             $verification = VerificationRequest::create([
@@ -194,12 +197,12 @@ class AccountVerificationController extends Controller
         }
         $tokenUserId = $authResult['user_id'];
 
-        // Validate request
+        // Validate request (PAN Card: front image only)
         $validator = Validator::make($request->all(), [
             'id_proof_type' => 'required|string|in:' . implode(',', array_keys(VerificationRequest::ID_PROOF_TYPES)),
             'id_proof_number' => 'required|string|max:100',
             'id_proof_front_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
-            'id_proof_back_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
+            'id_proof_back_image' => 'required_unless:id_proof_type,pan_card|nullable|image|mimes:jpeg,png,jpg|max:5120',
             'badge_type' => 'required|string|in:blue,golden',
             'verification_video' => 'required|file|mimes:mp4,webm,mov,avi|max:52428800', // 50MB max
         ]);
@@ -264,10 +267,13 @@ class AccountVerificationController extends Controller
             $frontFilename = 'verification_front_' . $tokenUserId . '_' . time() . '.' . $frontImage->getClientOriginalExtension();
             $frontPath = $frontImage->storeAs('upload/verification/' . date('Y/m'), $frontFilename, 'public');
 
-            // Upload back image
-            $backImage = $request->file('id_proof_back_image');
-            $backFilename = 'verification_back_' . $tokenUserId . '_' . time() . '.' . $backImage->getClientOriginalExtension();
-            $backPath = $backImage->storeAs('upload/verification/' . date('Y/m'), $backFilename, 'public');
+            // Upload back image (optional for PAN Card)
+            $backPath = null;
+            if ($request->hasFile('id_proof_back_image')) {
+                $backImage = $request->file('id_proof_back_image');
+                $backFilename = 'verification_back_' . $tokenUserId . '_' . time() . '.' . $backImage->getClientOriginalExtension();
+                $backPath = $backImage->storeAs('upload/verification/' . date('Y/m'), $backFilename, 'public');
+            }
 
             // Upload verification video
             $video = $request->file('verification_video');
