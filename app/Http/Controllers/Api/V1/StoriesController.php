@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -103,6 +104,104 @@ class StoriesController extends Controller
     }
 
     /**
+     * Search music catalog for stories (Instagram-style).
+     * Proxies Deezer public search / chart API and returns 30s previews.
+     */
+    public function searchMusic(Request $request): JsonResponse
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 1,
+                    'error_text' => 'Unauthorized - No Bearer token provided'
+                ]
+            ], 401);
+        }
+
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 2,
+                    'error_text' => 'Invalid token - Session not found'
+                ]
+            ], 401);
+        }
+
+        $query = trim((string) $request->query('q', ''));
+        $limit = min(25, max(1, (int) $request->query('limit', 20)));
+
+        try {
+            if ($query !== '') {
+                $response = Http::timeout(12)->get('https://api.deezer.com/search', [
+                    'q' => $query,
+                    'limit' => $limit,
+                ]);
+            } else {
+                // Trending / suggested tracks when search is empty
+                $response = Http::timeout(12)->get('https://api.deezer.com/chart/0/tracks', [
+                    'limit' => $limit,
+                ]);
+            }
+
+            if (!$response->successful()) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 10,
+                        'error_text' => 'Music search unavailable right now'
+                    ]
+                ], 502);
+            }
+
+            $payload = $response->json();
+            $rawTracks = $payload['data'] ?? [];
+
+            $tracks = [];
+            foreach ($rawTracks as $track) {
+                $preview = $track['preview'] ?? null;
+                if (empty($preview)) {
+                    continue;
+                }
+
+                $artist = $track['artist']['name'] ?? '';
+                $albumCover = $track['album']['cover_medium']
+                    ?? $track['album']['cover_small']
+                    ?? $track['album']['cover']
+                    ?? null;
+
+                $tracks[] = [
+                    'id' => (string) ($track['id'] ?? ''),
+                    'title' => $track['title'] ?? $track['title_short'] ?? 'Unknown',
+                    'artist' => $artist,
+                    'preview_url' => $preview,
+                    'duration' => (int) ($track['duration'] ?? 30),
+                    'cover' => $albumCover,
+                    'source' => 'deezer',
+                ];
+            }
+
+            return response()->json([
+                'api_status' => 200,
+                'query' => $query,
+                'tracks' => $tracks,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 10,
+                    'error_text' => 'Music search failed: ' . $e->getMessage()
+                ]
+            ], 500);
+        }
+    }
+
+    /**
      * Create story (mimics old API: create-story.php)
      * 
      * @param Request $request
@@ -144,8 +243,11 @@ class StoriesController extends Controller
             'story_description' => 'nullable|string',
             'cover' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240',
             'music' => 'nullable|file|mimes:mp3,mpeg,mpga,wav,ogg,m4a,aac|max:10240',
+            'music_url' => 'nullable|url|max:500',
             'music_title' => 'nullable|string|max:150',
             'music_artist' => 'nullable|string|max:150',
+            'music_cover' => 'nullable|url|max:500',
+            'music_id' => 'nullable|string|max:64',
         ]);
 
         if ($validator->fails()) {
@@ -214,19 +316,27 @@ class StoriesController extends Controller
         try {
             DB::beginTransaction();
 
-            // Optional story music (Instagram-style)
+            // Optional story music — uploaded file OR searched catalog track URL
             $musicPath = '';
             if ($request->hasFile('music') && Schema::hasColumn('Wo_UserStory', 'music')) {
                 $musicFile = $request->file('music');
                 $musicExt = $musicFile->getClientOriginalExtension() ?: 'mp3';
                 $musicPath = 'stories/music/' . date('Y/m') . '/' . uniqid() . '_' . time() . '.' . $musicExt;
                 Storage::disk('public')->put($musicPath, file_get_contents($musicFile));
+            } elseif ($request->filled('music_url') && Schema::hasColumn('Wo_UserStory', 'music')) {
+                $remoteUrl = trim((string) $request->input('music_url'));
+                if (filter_var($remoteUrl, FILTER_VALIDATE_URL)) {
+                    $musicPath = $remoteUrl;
+                }
             }
 
             $musicTitle = trim((string) $request->input('music_title', ''));
             $musicArtist = trim((string) $request->input('music_artist', ''));
-            if ($musicPath && $musicTitle === '') {
+            if ($musicPath && $musicTitle === '' && $request->hasFile('music')) {
                 $musicTitle = pathinfo($request->file('music')->getClientOriginalName(), PATHINFO_FILENAME) ?: 'Original audio';
+            }
+            if ($musicPath && $musicTitle === '') {
+                $musicTitle = 'Original audio';
             }
 
             // Create story record
@@ -1679,9 +1789,11 @@ class StoriesController extends Controller
             ];
         }
 
+        $isRemote = str_starts_with($musicPath, 'http://') || str_starts_with($musicPath, 'https://');
+
         return [
             'music' => $musicPath,
-            'music_url' => asset('storage/' . $musicPath),
+            'music_url' => $isRemote ? $musicPath : asset('storage/' . $musicPath),
             'music_title' => $story->music_title ?: 'Original audio',
             'music_artist' => $story->music_artist ?: '',
             'has_music' => true,

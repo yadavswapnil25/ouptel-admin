@@ -313,6 +313,7 @@ Route::get('/polls/{postId}', [PollController::class, 'getPollDetails']); // Get
 Route::post('/stories/view-all', [StoriesController::class, 'viewAllStories']); // View all stories (old API: view_all_stories)
 Route::post('/stories/user-stories', [StoriesController::class, 'getUserStories']); // Get user stories grouped (old API: get-user-stories.php)
 Route::post('/stories/create', [StoriesController::class, 'create']); // Create story (old API: create-story.php)
+Route::get('/stories/music/search', [StoriesController::class, 'searchMusic']); // Search music for stories (Deezer)
 Route::post('/stories/delete', [StoriesController::class, 'delete']); // Delete story (old API: delete-story.php)
 Route::post('/stories/react', [StoriesController::class, 'react']); // React to story (old API: react_story.php)
 Route::post('/stories/mute', [StoriesController::class, 'mute']); // Mute/unmute story (old API: mute_story.php)
