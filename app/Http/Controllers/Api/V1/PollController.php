@@ -84,6 +84,8 @@ class PollController extends Controller
         try {
             DB::beginTransaction();
 
+            $this->ensurePollTables();
+
             // Check if poll table exists
             if (!Schema::hasTable('Wo_Polls')) {
                 DB::rollBack();
@@ -337,7 +339,12 @@ class PollController extends Controller
 
             return response()->json([
                 'api_status' => 200,
-                'votes' => $votes
+                'votes' => $votes,
+                'poll_options' => array_map(static function ($row) use ($optionId) {
+                    return array_merge($row, [
+                        'is_voted' => (int) $row['id'] === (int) $optionId,
+                    ]);
+                }, $votes),
             ]);
         } else {
             return response()->json([
@@ -469,6 +476,27 @@ class PollController extends Controller
                 'votes' => $votes,
             ]
         ]);
+    }
+
+    private function ensurePollTables(): void
+    {
+        if (! Schema::hasTable('Wo_Polls')) {
+            Schema::create('Wo_Polls', function ($table) {
+                $table->bigIncrements('id');
+                $table->unsignedBigInteger('post_id')->index();
+                $table->string('text', 255);
+                $table->string('time', 50)->nullable();
+            });
+        }
+
+        if (! Schema::hasTable('Wo_Votes')) {
+            Schema::create('Wo_Votes', function ($table) {
+                $table->bigIncrements('id');
+                $table->unsignedBigInteger('user_id')->index();
+                $table->unsignedBigInteger('post_id')->index();
+                $table->unsignedBigInteger('option_id')->index();
+            });
+        }
     }
 }
 
