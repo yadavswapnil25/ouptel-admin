@@ -1762,6 +1762,23 @@ class ProfileController extends Controller
                 'badge_type' => $this->getUserBadgeType($post->user_id),
             ];
 
+            $group = null;
+            if (!empty($post->group_id) && (int) $post->group_id > 0 && Schema::hasTable('Wo_Groups')) {
+                $groupRow = DB::table('Wo_Groups')->where('id', (int) $post->group_id)->first();
+                if ($groupRow) {
+                    $groupTitle = trim((string) ($groupRow->group_title ?? ''));
+                    $groupName = trim((string) ($groupRow->group_name ?? ''));
+                    $group = [
+                        'id' => (int) $groupRow->id,
+                        'group_name' => $groupName,
+                        'group_title' => $groupTitle !== '' ? $groupTitle : $groupName,
+                        'name' => $groupTitle !== '' ? $groupTitle : ($groupName !== '' ? $groupName : 'Group'),
+                        'avatar' => $groupRow->avatar ?? '',
+                        'avatar_url' => !empty($groupRow->avatar) ? asset('storage/' . $groupRow->avatar) : null,
+                    ];
+                }
+            }
+
             $result[] = [
                 'id' => $post->id,
                 'post_id' => $post->post_id ?? $post->id,
@@ -1816,6 +1833,8 @@ class ProfileController extends Controller
                 // Color data (for colored posts)
                 'color_id' => $post->color_id ?? null,
                 'color' => $colorData,
+                'group_id' => $post->group_id ?? null,
+                'group' => $group,
             ];
         }
 

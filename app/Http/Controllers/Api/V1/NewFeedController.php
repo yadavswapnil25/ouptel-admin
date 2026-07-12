@@ -453,6 +453,24 @@ class NewFeedController extends Controller
             }
             $taggedFriends = $this->extractTaggedFriendsFromText((string) ($post->postText ?? ''));
 
+            // Group context for "shared to group" posts
+            $group = null;
+            if (!empty($post->group_id) && (int) $post->group_id > 0 && Schema::hasTable('Wo_Groups')) {
+                $groupRow = DB::table('Wo_Groups')->where('id', (int) $post->group_id)->first();
+                if ($groupRow) {
+                    $groupTitle = trim((string) ($groupRow->group_title ?? ''));
+                    $groupName = trim((string) ($groupRow->group_name ?? ''));
+                    $group = [
+                        'id' => (int) $groupRow->id,
+                        'group_name' => $groupName,
+                        'group_title' => $groupTitle !== '' ? $groupTitle : $groupName,
+                        'name' => $groupTitle !== '' ? $groupTitle : ($groupName !== '' ? $groupName : 'Group'),
+                        'avatar' => $groupRow->avatar ?? '',
+                        'avatar_url' => !empty($groupRow->avatar) ? asset('storage/' . $groupRow->avatar) : null,
+                    ];
+                }
+            }
+
             // Get post reactions count (try Wo_Reactions table first, fallback to post_likes column)
             // Use post_id field (which is used to store reactions) with fallback to id
             $postIdForReactions = $post->post_id ?? $post->id;
@@ -605,6 +623,7 @@ class NewFeedController extends Controller
                 // Page/Group context
                 'page_id' => $post->page_id ?? null,
                 'group_id' => $post->group_id ?? null,
+                'group' => $group,
                 'event_id' => $post->event_id ?? null,
                 
                 // Timestamps
