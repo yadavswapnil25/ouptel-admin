@@ -648,62 +648,19 @@ class FriendsController extends Controller
             DB::beginTransaction();
 
             $followMessage = 'invalid';
+            $fromId = (string) $tokenUserId;
+            $toId = (string) $recipientId;
 
-            // Check if already following or has pending request (matching old API logic)
-            // Handle both string and integer values for active field
-            $isFollowing = DB::table('Wo_Followers')
-                ->where('follower_id', $tokenUserId)
-                ->where('following_id', $recipientId)
-                ->whereIn('active', ['1', 1])
-                ->exists();
-
-            $isFollowRequested = DB::table('Wo_Followers')
-                ->where('follower_id', $tokenUserId)
-                ->where('following_id', $recipientId)
-                ->whereIn('active', ['0', 0])
-                ->exists();
-
-            // Pending follow only (active=0): cancel that request — do not touch active follows
-            if ($isFollowRequested && ! $isFollowing) {
-                $deleted = DB::table('Wo_Followers')
-                    ->where('follower_id', $tokenUserId)
-                    ->where('following_id', $recipientId)
-                    ->delete();
-
-                if ($deleted) {
-                    $followMessage = 'unfollowed';
-                    $this->updateFollowCounts($tokenUserId, $recipientId);
-                }
-            } elseif ($isFollowing) {
-                // Already following: never delete the follow here (old API toggled unfollow and broke "Add Friend")
-                $fromId = (string) $tokenUserId;
-                $toId = (string) $recipientId;
-
-                if ($this->isFriend($fromId, $toId)) {
-                    $followMessage = 'already_friends';
-                } elseif ($this->hasFriendTablePendingRequestFrom($fromId, $toId)) {
-                    $this->deleteFriendTablePendingRequestFrom($fromId, $toId);
-                    $followMessage = 'unfollowed';
-                } else {
-                    $this->insertFriendTablePendingRequest($fromId, $toId);
-                    $this->sendFriendInviteNotification($fromId, $toId);
-                    $followMessage = 'requested';
-                }
+            // Friend requests only (Wo_Friends) — never touch Wo_Followers (Follow is a separate action)
+            if ($this->isFriend($fromId, $toId)) {
+                $followMessage = 'already_friends';
+            } elseif ($this->hasFriendTablePendingRequestFrom($fromId, $toId)) {
+                $this->deleteFriendTablePendingRequestFrom($fromId, $toId);
+                $followMessage = 'unfollowed';
             } else {
-                // Not following yet: friend requests live in Wo_Friends only (Facebook-style — independent from Follow)
-                $fromId = (string) $tokenUserId;
-                $toId = (string) $recipientId;
-
-                if ($this->isFriend($fromId, $toId)) {
-                    $followMessage = 'already_friends';
-                } elseif ($this->hasFriendTablePendingRequestFrom($fromId, $toId)) {
-                    $this->deleteFriendTablePendingRequestFrom($fromId, $toId);
-                    $followMessage = 'unfollowed';
-                } else {
-                    $this->insertFriendTablePendingRequest($fromId, $toId);
-                    $this->sendFriendInviteNotification($fromId, $toId);
-                    $followMessage = 'requested';
-                }
+                $this->insertFriendTablePendingRequest($fromId, $toId);
+                $this->sendFriendInviteNotification($fromId, $toId);
+                $followMessage = 'requested';
             }
 
             DB::commit();
@@ -1876,7 +1833,7 @@ class FriendsController extends Controller
                 $row = [
                     'user_id' => $senderId,
                     'friend_id' => $receiverId,
-                    'status' => '1',
+                    'status' => '0',
                 ];
                 if (Schema::hasColumn('Wo_Friends', 'time')) {
                     $row['time'] = (string) time();
@@ -1899,7 +1856,7 @@ class FriendsController extends Controller
                 $row = [
                     'from_id' => $senderId,
                     'to_id' => $receiverId,
-                    'status' => '1',
+                    'status' => '0',
                 ];
                 if (Schema::hasColumn('Wo_Friends', 'time')) {
                     $row['time'] = (string) time();

@@ -876,8 +876,8 @@ class ProfileController extends Controller
                             $q->where('user_id', $b)->where('friend_id', $a);
                         });
                     if (Schema::hasColumn('Wo_Friends', 'status')) {
-                        // Accept status 1 (some platform versions) and 2 (standard accepted)
-                        $q->whereIn('status', ['1', '2', 1, 2]);
+                        // status 2 = accepted friends; 0/1 = pending request
+                        $q->whereIn('status', ['2', 2]);
                     }
                     if ($q->exists()) {
                         return true;
@@ -893,7 +893,7 @@ class ProfileController extends Controller
                             $q->where('from_id', $b)->where('to_id', $a);
                         });
                     if (Schema::hasColumn('Wo_Friends', 'status')) {
-                        $q->whereIn('status', ['1', '2', 1, 2]);
+                        $q->whereIn('status', ['2', 2]);
                     }
 
                     if ($q->exists()) {
