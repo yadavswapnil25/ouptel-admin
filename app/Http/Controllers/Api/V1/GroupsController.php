@@ -537,6 +537,15 @@ class GroupsController extends BaseController
 
             $joinStatus = 'left';
         } else {
+            // Age group restriction (admin-set): based on user birthday / DOB
+            $ageCheck = $this->assertUserMeetsGroupAgeRequirement($group, $userIdStr);
+            if ($ageCheck !== true) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $ageCheck,
+                ], 403);
+            }
+
             // Check if join_privacy is private
             // The Group model accessor converts database values: '1' = 'public', '0' = 'private'
             // Also check raw database value for compatibility with old system (where '2' = private)
@@ -939,5 +948,64 @@ class GroupsController extends BaseController
 
         return $this->isGroupOwner($group, $userId)
             || $this->isActiveMember((int) $group->id, $userId);
+    }
+
+    /**
+     * Admin age-group restriction for joining.
+     * @return true|string true when allowed, otherwise error message
+     */
+    private function assertUserMeetsGroupAgeRequirement(Group $group, string $userId)
+    {
+        if (!Schema::hasColumn('Wo_Groups', 'age_group')) {
+            return true;
+        }
+
+        $ageGroup = trim((string) ($group->age_group ?? ''));
+        if ($ageGroup === '') {
+            return true;
+        }
+
+        $range = $this->ageGroupRange($ageGroup);
+        if ($range === null) {
+            return true;
+        }
+
+        [$minAge, $maxAge, $label] = $range;
+
+        $birthdayRaw = DB::table('Wo_Users')->where('user_id', $userId)->value('birthday');
+        $birthdayRaw = is_string($birthdayRaw) ? trim($birthdayRaw) : '';
+
+        if ($birthdayRaw === '' || $birthdayRaw === '0000-00-00') {
+            return 'Please add your date of birth in profile settings before joining this group.';
+        }
+
+        try {
+            $age = \Carbon\Carbon::parse($birthdayRaw)->age;
+        } catch (\Throwable $e) {
+            return 'Please add a valid date of birth in profile settings before joining this group.';
+        }
+
+        if ($age < $minAge || ($maxAge !== null && $age > $maxAge)) {
+            return "You cannot join this group. This group is only for ages {$label}.";
+        }
+
+        return true;
+    }
+
+    /**
+     * @return array{0:int,1:?int,2:string}|null [min, max|null, label]
+     */
+    private function ageGroupRange(string $ageGroup): ?array
+    {
+        return match ($ageGroup) {
+            '0_17' => [0, 17, 'Under 18'],
+            '18_24' => [18, 24, '18–24'],
+            '25_34' => [25, 34, '25–34'],
+            '35_44' => [35, 44, '35–44'],
+            '45_54' => [45, 54, '45–54'],
+            '55_64' => [55, 64, '55–64'],
+            '65_plus' => [65, null, '65+'],
+            default => null,
+        };
     }
 }

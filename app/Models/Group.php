@@ -18,6 +18,7 @@ class Group extends Model
         'sub_category',
         'privacy',
         'join_privacy',
+        'age_group',
         'active',
         'avatar',
         'cover',

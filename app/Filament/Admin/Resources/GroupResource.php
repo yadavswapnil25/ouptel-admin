@@ -94,6 +94,22 @@ class GroupResource extends Resource
                             })
                             ->searchable()
                             ->required(),
+                        Forms\Components\Select::make('age_group')
+                            ->label('Age Group (Join Restriction)')
+                            ->helperText('Only users in this age range (from date of birth) can join. Leave empty for no restriction. Admin only.')
+                            ->placeholder('No age restriction')
+                            ->options([
+                                '0_17' => 'Under 18',
+                                '18_24' => '18–24',
+                                '25_34' => '25–34',
+                                '35_44' => '35–44',
+                                '45_54' => '45–54',
+                                '55_64' => '55–64',
+                                '65_plus' => '65+',
+                            ])
+                            ->nullable()
+                            ->searchable(false)
+                            ->dehydrateStateUsing(fn ($state) => filled($state) ? $state : null),
                         Forms\Components\Toggle::make('active')
                             ->label('Active')
                             ->default(true),
@@ -145,6 +161,21 @@ class GroupResource extends Resource
                         'secret' => 'danger',
                         default => 'gray',
                     }),
+                Tables\Columns\TextColumn::make('age_group')
+                    ->label('Age Group')
+                    ->placeholder('Any')
+                    ->formatStateUsing(fn (?string $state): string => match ($state) {
+                        '0_17' => 'Under 18',
+                        '18_24' => '18–24',
+                        '25_34' => '25–34',
+                        '35_44' => '35–44',
+                        '45_54' => '45–54',
+                        '55_64' => '55–64',
+                        '65_plus' => '65+',
+                        default => 'Any',
+                    })
+                    ->badge()
+                    ->color('gray'),
                 Tables\Columns\IconColumn::make('active')
                     ->label('Active')
                     ->boolean()
