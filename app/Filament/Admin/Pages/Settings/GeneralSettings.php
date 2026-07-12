@@ -15,6 +15,7 @@ use Filament\Actions\Action;
 use Filament\Notifications\Notification;
 use App\Models\Setting;
 use App\Helpers\SponsoredAdsHelper;
+use App\Helpers\BlogAdsHelper;
 use App\Filament\Admin\Concerns\HasPageAccess;
 
 class GeneralSettings extends Page
@@ -59,6 +60,7 @@ class GeneralSettings extends Page
             'sidebar_ad_image_upload' => Setting::get('sidebar_ad_image_upload', ''),
             'sidebar_ad_url' => Setting::get('sidebar_ad_url', ''),
             'sponsored_items' => SponsoredAdsHelper::loadForForm(),
+            'blog_ad_items' => BlogAdsHelper::loadForForm(),
         ]);
     }
 
@@ -262,6 +264,45 @@ class GeneralSettings extends Page
                             ->itemLabel(fn (array $state): ?string => $state['name'] ?? null),
                     ])
                     ->columns(1),
+
+                Section::make('Blog Advertisement')
+                    ->description('Add multiple ads for the Blog page right sidebar. All other blog sidebar widgets are replaced by these ads.')
+                    ->schema([
+                        Repeater::make('blog_ad_items')
+                            ->label('Blog Ads')
+                            ->schema([
+                                TextInput::make('name')
+                                    ->label('Ad Name')
+                                    ->placeholder('Blog Promo')
+                                    ->required()
+                                    ->columnSpan(1),
+                                TextInput::make('url')
+                                    ->label('Click URL')
+                                    ->url()
+                                    ->placeholder('https://example.com')
+                                    ->required()
+                                    ->columnSpan(1),
+                                FileUpload::make('image_upload')
+                                    ->label('Image Upload')
+                                    ->image()
+                                    ->disk('public')
+                                    ->directory('ads/blog')
+                                    ->visibility('public')
+                                    ->columnSpan(1),
+                                TextInput::make('image_url')
+                                    ->label('Image URL (fallback)')
+                                    ->placeholder('https://example.com/blog-ad.jpg')
+                                    ->helperText('Used if no uploaded image is set.')
+                                    ->columnSpan(1),
+                            ])
+                            ->columns(2)
+                            ->defaultItems(0)
+                            ->addActionLabel('Add blog ad')
+                            ->reorderable()
+                            ->collapsible()
+                            ->itemLabel(fn (array $state): ?string => $state['name'] ?? null),
+                    ])
+                    ->columns(1),
             ])
             ->statePath('data');
     }
@@ -283,6 +324,11 @@ class GeneralSettings extends Page
             if (array_key_exists('sponsored_items', $data)) {
                 SponsoredAdsHelper::saveFromForm(is_array($data['sponsored_items']) ? $data['sponsored_items'] : []);
                 unset($data['sponsored_items']);
+            }
+
+            if (array_key_exists('blog_ad_items', $data)) {
+                BlogAdsHelper::saveFromForm(is_array($data['blog_ad_items']) ? $data['blog_ad_items'] : []);
+                unset($data['blog_ad_items']);
             }
 
             foreach ($data as $name => $value) {

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Helpers\SponsoredAdsHelper;
+use App\Helpers\BlogAdsHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
@@ -99,6 +100,33 @@ class AdsController extends Controller
                 'errors' => [
                     'error_id' => 'sponsored_500',
                     'error_text' => 'Failed to load sponsored items.',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
+     * Return blog page advertisement items (multiple).
+     */
+    public function blog(): JsonResponse
+    {
+        try {
+            $items = BlogAdsHelper::getForApi();
+
+            return response()->json([
+                'api_status' => '200',
+                'api_text' => 'success',
+                'api_version' => '1.0',
+                'data' => $items,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'api_status' => '500',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => 'blog_ads_500',
+                    'error_text' => 'Failed to load blog advertisements.',
                 ],
             ], 500);
         }

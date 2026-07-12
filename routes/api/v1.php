@@ -456,6 +456,7 @@ Route::get('/hashtags/{hashtag}/posts', [HashtagController::class, 'getHashtagPo
 // Ads routes
 Route::get('/ads/sidebar', [AdsController::class, 'sidebar']);
 Route::get('/ads/sponsored', [AdsController::class, 'sponsored']);
+Route::get('/ads/blog', [AdsController::class, 'blog']);
 
 // Survey popup routes
 Route::post('/survey/status', [SurveyController::class, 'status']);
