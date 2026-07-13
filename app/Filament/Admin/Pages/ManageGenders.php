@@ -31,7 +31,16 @@ class ManageGenders extends Page implements HasTable
 
     public function getTableRecordKey($record): string
     {
-        return $record->gender_id ?? $record->id ?? 'unknown';
+        if (is_array($record)) {
+            return (string) ($record['gender_id'] ?? $record['id'] ?? $record['gender'] ?? uniqid('gender_', true));
+        }
+
+        return (string) (
+            $record->gender_id
+            ?? $record->id
+            ?? $record->gender
+            ?? uniqid('gender_', true)
+        );
     }
 
     public function table(Table $table): Table

@@ -7,6 +7,7 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 class RecentActivityWidget extends BaseWidget
 {
@@ -15,6 +16,19 @@ class RecentActivityWidget extends BaseWidget
     protected static ?int $sort = 3;
 
     protected int | string | array $columnSpan = 'full';
+
+    public function getTableRecordKey(Model|array $record): string
+    {
+        if (is_array($record)) {
+            return (string) ($record['user_id'] ?? $record['id'] ?? uniqid('activity_', true));
+        }
+
+        $key = $record->getAttribute('user_id')
+            ?? $record->getAttribute('id')
+            ?? $record->getKey();
+
+        return (string) ($key ?? uniqid('activity_', true));
+    }
 
     public function table(Table $table): Table
     {
@@ -64,14 +78,15 @@ class RecentActivityWidget extends BaseWidget
 
     protected function getTableQuery(): Builder
     {
-        // Use Eloquent User model instead of DB::table() to return correct Builder type
+        // Keep user_id selected — Filament record keys require a non-null primary key.
+        // Wo_Users PK is user_id (not id).
         return User::query()
             ->select(
-                'user_id as id', 
-                'username', 
-                'joined as time', 
-                \DB::raw("'user' as type"), 
-                \DB::raw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) as title"), 
+                'user_id',
+                'username',
+                'joined as time',
+                \DB::raw("'user' as type"),
+                \DB::raw("CONCAT(COALESCE(first_name, ''), ' ', COALESCE(last_name, '')) as title"),
                 'username as user'
             )
             ->where('joined', '>=', strtotime('-7 days'))
