@@ -83,12 +83,21 @@ class PeopleFollowController extends Controller
         $page = (int) ($request->query('page', 1));
         $page = max(1, $page);
 
+        $filter = $request->query('filter');
+        $validFilters = ['image', 'file', 'jobs', 'audio', 'video', 'blogs', 'articles', 'feeling'];
+        if ($filter && !in_array(strtolower($filter), $validFilters, true)) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Invalid filter. Valid filters are: ' . implode(', ', $validFilters)
+            ], 400);
+        }
+
         // Get user's current people follow feed order preference
         $feedOrder = $this->getUserPeopleFollowOrder($tokenUserId);
 
         try {
             // Get posts from people I follow based on feed order
-            $result = $this->getPeopleFollowPosts($tokenUserId, $feedOrder, $perPage, $page);
+            $result = $this->getPeopleFollowPosts($tokenUserId, $feedOrder, $perPage, $page, $filter);
 
             // Ensure result has the correct structure
             if (!isset($result['posts']) || !isset($result['pagination'])) {
@@ -115,6 +124,7 @@ class PeopleFollowController extends Controller
                 'meta' => [
                     'current_feed_type' => $feedOrder,
                     'feed_type_name' => $this->getPeopleFollowTypeName($feedOrder),
+                    'filter' => $filter ? ucfirst(strtolower($filter)) : null,
                     'following_count' => $followingCount,
                     'pagination' => $result['pagination'] ?? [
                         'current_page' => $page,
@@ -135,6 +145,7 @@ class PeopleFollowController extends Controller
                 'meta' => [
                     'current_feed_type' => $feedOrder,
                     'feed_type_name' => $this->getPeopleFollowTypeName($feedOrder),
+                    'filter' => $filter ? ucfirst(strtolower($filter)) : null,
                     'following_count' => 0,
                     'pagination' => [
                         'current_page' => $page,
@@ -434,7 +445,7 @@ class PeopleFollowController extends Controller
      * @param int $page
      * @return array
      */
-    private function getPeopleFollowPosts(string $userId, int $feedOrder, int $perPage, int $page = 1): array
+    private function getPeopleFollowPosts(string $userId, int $feedOrder, int $perPage, int $page = 1, ?string $filter = null): array
     {
         try {
             // Check if Wo_Posts table exists
@@ -478,6 +489,103 @@ class PeopleFollowController extends Controller
                       // Include posts where current user is explicitly tagged/recipient.
                       ->orWhere('recipient_id', $userId);
                 });
+
+            if ($filter) {
+                $filter = strtolower($filter);
+                switch ($filter) {
+                    case 'image':
+                        $query->where(function ($q) {
+                            $q->where('postType', 'photo')
+                                ->orWhere(function ($q2) {
+                                    $q2->whereNotNull('postPhoto')
+                                        ->where('postPhoto', '!=', '');
+                                });
+                        });
+                        break;
+
+                    case 'file':
+                        $query->where(function ($q) {
+                            $q->where('postType', 'file')
+                                ->orWhere(function ($q2) {
+                                    $q2->whereNotNull('postFile')
+                                        ->where('postFile', '!=', '')
+                                        ->where(function ($q3) {
+                                            $q3->whereNull('postType')
+                                                ->orWhere('postType', '')
+                                                ->orWhere('postType', 'file');
+                                        })
+                                        ->whereNull('postYoutube')
+                                        ->whereNull('postVimeo')
+                                        ->whereNull('postFacebook')
+                                        ->whereNull('postPlaytube')
+                                        ->whereNull('postDeepsound');
+                                });
+                        });
+                        break;
+
+                    case 'jobs':
+                        $query->where(function ($q) {
+                            $q->where('postType', 'job')
+                                ->orWhere(function ($q2) {
+                                    $q2->whereNotNull('job_id')
+                                        ->where('job_id', '>', 0);
+                                });
+                        });
+                        break;
+
+                    case 'audio':
+                        $query->where(function ($q) {
+                            $q->where('postType', 'audio')
+                                ->orWhere(function ($q2) {
+                                    $q2->whereNotNull('postRecord')
+                                        ->where('postRecord', '!=', '');
+                                });
+                        });
+                        break;
+
+                    case 'video':
+                        $query->where(function ($q) {
+                            $q->where('postType', 'video')
+                                ->orWhere(function ($q2) {
+                                    $q2->whereNotNull('postYoutube')
+                                        ->where('postYoutube', '!=', '');
+                                })
+                                ->orWhere(function ($q2) {
+                                    $q2->whereNotNull('postVimeo')
+                                        ->where('postVimeo', '!=', '');
+                                })
+                                ->orWhere(function ($q2) {
+                                    $q2->whereNotNull('postFacebook')
+                                        ->where('postFacebook', '!=', '');
+                                })
+                                ->orWhere(function ($q2) {
+                                    $q2->whereNotNull('postPlaytube')
+                                        ->where('postPlaytube', '!=', '');
+                                })
+                                ->orWhere(function ($q2) {
+                                    $q2->whereNotNull('postDeepsound')
+                                        ->where('postDeepsound', '!=', '');
+                                });
+                        });
+                        break;
+
+                    case 'blogs':
+                    case 'articles':
+                        $query->where(function ($q) {
+                            $q->where('postType', 'blog')
+                                ->orWhere(function ($q2) {
+                                    $q2->whereNotNull('blog_id')
+                                        ->where('blog_id', '>', 0);
+                                });
+                        });
+                        break;
+
+                    case 'feeling':
+                        $query->whereNotNull('postFeeling')
+                            ->where('postFeeling', '!=', '');
+                        break;
+                }
+            }
 
             switch ($feedOrder) {
                 case 0: // All Posts
