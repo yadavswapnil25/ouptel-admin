@@ -115,6 +115,8 @@ Route::get('/blogs/meta', [BlogsController::class, 'meta']);
 Route::get('/blogs/categories', [BlogsController::class, 'categories']); // Get blog categories with metadata
 Route::get('/blogs/my-articles', [BlogsController::class, 'getMyArticles']); // 5.1 Get My Articles (old API: ajax_loading.php?link1=my-blogs)
 Route::get('/blogs/{id}', [BlogsController::class, 'show']); // Get blog/article by ID (must be after specific routes)
+Route::post('/blogs/{id}/like', [BlogsController::class, 'toggleLike']); // Toggle blog like
+Route::post('/blogs/{id}/share', [BlogsController::class, 'recordShare']); // Record blog share
 Route::get('/blogs/{id}/comments', [BlogsController::class, 'getBlogComments']); // Get blog comments
 Route::post('/blogs/{id}/comments', [BlogsController::class, 'addBlogComment']); // Add blog comment
 Route::post('/blogs/comments/{commentId}/replies', [BlogsController::class, 'replyToBlogComment']); // Reply to blog comment

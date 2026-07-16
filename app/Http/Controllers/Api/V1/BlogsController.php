@@ -6,6 +6,7 @@ use App\Models\Article;
 use App\Models\BlogCategory;
 use App\Models\BlogComment;
 use App\Models\BlogCommentReply;
+use App\Models\BlogReaction;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -214,9 +215,18 @@ class BlogsController extends BaseController
             }
         }
 
-        // Reactions per user are not tracked for now while blog details are public
         $tokenUserId = null;
-        $isLiked = false;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+        $isLiked = $tokenUserId ? BlogReaction::query()
+            ->where('blog_id', $article->id)
+            ->where('user_id', $tokenUserId)
+            ->whereNull('comment_id')
+            ->whereNull('reply_id')
+            ->exists() : false;
 
         // Format response
         $response = [
@@ -233,6 +243,7 @@ class BlogsController extends BaseController
                 'category_id' => $article->category,
                 'thumbnail' => $article->thumbnail,
                 'thumbnail_url' => $article->thumbnail_url,
+                'image_url' => $article->thumbnail_url,
                 'tags' => $article->tags ? explode(',', $article->tags) : [],
                 'posted' => $article->posted,
                 'posted_at' => $article->posted_date,
@@ -241,14 +252,85 @@ class BlogsController extends BaseController
                 'shares' => $article->shares_count,
                 'comments' => $article->comments_count,
                 'reactions' => $article->reactions_count,
+                'comments_count' => $article->comments_count,
+                'reactions_count' => $article->reactions_count,
+                'shares_count' => $article->shares_count,
                 'url' => $article->url,
                 'is_liked' => $isLiked,
-                'is_owner' => false,
+                'is_owner' => $tokenUserId ? (string) $rawUserId === (string) $tokenUserId : false,
                 'author' => $userData,
             ],
         ];
 
         return response()->json($response);
+    }
+
+    public function toggleLike(Request $request, int $blogId): JsonResponse
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+        }
+
+        $article = Article::find($blogId);
+        if (!$article) {
+            return response()->json(['ok' => false, 'message' => 'Blog not found'], 404);
+        }
+
+        $existing = BlogReaction::query()
+            ->where('blog_id', $article->id)
+            ->where('user_id', $tokenUserId)
+            ->whereNull('comment_id')
+            ->whereNull('reply_id')
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+            $liked = false;
+            $message = 'Blog unliked successfully';
+        } else {
+            BlogReaction::create([
+                'user_id' => (int) $tokenUserId,
+                'blog_id' => $article->id,
+                'comment_id' => null,
+                'reply_id' => null,
+                'reaction' => 'Like',
+            ]);
+            $liked = true;
+            $message = 'Blog liked successfully';
+        }
+
+        return response()->json([
+            'ok' => true,
+            'message' => $message,
+            'data' => [
+                'is_liked' => $liked,
+                'reactions_count' => $article->fresh()->reactions_count,
+            ],
+        ]);
+    }
+
+    public function recordShare(Request $request, int $blogId): JsonResponse
+    {
+        $article = Article::find($blogId);
+        if (!$article) {
+            return response()->json(['ok' => false, 'message' => 'Blog not found'], 404);
+        }
+
+        $article->increment('shared');
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Blog shared successfully',
+            'data' => [
+                'shares_count' => $article->fresh()->shares_count,
+            ],
+        ]);
     }
 
     /**
