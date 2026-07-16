@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class JobsController extends Controller
 {
@@ -521,6 +522,9 @@ class JobsController extends Controller
                 'location' => $location,
                 'phone_number' => $phone,
                 'email' => $email,
+                'qualification' => $attrs['qualification'] ?? '',
+                'resume' => $attrs['resume'] ?? ($attrs['resume_url'] ?? ''),
+                'resume_url' => $this->resolveJobResumeUrl($attrs['resume'] ?? ($attrs['resume_url'] ?? '')),
                 'position' => $attrs['position'] ?? '',
                 'where_did_you_work' => $attrs['where_did_you_work'] ?? '',
                 'experience_description' => $attrs['experience_description'] ?? '',
@@ -646,11 +650,14 @@ class JobsController extends Controller
         $paginator = $query->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (JobApplication $application) {
+            $attrs = $application->getAttributes();
+            $resumePath = $attrs['resume'] ?? ($attrs['resume_url'] ?? '');
             return [
                 'id' => $application->id,
-                'cover_letter' => '', // Default value since column doesn't exist
-                'resume_url' => '', // Default value since column doesn't exist
-                'status' => 'pending', // Default value since column doesn't exist
+                'cover_letter' => $attrs['cover_letter'] ?? '',
+                'qualification' => $attrs['qualification'] ?? '',
+                'resume_url' => $this->resolveJobResumeUrl($resumePath),
+                'status' => 'pending',
                 'created_at' => $application->time ? date('c', $application->time_as_timestamp) : null,
                 'applicant' => [
                     'user_id' => $application->user_id,
@@ -702,6 +709,8 @@ class JobsController extends Controller
             'phone_number' => 'nullable|string|max:50',
             'location' => 'nullable|string|max:50',
             'email' => 'required|email|max:100',
+            'qualification' => 'nullable|string|max:255',
+            'resume' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
             'position' => 'nullable|string|max:100',
             'where_did_you_work' => 'nullable|string|max:100',
             'experience_description' => 'nullable|string|max:300',
@@ -711,6 +720,8 @@ class JobsController extends Controller
             'question_two_answer' => 'nullable|string|max:200',
             'question_three_answer' => 'nullable|string|max:200',
         ]);
+
+        $this->ensureJobApplyExtraColumns();
 
         $pageId = $job->page_id ?? 0;
 
@@ -726,6 +737,21 @@ class JobsController extends Controller
         $q1 = $q1 === null ? '' : $q1;
         $q2 = $q2 === null ? '' : $q2;
         $q3 = $q3 === null ? '' : $q3;
+
+        $resumePath = '';
+        if ($request->hasFile('resume') && Schema::hasColumn('Wo_Job_Apply', 'resume')) {
+            try {
+                $file = $request->file('resume');
+                $ext = strtolower($file->getClientOriginalExtension() ?: 'pdf');
+                $filename = 'resume_' . $userId . '_' . time() . '.' . $ext;
+                $resumePath = $file->storeAs('upload/resumes/' . date('Y/m'), $filename, 'public');
+            } catch (\Exception $e) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Failed to upload resume. Please try again.',
+                ], 500);
+            }
+        }
 
         $insertData = [
             'user_id' => $userId,
@@ -745,6 +771,13 @@ class JobsController extends Controller
             'question_three_answer' => $q3,
             'time' => (string) time(),
         ];
+
+        if (Schema::hasColumn('Wo_Job_Apply', 'qualification')) {
+            $insertData['qualification'] = (string) $request->input('qualification', '');
+        }
+        if (Schema::hasColumn('Wo_Job_Apply', 'resume')) {
+            $insertData['resume'] = $resumePath;
+        }
 
         $appId = DB::table('Wo_Job_Apply')->insertGetId($insertData);
 
@@ -900,11 +933,14 @@ class JobsController extends Controller
         $paginator = $query->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (JobApplication $application) {
+            $attrs = $application->getAttributes();
+            $resumePath = $attrs['resume'] ?? ($attrs['resume_url'] ?? '');
             return [
                 'id' => $application->id,
-                'cover_letter' => '', // Default value since column doesn't exist
-                'resume_url' => '', // Default value since column doesn't exist
-                'status' => 'pending', // Default value since column doesn't exist
+                'cover_letter' => $attrs['cover_letter'] ?? '',
+                'qualification' => $attrs['qualification'] ?? '',
+                'resume_url' => $this->resolveJobResumeUrl($resumePath),
+                'status' => 'pending',
                 'created_at' => $application->time ? date('c', $application->time_as_timestamp) : null,
                 'job' => [
                     'id' => $application->job_id,
@@ -1020,5 +1056,43 @@ class JobsController extends Controller
         }
 
         return $maps;
+    }
+
+    private function ensureJobApplyExtraColumns(): void
+    {
+        if (!Schema::hasTable('Wo_Job_Apply')) {
+            return;
+        }
+
+        try {
+            if (!Schema::hasColumn('Wo_Job_Apply', 'qualification')) {
+                Schema::table('Wo_Job_Apply', function ($table) {
+                    $table->string('qualification', 255)->nullable()->default('');
+                });
+            }
+            if (!Schema::hasColumn('Wo_Job_Apply', 'resume')) {
+                Schema::table('Wo_Job_Apply', function ($table) {
+                    $table->string('resume', 500)->nullable()->default('');
+                });
+            }
+        } catch (\Throwable $e) {
+            // Ignore — insert will only use columns that exist.
+        }
+    }
+
+    private function resolveJobResumeUrl($path): string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return '';
+        }
+        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
+            return $path;
+        }
+        try {
+            return Storage::disk('public')->url(ltrim($path, '/'));
+        } catch (\Throwable $e) {
+            return asset('storage/' . ltrim($path, '/'));
+        }
     }
 }
