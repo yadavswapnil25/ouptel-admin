@@ -683,9 +683,106 @@ class GroupsController extends BaseController
         }
 
         $ownerId = (string) $group->user_id;
-        $members = $rows->map(function ($row) use ($ownerId, $adminIds) {
+        $viewerId = $tokenUserId ? (string) $tokenUserId : '';
+        $memberIds = $rows->map(fn ($row) => (string) $row->user_id)->unique()->values()->all();
+
+        $followingIds = [];
+        $followPendingIds = [];
+        $friendIds = [];
+        $friendPendingIds = [];
+
+        if ($viewerId !== '' && $memberIds !== []) {
+            if (Schema::hasTable('Wo_Followers')) {
+                $followingIds = DB::table('Wo_Followers')
+                    ->where('follower_id', $viewerId)
+                    ->whereIn('following_id', $memberIds)
+                    ->whereIn('active', ['1', 1])
+                    ->pluck('following_id')
+                    ->map(fn ($id) => (string) $id)
+                    ->all();
+
+                $followPendingIds = DB::table('Wo_Followers')
+                    ->where('follower_id', $viewerId)
+                    ->whereIn('following_id', $memberIds)
+                    ->whereIn('active', ['0', 0])
+                    ->pluck('following_id')
+                    ->map(fn ($id) => (string) $id)
+                    ->all();
+            }
+
+            if (Schema::hasTable('Wo_Friends')) {
+                try {
+                    if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                        $friendIds = DB::table('Wo_Friends')
+                            ->where('user_id', $viewerId)
+                            ->whereIn('friend_id', $memberIds)
+                            ->whereIn('status', ['2', 2])
+                            ->pluck('friend_id')
+                            ->merge(
+                                DB::table('Wo_Friends')
+                                    ->where('friend_id', $viewerId)
+                                    ->whereIn('user_id', $memberIds)
+                                    ->whereIn('status', ['2', 2])
+                                    ->pluck('user_id')
+                            )
+                            ->map(fn ($id) => (string) $id)
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        $friendPendingIds = DB::table('Wo_Friends')
+                            ->where('user_id', $viewerId)
+                            ->whereIn('friend_id', $memberIds)
+                            ->whereIn('status', ['0', 0])
+                            ->pluck('friend_id')
+                            ->map(fn ($id) => (string) $id)
+                            ->all();
+                    } elseif (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                        $friendIds = DB::table('Wo_Friends')
+                            ->where('from_id', $viewerId)
+                            ->whereIn('to_id', $memberIds)
+                            ->whereIn('status', ['2', 2])
+                            ->pluck('to_id')
+                            ->merge(
+                                DB::table('Wo_Friends')
+                                    ->where('to_id', $viewerId)
+                                    ->whereIn('from_id', $memberIds)
+                                    ->whereIn('status', ['2', 2])
+                                    ->pluck('from_id')
+                            )
+                            ->map(fn ($id) => (string) $id)
+                            ->unique()
+                            ->values()
+                            ->all();
+
+                        $friendPendingIds = DB::table('Wo_Friends')
+                            ->where('from_id', $viewerId)
+                            ->whereIn('to_id', $memberIds)
+                            ->whereIn('status', ['0', 0])
+                            ->pluck('to_id')
+                            ->map(fn ($id) => (string) $id)
+                            ->all();
+                    }
+                } catch (\Throwable $e) {
+                    $friendIds = [];
+                    $friendPendingIds = [];
+                }
+            }
+        }
+
+        $followingSet = array_fill_keys($followingIds, true);
+        $followPendingSet = array_fill_keys($followPendingIds, true);
+        $friendSet = array_fill_keys($friendIds, true);
+        $friendPendingSet = array_fill_keys($friendPendingIds, true);
+
+        $members = $rows->map(function ($row) use ($ownerId, $adminIds, $viewerId, $followingSet, $followPendingSet, $friendSet, $friendPendingSet) {
             $user = DB::table('Wo_Users')->where('user_id', $row->user_id)->first();
             $userIdStr = (string) $row->user_id;
+            $isSelf = $viewerId !== '' && $viewerId === $userIdStr;
+            $isFollowing = !$isSelf && isset($followingSet[$userIdStr]);
+            $isFollowPending = !$isSelf && isset($followPendingSet[$userIdStr]);
+            $isFriend = !$isSelf && isset($friendSet[$userIdStr]);
+            $friendRequestSent = !$isSelf && isset($friendPendingSet[$userIdStr]);
 
             return [
                 'user_id' => $userIdStr,
@@ -696,6 +793,11 @@ class GroupsController extends BaseController
                 'is_owner' => $userIdStr === $ownerId,
                 'is_admin' => in_array($userIdStr, $adminIds, true) || $userIdStr === $ownerId,
                 'status' => $row->active === '1' || $row->active === 1 ? 'active' : 'pending',
+                'is_self' => $isSelf,
+                'is_following' => $isFollowing,
+                'follow_pending' => $isFollowPending,
+                'is_friend' => $isFriend,
+                'friend_request_sent' => $friendRequestSent,
             ];
         })->values();
 
