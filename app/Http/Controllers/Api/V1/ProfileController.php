@@ -367,11 +367,8 @@ class ProfileController extends Controller
         $userData['university'] = $user->university ?? '';
         $userData['website'] = $user->website ?? '';
 
-        // Add state background image URL from admin-managed Wo_States (if available).
-        // Matching order:
-        // 1) exact state match
-        // 2) exact city match (useful when admin stores city names like "Pune")
-        // 3) partial contains fallback for both
+        // Add location background image URL from admin-managed Wo_States (if available).
+        // Prefer city-wise match first, then state/region.
         $userData['state_background_url'] = null;
         if (($stateName !== '' || $cityName !== '') && Schema::hasTable('Wo_States')) {
             try {
@@ -380,13 +377,7 @@ class ProfileController extends Controller
 
                 $stateRow = null;
 
-                if ($stateLower !== '') {
-                    $stateRow = DB::table('Wo_States')
-                        ->whereRaw('LOWER(name) = ?', [$stateLower])
-                        ->first();
-                }
-
-                if (!$stateRow && $cityLower !== '') {
+                if ($cityLower !== '') {
                     $stateRow = DB::table('Wo_States')
                         ->whereRaw('LOWER(name) = ?', [$cityLower])
                         ->first();
@@ -394,7 +385,7 @@ class ProfileController extends Controller
 
                 if (!$stateRow && $stateLower !== '') {
                     $stateRow = DB::table('Wo_States')
-                        ->whereRaw('LOWER(name) LIKE ?', ['%' . $stateLower . '%'])
+                        ->whereRaw('LOWER(name) = ?', [$stateLower])
                         ->first();
                 }
 
@@ -404,9 +395,16 @@ class ProfileController extends Controller
                         ->first();
                 }
 
+                if (!$stateRow && $stateLower !== '') {
+                    $stateRow = DB::table('Wo_States')
+                        ->whereRaw('LOWER(name) LIKE ?', ['%' . $stateLower . '%'])
+                        ->first();
+                }
+
                 if ($stateRow && !empty($stateRow->photo)) {
                     $photoPath = ltrim((string) $stateRow->photo, '/');
                     $userData['state_background_url'] = asset('storage/' . $photoPath);
+                    $userData['location_background_name'] = $stateRow->name ?? null;
                 }
             } catch (\Exception $e) {
                 // Keep null fallback if lookup fails.

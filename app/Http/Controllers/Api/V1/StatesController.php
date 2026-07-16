@@ -24,12 +24,13 @@ class StatesController extends BaseController
         }
 
         $candidates = collect([
-            $request->query('state'),
-            $request->query('region'),
             $request->query('city'),
+            $request->query('region'),
+            $request->query('state'),
         ])
             ->map(fn ($value) => trim((string) $value))
             ->filter(fn ($value) => $value !== '')
+            ->unique(fn ($value) => mb_strtolower($value))
             ->values();
 
         if ($candidates->isEmpty()) {
@@ -45,6 +46,7 @@ class StatesController extends BaseController
 
         $stateRow = null;
 
+        // Prefer exact city/locality matches first (city-wise backgrounds).
         foreach ($candidates as $candidate) {
             $stateRow = DB::table('Wo_States')
                 ->whereRaw('LOWER(name) = ?', [mb_strtolower($candidate)])
