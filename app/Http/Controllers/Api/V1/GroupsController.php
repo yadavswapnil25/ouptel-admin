@@ -612,21 +612,11 @@ class GroupsController extends BaseController
         $perPage = max(1, min((int) $request->query('per_page', 10), 50));
         $pageNum = max(1, (int) $request->query('page', 1));
         $offset = ($pageNum - 1) * $perPage;
-        $filter = $request->query('filter');
-        $validFilters = ['image', 'file', 'jobs', 'audio', 'video', 'blogs', 'articles', 'feeling'];
-        if ($filter && !in_array(strtolower((string) $filter), $validFilters, true)) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'Invalid filter. Valid filters are: ' . implode(', ', $validFilters),
-            ], 400);
-        }
 
         $query = DB::table('Wo_Posts')
             ->where('group_id', $id)
             ->where('active', '1')
             ->orderByDesc('time');
-
-        $this->applyGroupPostFilter($query, $filter);
 
         $total = (clone $query)->count();
         $posts = $query->offset($offset)->limit($perPage)->get();
@@ -643,7 +633,6 @@ class GroupsController extends BaseController
             'data' => [
                 'group_id' => (int) $id,
                 'posts' => $formattedPosts,
-                'filter' => $filter ? ucfirst(strtolower((string) $filter)) : null,
                 'pagination' => [
                     'current_page' => $pageNum,
                     'per_page' => $perPage,
@@ -653,119 +642,6 @@ class GroupsController extends BaseController
                 ],
             ],
         ]);
-    }
-
-    /**
-     * Apply optional media/type filter to a group posts query.
-     */
-    private function applyGroupPostFilter($query, ?string $filter = null): void
-    {
-        if (!$filter) {
-            return;
-        }
-
-        $filter = strtolower($filter);
-        switch ($filter) {
-            case 'image':
-                $query->where(function ($q) {
-                    $q->where('postType', 'photo')
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('postPhoto')
-                                ->where('postPhoto', '!=', '');
-                        })
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('album_name')
-                                ->where('album_name', '!=', '');
-                        })
-                        ->orWhere(function ($q2) {
-                            $q2->where('multi_image_post', 1)
-                                ->orWhere('multi_image_post', '1');
-                        });
-                });
-                break;
-
-            case 'file':
-                $query->where(function ($q) {
-                    $q->where('postType', 'file')
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('postFile')
-                                ->where('postFile', '!=', '')
-                                ->where(function ($q3) {
-                                    $q3->whereNull('postType')
-                                        ->orWhere('postType', '')
-                                        ->orWhere('postType', 'file');
-                                })
-                                ->whereNull('postYoutube')
-                                ->whereNull('postVimeo')
-                                ->whereNull('postFacebook')
-                                ->whereNull('postPlaytube')
-                                ->whereNull('postDeepsound');
-                        });
-                });
-                break;
-
-            case 'jobs':
-                $query->where(function ($q) {
-                    $q->where('postType', 'job')
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('job_id')
-                                ->where('job_id', '>', 0);
-                        });
-                });
-                break;
-
-            case 'audio':
-                $query->where(function ($q) {
-                    $q->where('postType', 'audio')
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('postRecord')
-                                ->where('postRecord', '!=', '');
-                        });
-                });
-                break;
-
-            case 'video':
-                $query->where(function ($q) {
-                    $q->where('postType', 'video')
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('postYoutube')
-                                ->where('postYoutube', '!=', '');
-                        })
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('postVimeo')
-                                ->where('postVimeo', '!=', '');
-                        })
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('postFacebook')
-                                ->where('postFacebook', '!=', '');
-                        })
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('postPlaytube')
-                                ->where('postPlaytube', '!=', '');
-                        })
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('postDeepsound')
-                                ->where('postDeepsound', '!=', '');
-                        });
-                });
-                break;
-
-            case 'blogs':
-            case 'articles':
-                $query->where(function ($q) {
-                    $q->where('postType', 'blog')
-                        ->orWhere(function ($q2) {
-                            $q2->whereNotNull('blog_id')
-                                ->where('blog_id', '>', 0);
-                        });
-                });
-                break;
-
-            case 'feeling':
-                $query->whereNotNull('postFeeling')
-                    ->where('postFeeling', '!=', '');
-                break;
-        }
     }
 
     /**
