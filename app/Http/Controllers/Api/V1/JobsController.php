@@ -226,6 +226,8 @@ class JobsController extends Controller
                 }
             }
 
+            $pageInfo = $this->resolveJobPageInfo($job->page_id ?? null);
+
             return [
                 'id' => $job->id,
                 'title' => $job->title,
@@ -244,6 +246,10 @@ class JobsController extends Controller
                 'is_applied' => $isApplied,
                 'is_owner' => $isOwner,
                 'owner' => $owner,
+                'page_id' => $pageInfo['page_id'] ?? ($job->page_id ?? null),
+                'page' => $pageInfo,
+                'company_name' => $pageInfo['page_title'] ?? null,
+                'company_logo' => $pageInfo['avatar_url'] ?? null,
                 'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
             ];
         });
@@ -387,6 +393,8 @@ class JobsController extends Controller
                 : asset('storage/' . $job->image);
         }
 
+        $pageInfo = $this->resolveJobPageInfo($job->page_id ?? $validated['page_id'] ?? null);
+
         return response()->json([
             'ok' => true,
             'message' => 'Job created successfully',
@@ -395,16 +403,20 @@ class JobsController extends Controller
                 'title' => $job->title,
                 'description' => $job->description,
                 'image' => $image,
-                'company' => 'Unknown Company', // Default value since column doesn't exist
+                'company' => $pageInfo['page_title'] ?? 'Unknown Company',
+                'company_name' => $pageInfo['page_title'] ?? null,
+                'company_logo' => $pageInfo['avatar_url'] ?? null,
+                'page_id' => $pageInfo['page_id'] ?? ($job->page_id ?? null),
+                'page' => $pageInfo,
                 'location' => $job->location,
-                'salary' => 0, // Default value since column doesn't exist
-                'type' => 'full-time', // Default value since column doesn't exist
+                'salary' => 0,
+                'type' => 'full-time',
                 'status' => $job->status,
                 'applications_count' => 0,
                 'is_applied' => false,
-                'is_owner' => false, // Simplified since user_id doesn't exist
+                'is_owner' => true,
                 'owner' => [
-                    'user_id' => null,
+                    'user_id' => $userId,
                     'username' => 'Unknown',
                     'avatar_url' => null,
                 ],
@@ -599,6 +611,8 @@ class JobsController extends Controller
             $showImage = str_starts_with($img, 'http') ? $img : asset('storage/' . $img);
         }
 
+        $pageInfo = $this->resolveJobPageInfo($job->page_id ?? null);
+
         return response()->json([
             'ok' => true,
             'data' => [
@@ -620,6 +634,10 @@ class JobsController extends Controller
                     'is_applied' => $isApplied,
                     'is_owner' => $isOwner,
                     'owner' => $owner,
+                    'page_id' => $pageInfo['page_id'] ?? ($job->page_id ?? null),
+                    'page' => $pageInfo,
+                    'company_name' => $pageInfo['page_title'] ?? null,
+                    'company_logo' => $pageInfo['avatar_url'] ?? null,
                     'questions' => $this->extractJobQuestions($job),
                     'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
                 ],
@@ -1056,6 +1074,48 @@ class JobsController extends Controller
         }
 
         return $maps;
+    }
+
+    private function resolveJobPageInfo($pageId): ?array
+    {
+        if (empty($pageId) || !Schema::hasTable('Wo_Pages')) {
+            return null;
+        }
+
+        try {
+            $page = DB::table('Wo_Pages')->where('page_id', $pageId)->first();
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        if (!$page) {
+            return null;
+        }
+
+        $verifiedRaw = $page->verified ?? 0;
+        $isVerified = $verifiedRaw === 1
+            || $verifiedRaw === '1'
+            || $verifiedRaw === true
+            || $verifiedRaw === 'true';
+
+        $avatar = trim((string) ($page->avatar ?? ''));
+        $avatarUrl = null;
+        if ($avatar !== '') {
+            $avatarUrl = (str_starts_with($avatar, 'http://') || str_starts_with($avatar, 'https://'))
+                ? $avatar
+                : asset('storage/' . ltrim($avatar, '/'));
+        }
+
+        $pageTitle = trim((string) ($page->page_title ?? ''));
+        $pageName = trim((string) ($page->page_name ?? ''));
+
+        return [
+            'page_id' => (int) $page->page_id,
+            'page_name' => $pageName,
+            'page_title' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
+            'verified' => $isVerified,
+            'avatar_url' => $avatarUrl,
+        ];
     }
 
     private function ensureJobApplyExtraColumns(): void
