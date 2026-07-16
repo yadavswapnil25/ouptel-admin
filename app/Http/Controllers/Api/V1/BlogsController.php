@@ -229,51 +229,12 @@ class BlogsController extends BaseController
             ->whereNull('comment_id')
             ->whereNull('reply_id')
             ->exists() : false;
-        $isFollowing = false;
-        $followPending = false;
-        $isFriend = false;
-        $friendRequestSent = false;
-        $isReported = false;
-
-        if ($tokenUserId && $authorId !== '' && (string) $tokenUserId !== $authorId) {
-            $isFollowing = DB::table('Wo_Followers')
-                ->where('follower_id', $tokenUserId)
-                ->where('following_id', $authorId)
-                ->where('active', '1')
-                ->exists();
-
-            if (! $isFollowing) {
-                $followPending = DB::table('Wo_Followers')
-                    ->where('follower_id', $tokenUserId)
-                    ->where('following_id', $authorId)
-                    ->where('active', '0')
-                    ->exists();
-            }
-
-            $isFriend = DB::table('Wo_Friends')
-                ->where(function ($query) use ($tokenUserId, $authorId) {
-                    $query->where('user_id', $tokenUserId)->where('friend_id', $authorId);
-                })
-                ->orWhere(function ($query) use ($tokenUserId, $authorId) {
-                    $query->where('user_id', $authorId)->where('friend_id', $tokenUserId);
-                })
-                ->where('active', '1')
-                ->exists();
-
-            if (! $isFriend) {
-                $friendRequestSent = DB::table('Wo_Friends')
-                    ->where('user_id', $tokenUserId)
-                    ->where('friend_id', $authorId)
-                    ->where('active', '0')
-                    ->exists();
-            }
-
-            $isReported = Report::query()
-                ->where('post_id', $article->id)
-                ->where('user_id', $tokenUserId)
-                ->where('text', 'blog')
-                ->exists();
-        }
+        $socialFlags = $this->getBlogAuthorSocialFlags($tokenUserId, $authorId, (int) $article->id);
+        $isFollowing = $socialFlags['is_following'];
+        $followPending = $socialFlags['follow_pending'];
+        $isFriend = $socialFlags['is_friend'];
+        $friendRequestSent = $socialFlags['friend_request_sent'];
+        $isReported = $socialFlags['is_reported'];
 
         // Format response
         $response = [
@@ -692,6 +653,106 @@ class BlogsController extends BaseController
     /**
      * Helper: format a blog comment with replies.
      */
+    /**
+     * @return array{
+     *     is_following: bool,
+     *     follow_pending: bool,
+     *     is_friend: bool,
+     *     friend_request_sent: bool,
+     *     is_reported: bool
+     * }
+     */
+    protected function getBlogAuthorSocialFlags(?string $tokenUserId, string $authorId, int $articleId): array
+    {
+        $flags = [
+            'is_following' => false,
+            'follow_pending' => false,
+            'is_friend' => false,
+            'friend_request_sent' => false,
+            'is_reported' => false,
+        ];
+
+        if (! $tokenUserId || $authorId === '' || (string) $tokenUserId === $authorId) {
+            return $flags;
+        }
+
+        if (Schema::hasTable('Wo_Followers')) {
+            $flags['is_following'] = DB::table('Wo_Followers')
+                ->where('follower_id', $tokenUserId)
+                ->where('following_id', $authorId)
+                ->whereIn('active', ['1', 1])
+                ->exists();
+
+            if (! $flags['is_following']) {
+                $flags['follow_pending'] = DB::table('Wo_Followers')
+                    ->where('follower_id', $tokenUserId)
+                    ->where('following_id', $authorId)
+                    ->whereIn('active', ['0', 0])
+                    ->exists();
+            }
+        }
+
+        if (Schema::hasTable('Wo_Friends')) {
+            try {
+                if (Schema::hasColumn('Wo_Friends', 'user_id')
+                    && Schema::hasColumn('Wo_Friends', 'friend_id')
+                    && Schema::hasColumn('Wo_Friends', 'status')) {
+                    $flags['is_friend'] = DB::table('Wo_Friends')
+                        ->where(function ($query) use ($tokenUserId, $authorId) {
+                            $query->where('user_id', $tokenUserId)->where('friend_id', $authorId);
+                        })
+                        ->orWhere(function ($query) use ($tokenUserId, $authorId) {
+                            $query->where('user_id', $authorId)->where('friend_id', $tokenUserId);
+                        })
+                        ->whereIn('status', ['2', 2])
+                        ->exists();
+
+                    if (! $flags['is_friend']) {
+                        $flags['friend_request_sent'] = DB::table('Wo_Friends')
+                            ->where('user_id', $tokenUserId)
+                            ->where('friend_id', $authorId)
+                            ->whereIn('status', ['0', 0])
+                            ->exists();
+                    }
+                } elseif (Schema::hasColumn('Wo_Friends', 'from_id')
+                    && Schema::hasColumn('Wo_Friends', 'to_id')
+                    && Schema::hasColumn('Wo_Friends', 'status')) {
+                    $flags['is_friend'] = DB::table('Wo_Friends')
+                        ->where(function ($query) use ($tokenUserId, $authorId) {
+                            $query->where('from_id', $tokenUserId)->where('to_id', $authorId);
+                        })
+                        ->orWhere(function ($query) use ($tokenUserId, $authorId) {
+                            $query->where('from_id', $authorId)->where('to_id', $tokenUserId);
+                        })
+                        ->whereIn('status', ['2', 2])
+                        ->exists();
+
+                    if (! $flags['is_friend']) {
+                        $flags['friend_request_sent'] = DB::table('Wo_Friends')
+                            ->where('from_id', $tokenUserId)
+                            ->where('to_id', $authorId)
+                            ->whereIn('status', ['0', 0])
+                            ->exists();
+                    }
+                }
+            } catch (\Throwable $e) {
+                // Ignore schema mismatches and continue loading the blog.
+            }
+        }
+
+        try {
+            $flags['is_reported'] = Report::query()
+                ->where('post_id', $articleId)
+                ->where('user_id', $tokenUserId)
+                ->where('text', 'blog')
+                ->exists();
+        } catch (\Throwable $e) {
+            $flags['is_reported'] = false;
+        }
+
+        return $flags;
+    }
+
     protected function formatBlogComment(BlogComment $comment, ?string $currentUserId, bool $includeReplies = true): array
     {
         $user = $comment->user;
