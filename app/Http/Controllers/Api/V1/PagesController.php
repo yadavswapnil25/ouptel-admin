@@ -156,6 +156,21 @@ class PagesController extends BaseController
             }
             $pageData['comments_count'] = $commentsCount;
 
+            $isLiked = false;
+            $isOwner = false;
+            if ($tokenUserId) {
+                if (DB::getSchemaBuilder()->hasTable('Wo_Pages_Likes')) {
+                    $isLiked = DB::table('Wo_Pages_Likes')
+                        ->where('page_id', $page->page_id)
+                        ->where('user_id', $tokenUserId)
+                        ->exists();
+                }
+                $isOwner = (string) ($page->user_id ?? '') === (string) $tokenUserId;
+            }
+            $pageData['is_liked'] = $isLiked;
+            $pageData['is_following'] = $isLiked;
+            $pageData['is_owner'] = $isOwner;
+
             // Include recent posts if requested
             if ($includePosts && $postsLimit > 0) {
                 $recentPosts = DB::table('Wo_Posts')
