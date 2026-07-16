@@ -1762,6 +1762,24 @@ class ProfileController extends Controller
                 'badge_type' => $this->getUserBadgeType($post->user_id),
             ];
 
+            $page = null;
+            if (!empty($post->page_id) && (int) $post->page_id > 0 && Schema::hasTable('Wo_Pages')) {
+                $pageRow = DB::table('Wo_Pages')->where('page_id', (int) $post->page_id)->first();
+                if ($pageRow) {
+                    $pageTitle = trim((string) ($pageRow->page_title ?? ''));
+                    $pageName = trim((string) ($pageRow->page_name ?? ''));
+                    $page = [
+                        'page_id' => (int) $pageRow->page_id,
+                        'page_name' => $pageName,
+                        'page_title' => $pageTitle !== '' ? $pageTitle : $pageName,
+                        'name' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
+                        'avatar' => $pageRow->avatar ?? '',
+                        'avatar_url' => !empty($pageRow->avatar) ? asset('storage/' . $pageRow->avatar) : null,
+                        'verified' => (bool) ($pageRow->verified ?? false),
+                    ];
+                }
+            }
+
             $group = null;
             if (!empty($post->group_id) && (int) $post->group_id > 0 && Schema::hasTable('Wo_Groups')) {
                 $groupRow = DB::table('Wo_Groups')->where('id', (int) $post->group_id)->first();
@@ -1833,6 +1851,8 @@ class ProfileController extends Controller
                 // Color data (for colored posts)
                 'color_id' => $post->color_id ?? null,
                 'color' => $colorData,
+                'page_id' => $post->page_id ?? null,
+                'page' => $page,
                 'group_id' => $post->group_id ?? null,
                 'group' => $group,
             ];

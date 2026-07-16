@@ -437,6 +437,23 @@ class NewFeedController extends Controller
         $formattedPosts = $posts->map(function ($post) use ($userId) {
             // Get user information
             $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
+            $page = null;
+            if (!empty($post->page_id) && (int) $post->page_id > 0 && Schema::hasTable('Wo_Pages')) {
+                $pageRow = DB::table('Wo_Pages')->where('page_id', (int) $post->page_id)->first();
+                if ($pageRow) {
+                    $pageTitle = trim((string) ($pageRow->page_title ?? ''));
+                    $pageName = trim((string) ($pageRow->page_name ?? ''));
+                    $page = [
+                        'page_id' => (int) $pageRow->page_id,
+                        'page_name' => $pageName,
+                        'page_title' => $pageTitle !== '' ? $pageTitle : $pageName,
+                        'name' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
+                        'avatar' => $pageRow->avatar ?? '',
+                        'avatar_url' => !empty($pageRow->avatar) ? asset('storage/' . $pageRow->avatar) : null,
+                        'verified' => (bool) ($pageRow->verified ?? false),
+                    ];
+                }
+            }
             
             // Get recipient information (for "X and Y" display in feed)
             $recipient = null;
@@ -622,6 +639,7 @@ class NewFeedController extends Controller
                 
                 // Page/Group context
                 'page_id' => $post->page_id ?? null,
+                'page' => $page,
                 'group_id' => $post->group_id ?? null,
                 'group' => $group,
                 'event_id' => $post->event_id ?? null,

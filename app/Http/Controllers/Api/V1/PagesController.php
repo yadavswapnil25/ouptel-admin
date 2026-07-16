@@ -1607,6 +1607,23 @@ class PagesController extends BaseController
     {
         // Get user information
         $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
+        $page = null;
+        if (!empty($post->page_id) && (int) $post->page_id > 0 && Schema::hasTable('Wo_Pages')) {
+            $pageRow = DB::table('Wo_Pages')->where('page_id', (int) $post->page_id)->first();
+            if ($pageRow) {
+                $pageTitle = trim((string) ($pageRow->page_title ?? ''));
+                $pageName = trim((string) ($pageRow->page_name ?? ''));
+                $page = [
+                    'page_id' => (int) $pageRow->page_id,
+                    'page_name' => $pageName,
+                    'page_title' => $pageTitle !== '' ? $pageTitle : $pageName,
+                    'name' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
+                    'avatar' => $pageRow->avatar ?? '',
+                    'avatar_url' => !empty($pageRow->avatar) ? asset('storage/' . $pageRow->avatar) : null,
+                    'verified' => (bool) ($pageRow->verified ?? false),
+                ];
+            }
+        }
         
         // Get post reactions count
         $postIdForReactions = $post->post_id ?? $post->id;
@@ -1703,6 +1720,8 @@ class PagesController extends BaseController
                 'avatar_url' => ($user?->avatar) ? asset('storage/' . $user?->avatar) : null,
                 'verified' => (bool) ($user?->verified ?? false),
             ],
+            'page_id' => $post->page_id ?? null,
+            'page' => $page,
             
             // Timestamps
             'created_at' => $post->time ? date('c', $post->time) : null,
