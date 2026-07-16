@@ -49,6 +49,8 @@ class PollController extends Controller
             'postPrivacy' => 'required|in:0,1,2,3,4',
             'answer' => 'required|array|min:2|max:10',
             'answer.*' => 'required|string|max:255',
+            'answer_page_ids' => 'nullable|array',
+            'answer_page_ids.*' => 'nullable|integer',
             'page_id' => 'nullable|integer',
             'group_id' => 'nullable|integer',
             'event_id' => 'nullable|integer',
@@ -115,20 +117,37 @@ class PollController extends Controller
 
             // Create poll options in Wo_Polls table (matching old API: Wo_AddOption function)
             // Each option is stored as a row in Wo_Polls with post_id, text, time
+            $answerPageIds = array_values((array) $request->input('answer_page_ids', []));
             $optionIds = [];
-            foreach ($answers as $answerText) {
+            $optionPageIds = [];
+            foreach ($answers as $index => $answerText) {
+                $taggedPageId = isset($answerPageIds[$index]) ? (int) $answerPageIds[$index] : 0;
+                if ($taggedPageId > 0 && Schema::hasTable('Wo_Pages')) {
+                    $pageExists = DB::table('Wo_Pages')->where('page_id', $taggedPageId)->exists();
+                    if (! $pageExists) {
+                        $taggedPageId = 0;
+                    }
+                } else {
+                    $taggedPageId = 0;
+                }
+
                 $optionInsertData = [
                     'post_id' => $postId,
                     'text' => $answerText,
                 ];
-                
+
                 // Only add time if column exists
                 if (Schema::hasColumn('Wo_Polls', 'time')) {
                     $optionInsertData['time'] = time();
                 }
-                
+
+                if (Schema::hasColumn('Wo_Polls', 'page_id')) {
+                    $optionInsertData['page_id'] = $taggedPageId > 0 ? $taggedPageId : 0;
+                }
+
                 $optionId = DB::table('Wo_Polls')->insertGetId($optionInsertData);
                 $optionIds[] = $optionId;
+                $optionPageIds[] = $taggedPageId;
             }
 
             DB::commit();
@@ -136,6 +155,7 @@ class PollController extends Controller
             // Get created post data (matching old API response format)
             $post = DB::table('Wo_Posts')->where('id', $postId)->first();
             $user = DB::table('Wo_Users')->where('user_id', $tokenUserId)->first();
+            $taggedPagesById = $this->getPollTaggedPagesByIds($optionPageIds);
 
             // Format response matching old API structure
             $responseData = [
@@ -156,13 +176,18 @@ class PollController extends Controller
                         'name' => $user->name ?? $user->username ?? 'Unknown User',
                     ] : null,
                 ],
-                'poll_options' => array_map(function($optionId, $index) use ($answers) {
-                    return [
+                'poll_options' => array_map(function ($optionId, $index) use ($answers, $optionPageIds, $taggedPagesById) {
+                    $pageId = (int) ($optionPageIds[$index] ?? 0);
+                    $row = [
                         'id' => $optionId,
                         'text' => $answers[$index],
                         'votes' => 0,
                         'percentage' => 0,
+                        'page_id' => $pageId > 0 ? $pageId : null,
+                        'page' => $pageId > 0 ? ($taggedPagesById[$pageId] ?? null) : null,
                     ];
+
+                    return $row;
                 }, $optionIds, array_keys($answers)),
             ];
 
@@ -321,6 +346,12 @@ class PollController extends Controller
                 ->get();
 
             $votes = [];
+            $pageIds = [];
+            foreach ($options as $opt) {
+                $pageIds[] = (int) ($opt->page_id ?? 0);
+            }
+            $taggedPagesById = $this->getPollTaggedPagesByIds($pageIds);
+
             foreach ($options as $opt) {
                 $optionVotes = DB::table($votesTable)
                     ->where('post_id', $postId)
@@ -328,12 +359,15 @@ class PollController extends Controller
                     ->count();
                 
                 $percentage = $totalVotes > 0 ? round(($optionVotes / $totalVotes) * 100, 2) : 0;
+                $pageId = (int) ($opt->page_id ?? 0);
 
                 $votes[] = [
                     'id' => $opt->id,
                     'text' => $opt->text,
                     'votes' => $optionVotes,
                     'percentage' => $percentage,
+                    'page_id' => $pageId > 0 ? $pageId : null,
+                    'page' => $pageId > 0 ? ($taggedPagesById[$pageId] ?? null) : null,
                 ];
             }
 
@@ -447,6 +481,12 @@ class PollController extends Controller
             ->value('option_id');
 
         // Calculate percentages (matching old API: Ju_GetPercentageOfOptionPost)
+        $pageIds = [];
+        foreach ($options as $option) {
+            $pageIds[] = (int) ($option->page_id ?? 0);
+        }
+        $taggedPagesById = $this->getPollTaggedPagesByIds($pageIds);
+
         $votes = [];
         foreach ($options as $option) {
             $optionVotes = DB::table($votesTable)
@@ -455,6 +495,7 @@ class PollController extends Controller
                 ->count();
             
             $percentage = $totalVotes > 0 ? round(($optionVotes / $totalVotes) * 100, 2) : 0;
+            $pageId = (int) ($option->page_id ?? 0);
 
             $votes[] = [
                 'id' => $option->id,
@@ -462,6 +503,8 @@ class PollController extends Controller
                 'votes' => $optionVotes,
                 'percentage' => $percentage,
                 'is_voted' => $userVote == $option->id,
+                'page_id' => $pageId > 0 ? $pageId : null,
+                'page' => $pageId > 0 ? ($taggedPagesById[$pageId] ?? null) : null,
             ];
         }
 
@@ -485,7 +528,13 @@ class PollController extends Controller
                 $table->bigIncrements('id');
                 $table->unsignedBigInteger('post_id')->index();
                 $table->string('text', 255);
+                $table->unsignedBigInteger('page_id')->nullable()->default(0)->index();
                 $table->string('time', 50)->nullable();
+            });
+        } elseif (! Schema::hasColumn('Wo_Polls', 'page_id')) {
+            Schema::table('Wo_Polls', function ($table) {
+                $table->unsignedBigInteger('page_id')->nullable()->default(0)->after('text');
+                $table->index('page_id');
             });
         }
 
@@ -497,6 +546,36 @@ class PollController extends Controller
                 $table->unsignedBigInteger('option_id')->index();
             });
         }
+    }
+
+    /**
+     * @param  array<int, int|string|null>  $pageIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function getPollTaggedPagesByIds(array $pageIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $pageIds))));
+        if ($ids === [] || ! Schema::hasTable('Wo_Pages')) {
+            return [];
+        }
+
+        $pages = DB::table('Wo_Pages')
+            ->whereIn('page_id', $ids)
+            ->get(['page_id', 'page_name', 'page_title', 'avatar']);
+
+        $byId = [];
+        foreach ($pages as $page) {
+            $avatar = $page->avatar ?? '';
+            $byId[(int) $page->page_id] = [
+                'page_id' => (int) $page->page_id,
+                'page_name' => $page->page_name ?? '',
+                'page_title' => $page->page_title ?? ($page->page_name ?? ''),
+                'avatar' => $avatar,
+                'avatar_url' => $avatar !== '' ? asset('storage/' . ltrim($avatar, '/')) : null,
+            ];
+        }
+
+        return $byId;
     }
 }
 

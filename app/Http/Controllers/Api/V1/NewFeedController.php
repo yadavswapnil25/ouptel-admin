@@ -1147,6 +1147,9 @@ class NewFeedController extends Controller
                 return [];
             }
 
+            $pageIds = $options->map(fn ($option) => (int) ($option->page_id ?? 0))->all();
+            $taggedPagesById = $this->getPollTaggedPagesByIds($pageIds);
+
             // Determine votes table name
             $votesTable = 'Wo_Votes';
             if (!Schema::hasTable($votesTable)) {
@@ -1154,13 +1157,16 @@ class NewFeedController extends Controller
                     $votesTable = 'Wo_PollVotes';
                 } else {
                     // If votes table doesn't exist, return options without vote data
-                    return $options->map(function ($option) {
+                    return $options->map(function ($option) use ($taggedPagesById) {
+                        $pageId = (int) ($option->page_id ?? 0);
                         return [
                             'id' => $option->id,
                             'text' => $option->text ?? '',
                             'votes' => 0,
                             'percentage' => 0,
                             'is_voted' => false,
+                            'page_id' => $pageId > 0 ? $pageId : null,
+                            'page' => $pageId > 0 ? ($taggedPagesById[$pageId] ?? null) : null,
                         ];
                     })->toArray();
                 }
@@ -1178,13 +1184,14 @@ class NewFeedController extends Controller
                 ->value('option_id');
 
             // Calculate votes and percentages for each option
-            return $options->map(function ($option) use ($votesTable, $postId, $totalVotes, $userVote) {
+            return $options->map(function ($option) use ($votesTable, $postId, $totalVotes, $userVote, $taggedPagesById) {
                 $optionVotes = DB::table($votesTable)
                     ->where('post_id', $postId)
                     ->where('option_id', $option->id)
                     ->count();
 
                 $percentage = $totalVotes > 0 ? round(($optionVotes / $totalVotes) * 100, 2) : 0;
+                $pageId = (int) ($option->page_id ?? 0);
 
                 return [
                     'id' => $option->id,
@@ -1192,6 +1199,8 @@ class NewFeedController extends Controller
                     'votes' => $optionVotes,
                     'percentage' => $percentage,
                     'is_voted' => $userVote == $option->id,
+                    'page_id' => $pageId > 0 ? $pageId : null,
+                    'page' => $pageId > 0 ? ($taggedPagesById[$pageId] ?? null) : null,
                 ];
             })->toArray();
 
@@ -1199,6 +1208,36 @@ class NewFeedController extends Controller
             // If there's an error, return empty array
             return [];
         }
+    }
+
+    /**
+     * @param  array<int, int|string|null>  $pageIds
+     * @return array<int, array<string, mixed>>
+     */
+    private function getPollTaggedPagesByIds(array $pageIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $pageIds))));
+        if ($ids === [] || ! Schema::hasTable('Wo_Pages')) {
+            return [];
+        }
+
+        $pages = DB::table('Wo_Pages')
+            ->whereIn('page_id', $ids)
+            ->get(['page_id', 'page_name', 'page_title', 'avatar']);
+
+        $byId = [];
+        foreach ($pages as $page) {
+            $avatar = $page->avatar ?? '';
+            $byId[(int) $page->page_id] = [
+                'page_id' => (int) $page->page_id,
+                'page_name' => $page->page_name ?? '',
+                'page_title' => $page->page_title ?? ($page->page_name ?? ''),
+                'avatar' => $avatar,
+                'avatar_url' => $avatar !== '' ? asset('storage/' . ltrim($avatar, '/')) : null,
+            ];
+        }
+
+        return $byId;
     }
 
     /**
