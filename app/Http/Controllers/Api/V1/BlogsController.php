@@ -681,7 +681,7 @@ class BlogsController extends BaseController
             $thumbnailPath = "{$dir}/{$filename}";
         }
 
-        // Create the article - new articles are pending review by default (active = 0)
+        // Create the article and publish it immediately.
         $article = new Article();
         $article->user = (string) $userId;
         $article->title = $validated['title'];
@@ -691,8 +691,7 @@ class BlogsController extends BaseController
         $article->thumbnail = $thumbnailPath;
         $article->tags = $validated['tags'] ?? '';
         $article->posted = time();
-        // Mark as inactive; admin panel can later publish by setting active = 1
-        $article->active = '0';
+        $article->active = '1';
         $article->view = 0;
         $article->shared = 0;
         $article->save();
@@ -701,7 +700,7 @@ class BlogsController extends BaseController
             'api_status' => 200,
             'api_text' => 'success',
             'api_version' => '1.0',
-            'message' => 'Your blog is under review and will be published after admin approval.',
+            'message' => 'Blog published successfully.',
             'data' => [
                 'id' => $article->id,
                 'title' => $article->title,
