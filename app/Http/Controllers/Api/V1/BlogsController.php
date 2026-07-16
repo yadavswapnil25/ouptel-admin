@@ -7,6 +7,7 @@ use App\Models\BlogCategory;
 use App\Models\BlogComment;
 use App\Models\BlogCommentReply;
 use App\Models\BlogReaction;
+use App\Models\Report;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -221,12 +222,58 @@ class BlogsController extends BaseController
             $token = substr($authHeader, 7);
             $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
         }
+        $authorId = (string) ($rawUserId ?? $userData['user_id'] ?? '');
         $isLiked = $tokenUserId ? BlogReaction::query()
             ->where('blog_id', $article->id)
             ->where('user_id', $tokenUserId)
             ->whereNull('comment_id')
             ->whereNull('reply_id')
             ->exists() : false;
+        $isFollowing = false;
+        $followPending = false;
+        $isFriend = false;
+        $friendRequestSent = false;
+        $isReported = false;
+
+        if ($tokenUserId && $authorId !== '' && (string) $tokenUserId !== $authorId) {
+            $isFollowing = DB::table('Wo_Followers')
+                ->where('follower_id', $tokenUserId)
+                ->where('following_id', $authorId)
+                ->where('active', '1')
+                ->exists();
+
+            if (! $isFollowing) {
+                $followPending = DB::table('Wo_Followers')
+                    ->where('follower_id', $tokenUserId)
+                    ->where('following_id', $authorId)
+                    ->where('active', '0')
+                    ->exists();
+            }
+
+            $isFriend = DB::table('Wo_Friends')
+                ->where(function ($query) use ($tokenUserId, $authorId) {
+                    $query->where('user_id', $tokenUserId)->where('friend_id', $authorId);
+                })
+                ->orWhere(function ($query) use ($tokenUserId, $authorId) {
+                    $query->where('user_id', $authorId)->where('friend_id', $tokenUserId);
+                })
+                ->where('active', '1')
+                ->exists();
+
+            if (! $isFriend) {
+                $friendRequestSent = DB::table('Wo_Friends')
+                    ->where('user_id', $tokenUserId)
+                    ->where('friend_id', $authorId)
+                    ->where('active', '0')
+                    ->exists();
+            }
+
+            $isReported = Report::query()
+                ->where('post_id', $article->id)
+                ->where('user_id', $tokenUserId)
+                ->where('text', 'blog')
+                ->exists();
+        }
 
         // Format response
         $response = [
@@ -258,6 +305,11 @@ class BlogsController extends BaseController
                 'url' => $article->url,
                 'is_liked' => $isLiked,
                 'is_owner' => $tokenUserId ? (string) $rawUserId === (string) $tokenUserId : false,
+                'is_following' => $isFollowing,
+                'follow_pending' => $followPending,
+                'is_friend' => $isFriend,
+                'friend_request_sent' => $friendRequestSent,
+                'is_reported' => $isReported,
                 'author' => $userData,
             ],
         ];
@@ -330,6 +382,64 @@ class BlogsController extends BaseController
             'data' => [
                 'shares_count' => $article->fresh()->shares_count,
             ],
+        ]);
+    }
+
+    public function reportBlog(Request $request, int $blogId): JsonResponse
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+        }
+
+        $article = Article::find($blogId);
+        if (!$article) {
+            return response()->json(['ok' => false, 'message' => 'Blog not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'reason' => ['required', 'string', 'max:50'],
+            'description' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $existing = Report::query()
+            ->where('post_id', $article->id)
+            ->where('user_id', $tokenUserId)
+            ->where('text', 'blog')
+            ->first();
+
+        if ($existing) {
+            $existing->delete();
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Blog report removed successfully',
+                'data' => ['is_reported' => false],
+            ]);
+        }
+
+        Report::create([
+            'post_id' => $article->id,
+            'comment_id' => 0,
+            'profile_id' => 0,
+            'page_id' => 0,
+            'group_id' => 0,
+            'user_id' => $tokenUserId,
+            'text' => 'blog',
+            'reason' => $validated['reason'],
+            'seen' => 0,
+            'time' => time(),
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Blog reported successfully',
+            'data' => ['is_reported' => true],
         ]);
     }
 

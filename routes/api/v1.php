@@ -117,6 +117,7 @@ Route::get('/blogs/my-articles', [BlogsController::class, 'getMyArticles']); // 
 Route::get('/blogs/{id}', [BlogsController::class, 'show']); // Get blog/article by ID (must be after specific routes)
 Route::post('/blogs/{id}/like', [BlogsController::class, 'toggleLike']); // Toggle blog like
 Route::post('/blogs/{id}/share', [BlogsController::class, 'recordShare']); // Record blog share
+Route::post('/blogs/{id}/report', [BlogsController::class, 'reportBlog']); // Report blog
 Route::get('/blogs/{id}/comments', [BlogsController::class, 'getBlogComments']); // Get blog comments
 Route::post('/blogs/{id}/comments', [BlogsController::class, 'addBlogComment']); // Add blog comment
 Route::post('/blogs/comments/{commentId}/replies', [BlogsController::class, 'replyToBlogComment']); // Reply to blog comment
