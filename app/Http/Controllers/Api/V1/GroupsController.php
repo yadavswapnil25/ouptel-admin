@@ -525,6 +525,16 @@ class GroupsController extends BaseController
 
         // If user is already a member or has requested to join, leave the group
         if ($isMember || $hasJoinRequest) {
+            $leaveReason = trim((string) $request->input('leave_reason', ''));
+            if ($isMember && $leaveReason !== '' && Schema::hasTable('Wo_Group_Leave_Reasons')) {
+                DB::table('Wo_Group_Leave_Reasons')->insert([
+                    'group_id' => $groupId,
+                    'user_id' => (string) $userId,
+                    'reason' => mb_substr($leaveReason, 0, 500),
+                    'time' => time(),
+                ]);
+            }
+
             // Remove from members table (deletes both joined and requested entries)
             // Handle both string and integer user_id types
             DB::table('Wo_Group_Members')
