@@ -22,10 +22,16 @@ class BlogsController extends BaseController
     {
         $perPage = (int) ($request->query('per_page', 12));
         $perPage = max(1, min($perPage, 50));
+        $type = strtolower(trim((string) $request->query('type', 'all')));
 
-        $query = Article::query()
-            ->where('active', '1')
-            ->orderByDesc('id');
+        $tokenUserId = null;
+        $authHeader = $request->header('Authorization');
+        if ($authHeader && str_starts_with($authHeader, 'Bearer ')) {
+            $token = substr($authHeader, 7);
+            $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        }
+
+        $query = Article::query()->where('active', '1');
 
         if ($request->filled('category')) {
             $query->where('category', $request->query('category'));
@@ -43,35 +49,71 @@ class BlogsController extends BaseController
             });
         }
 
-        if ($request->boolean('only_my', false)) {
-            $authHeader = $request->header('Authorization');
-            if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+        $needsAuth = in_array($type, ['my', 'following', 'followers'], true)
+            || $request->boolean('only_my', false);
+
+        if ($needsAuth) {
+            if (!$tokenUserId) {
                 return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
             }
-            $token = substr($authHeader, 7);
-            $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
-            if (!$userId) {
-                return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
-            }
-            $query->where('user', $userId);
         }
+
+        if ($type === 'my' || $request->boolean('only_my', false)) {
+            $query->where('user', $tokenUserId);
+        } elseif ($type === 'following') {
+            // Blogs from people the current user follows
+            $followingIds = DB::table('Wo_Followers')
+                ->where('follower_id', $tokenUserId)
+                ->where('active', '1')
+                ->pluck('following_id')
+                ->map(fn ($id) => (string) $id)
+                ->filter()
+                ->values()
+                ->all();
+
+            if (empty($followingIds)) {
+                return response()->json([
+                    'data' => [],
+                    'meta' => [
+                        'current_page' => 1,
+                        'per_page' => $perPage,
+                        'total' => 0,
+                        'last_page' => 1,
+                    ],
+                ]);
+            }
+
+            $query->whereIn('user', $followingIds);
+        }
+
+        if ($type === 'trending') {
+            $query->orderByDesc('view')->orderByDesc('id');
+        } else {
+            $query->orderByDesc('id');
+        }
+
         $paginator = $query->paginate($perPage);
 
-        $data = $paginator->getCollection()->map(function (Article $article) {
+        $data = $paginator->getCollection()->map(function (Article $article) use ($tokenUserId) {
+            $ownerId = optional($article->user)->user_id ?? $article->user ?? null;
             return [
                 'id' => $article->id,
                 'title' => $article->title,
                 'excerpt' => $article->excerpt,
+                'description' => $article->description,
                 'thumbnail' => $article->thumbnail_url,
                 'category' => $article->category,
                 'posted_at' => $article->posted_date,
                 'views' => $article->views_count,
+                'views_count' => $article->views_count,
                 'shares' => $article->shares_count,
                 'comments' => $article->comments_count,
+                'comments_count' => $article->comments_count,
                 'reactions' => $article->reactions_count,
                 'url' => $article->url,
+                'is_owner' => $tokenUserId && (string) $ownerId === (string) $tokenUserId,
                 'user' => [
-                    'user_id' => optional($article->user)->user_id,
+                    'user_id' => $ownerId,
                     'username' => optional($article->user)->username,
                     'avatar_url' => optional($article->user)->avatar_url,
                 ],
