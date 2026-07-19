@@ -127,6 +127,13 @@ class Article extends Model
 
     public function getReactionsCountAttribute()
     {
-        return $this->reactions()->count();
+        return $this->reactions()
+            ->where(function ($q) {
+                $q->whereNull('comment_id')->orWhere('comment_id', 0);
+            })
+            ->where(function ($q) {
+                $q->whereNull('reply_id')->orWhere('reply_id', 0);
+            })
+            ->count();
     }
 }

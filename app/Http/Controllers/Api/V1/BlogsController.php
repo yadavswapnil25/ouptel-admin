@@ -226,8 +226,12 @@ class BlogsController extends BaseController
         $isLiked = $tokenUserId ? BlogReaction::query()
             ->where('blog_id', $article->id)
             ->where('user_id', $tokenUserId)
-            ->whereNull('comment_id')
-            ->whereNull('reply_id')
+            ->where(function ($q) {
+                $q->whereNull('comment_id')->orWhere('comment_id', 0);
+            })
+            ->where(function ($q) {
+                $q->whereNull('reply_id')->orWhere('reply_id', 0);
+            })
             ->exists() : false;
         $socialFlags = $this->getBlogAuthorSocialFlags($tokenUserId, $authorId, (int) $article->id);
         $isFollowing = $socialFlags['is_following'];
@@ -298,8 +302,12 @@ class BlogsController extends BaseController
         $existing = BlogReaction::query()
             ->where('blog_id', $article->id)
             ->where('user_id', $tokenUserId)
-            ->whereNull('comment_id')
-            ->whereNull('reply_id')
+            ->where(function ($q) {
+                $q->whereNull('comment_id')->orWhere('comment_id', 0);
+            })
+            ->where(function ($q) {
+                $q->whereNull('reply_id')->orWhere('reply_id', 0);
+            })
             ->first();
 
         if ($existing) {
@@ -307,11 +315,12 @@ class BlogsController extends BaseController
             $liked = false;
             $message = 'Blog unliked successfully';
         } else {
+            // Wo_Blog_Reaction.comment_id / reply_id are NOT NULL — use 0 for blog-level likes.
             BlogReaction::create([
                 'user_id' => (int) $tokenUserId,
                 'blog_id' => $article->id,
-                'comment_id' => null,
-                'reply_id' => null,
+                'comment_id' => 0,
+                'reply_id' => 0,
                 'reaction' => 'Like',
             ]);
             $liked = true;

@@ -41,6 +41,19 @@ class BlogReaction extends Model
     {
         return $this->belongsTo(BlogCommentReply::class, 'reply_id', 'id');
     }
+
+    /**
+     * WoWonder schema uses 0 (not null) for blog-level likes.
+     */
+    public function setCommentIdAttribute($value): void
+    {
+        $this->attributes['comment_id'] = $value === null || $value === '' ? 0 : $value;
+    }
+
+    public function setReplyIdAttribute($value): void
+    {
+        $this->attributes['reply_id'] = $value === null || $value === '' ? 0 : $value;
+    }
 }
 
 
