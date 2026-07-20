@@ -699,9 +699,6 @@ class DesignController extends Controller
                     'avatar' => $destPath,
                 ]);
 
-                $postType = 'profile_picture';
-                $newPostId = $this->createProfileMediaPost($tokenUserId, $postType, $destPath);
-
                 return response()->json([
                     'api_status' => '200',
                     'api_text' => 'success',
@@ -710,7 +707,6 @@ class DesignController extends Controller
                     'avatar' => asset('storage/' . $destPath),
                     'avatar_url' => asset('storage/' . $destPath),
                     'avatar_path' => $destPath,
-                    'post_id' => $newPostId,
                 ]);
             }
 
@@ -722,8 +718,6 @@ class DesignController extends Controller
                 'cover' => $destPath,
             ]);
 
-            $newPostId = $this->createProfileMediaPost($tokenUserId, 'profile_cover_picture', $destPath);
-
             return response()->json([
                 'api_status' => '200',
                 'api_text' => 'success',
@@ -732,7 +726,6 @@ class DesignController extends Controller
                 'cover' => asset('storage/' . $destPath),
                 'cover_url' => asset('storage/' . $destPath),
                 'cover_path' => $destPath,
-                'post_id' => $newPostId,
             ]);
         } catch (\Exception $e) {
             return response()->json([
