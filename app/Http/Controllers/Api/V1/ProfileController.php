@@ -367,6 +367,24 @@ class ProfileController extends Controller
         $userData['university'] = $user->university ?? '';
         $userData['website'] = $user->website ?? '';
 
+        $interestFields = [
+            'favourite_tv_shows' => ['favorite_tv_shows', 'favourite_tv_shows'],
+            'favourite_music_bands' => ['favorite_music_bands', 'favourite_music_bands'],
+            'favourite_movies' => ['favorite_movies', 'favourite_movies'],
+            'favourite_books' => ['favorite_books', 'favourite_books'],
+            'favourite_games' => ['favorite_games', 'favourite_games'],
+        ];
+
+        foreach ($interestFields as $column => $aliases) {
+            $value = '';
+            if (Schema::hasColumn('Wo_Users', $column)) {
+                $value = trim((string) ($userRaw->{$column} ?? ''));
+            }
+            foreach ($aliases as $alias) {
+                $userData[$alias] = $value;
+            }
+        }
+
         // Add location background image URL from admin-managed Wo_States (if available).
         // Prefer city-wise match first, then state/region.
         $userData['state_background_url'] = null;

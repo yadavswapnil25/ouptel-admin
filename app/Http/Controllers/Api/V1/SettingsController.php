@@ -8,6 +8,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class SettingsController extends Controller
@@ -298,7 +299,7 @@ class SettingsController extends Controller
 
         // Validate type parameter
         $validator = Validator::make($request->all(), [
-            'type' => 'required|in:general_settings,password_settings,privacy_settings,online_status,profile_settings,custom_settings,community_preferences_settings',
+            'type' => 'required|in:general_settings,password_settings,privacy_settings,online_status,profile_settings,interests_settings,custom_settings,community_preferences_settings',
             'user_data' => 'required|string', // JSON encoded string
         ]);
 
@@ -362,6 +363,10 @@ class SettingsController extends Controller
                     
                 case 'profile_settings':
                     $errors = $this->updateProfileSettings($user, $userData);
+                    break;
+
+                case 'interests_settings':
+                    $errors = $this->updateInterestsSettings($user, $userData);
                     break;
                     
                 case 'custom_settings':
@@ -866,6 +871,47 @@ class SettingsController extends Controller
         }
 
         return $errors;
+    }
+
+    /**
+     * Update profile interests (TV, music, movies, books, games).
+     */
+    private function updateInterestsSettings(User $user, array $userData): array
+    {
+        $fieldMap = [
+            'favourite_tv_shows' => ['favorite_tv_shows', 'favourite_tv_shows', 'tv_shows'],
+            'favourite_music_bands' => ['favorite_music_bands', 'favourite_music_bands', 'music_bands', 'music_artists'],
+            'favourite_movies' => ['favorite_movies', 'favourite_movies', 'movies', 'films'],
+            'favourite_books' => ['favorite_books', 'favourite_books', 'books'],
+            'favourite_games' => ['favorite_games', 'favourite_games', 'games'],
+        ];
+
+        $updateData = [];
+
+        foreach ($fieldMap as $column => $aliases) {
+            if (!Schema::hasColumn('Wo_Users', $column)) {
+                continue;
+            }
+
+            foreach ($aliases as $alias) {
+                if (!array_key_exists($alias, $userData)) {
+                    continue;
+                }
+
+                $value = trim((string) $userData[$alias]);
+                if (mb_strlen($value) > 500) {
+                    $value = mb_substr($value, 0, 497) . '...';
+                }
+                $updateData[$column] = $value;
+                break;
+            }
+        }
+
+        if (!empty($updateData)) {
+            DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
+        }
+
+        return [];
     }
 
     /**
