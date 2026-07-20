@@ -1742,6 +1742,13 @@ class ProfileController extends Controller
             if (!empty($post->postLink) && $postType !== 'colored' && !$isAlbumPost && empty($post->postMap)) {
                 $postType = 'link';
             }
+
+            if (
+                (!empty($post->blog_id) && (int) $post->blog_id > 0)
+                || strtolower((string) ($post->postType ?? '')) === 'blog'
+            ) {
+                $postType = 'blog';
+            }
             
             // Get album images if it's an album post (match new-feed format)
             $albumImages = [];
@@ -1853,6 +1860,8 @@ class ProfileController extends Controller
                 'page' => $page,
                 'group_id' => $post->group_id ?? null,
                 'group' => $group,
+                'blog_id' => !empty($post->blog_id) ? (int) $post->blog_id : null,
+                'blog' => $this->getBlogDataForPost($post),
             ];
         }
 
@@ -2150,6 +2159,49 @@ class ProfileController extends Controller
                 ->whereNotNull('badge_type')
                 ->latest('approved_at')
                 ->value('badge_type');
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Attach Wo_Blog article data when a timeline post has blog_id.
+     */
+    private function getBlogDataForPost($post): ?array
+    {
+        $blogId = (int) ($post->blog_id ?? 0);
+        if ($blogId <= 0 || !Schema::hasTable('Wo_Blog')) {
+            return null;
+        }
+
+        try {
+            $blog = DB::table('Wo_Blog')->where('id', $blogId)->first();
+            if (!$blog) {
+                return null;
+            }
+
+            $thumbnail = (string) ($blog->thumbnail ?? '');
+            $thumbnailUrl = null;
+            if ($thumbnail !== '') {
+                if (str_starts_with($thumbnail, 'http://') || str_starts_with($thumbnail, 'https://')) {
+                    $thumbnailUrl = $thumbnail;
+                } else {
+                    $thumbnailUrl = asset($thumbnail);
+                }
+            }
+
+            $frontendBase = rtrim((string) env('FRONTEND_URL', config('app.url')), '/');
+
+            return [
+                'id' => (int) $blog->id,
+                'title' => $blog->title ?? '',
+                'description' => $blog->description ?? '',
+                'thumbnail' => $thumbnail,
+                'thumbnail_url' => $thumbnailUrl,
+                'url' => "{$frontendBase}/blog/{$blog->id}",
+                'views' => (int) ($blog->view ?? 0),
+                'posted' => $blog->posted ?? null,
+            ];
         } catch (\Exception $e) {
             return null;
         }

@@ -1000,6 +1000,9 @@ class BlogsController extends BaseController
         $article->shared = 0;
         $article->save();
 
+        // Publish to newsfeed + user profile timeline (WoWonder: Wo_RegisterPost with blog_id)
+        $feedPostId = $this->createBlogFeedPost((int) $userId, $article);
+
         return response()->json([
             'api_status' => 200,
             'api_text' => 'success',
@@ -1017,6 +1020,7 @@ class BlogsController extends BaseController
                 'posted_at' => $article->posted_date,
                 'active' => (bool) $article->active,
                 'url' => $article->url,
+                'post_id' => $feedPostId,
             ],
         ], 201);
     }
@@ -1173,6 +1177,9 @@ class BlogsController extends BaseController
             if (Schema::hasTable('Wo_Blog_Reaction')) {
                 DB::table('Wo_Blog_Reaction')->where('blog_id', $id)->delete();
             }
+
+            // Remove newsfeed / profile timeline post linked to this blog
+            $this->deleteBlogFeedPost((int) $id);
         } catch (\Exception $e) {
             // Log error but continue with article deletion
             Log::warning('Error deleting related blog data: ' . $e->getMessage(), [
@@ -1200,6 +1207,132 @@ class BlogsController extends BaseController
             'api_version' => '1.0',
             'message' => 'Article deleted successfully',
         ]);
+    }
+
+    /**
+     * Create a Wo_Posts row so the blog appears on newsfeed and the author's profile.
+     * Mirrors old WoWonder insert-blog.php → Wo_RegisterPost(blog_id).
+     */
+    private function createBlogFeedPost(int $userId, Article $article): ?int
+    {
+        if (!Schema::hasTable('Wo_Posts')) {
+            return null;
+        }
+
+        try {
+            // Avoid duplicate feed posts if create is retried
+            $existingId = DB::table('Wo_Posts')
+                ->where('blog_id', $article->id)
+                ->where('user_id', $userId)
+                ->value('id');
+            if ($existingId) {
+                return (int) $existingId;
+            }
+
+            $tags = '';
+            if (!empty($article->tags)) {
+                $parts = array_filter(array_map('trim', explode(',', (string) $article->tags)));
+                foreach ($parts as $tag) {
+                    $tags .= '#' . ltrim($tag, '#') . ' ';
+                }
+            }
+            $postText = trim($article->title . (!empty($tags) ? ' | ' . trim($tags) : ''));
+
+            $now = time();
+            $postData = [
+                'user_id' => $userId,
+                'recipient_id' => 0,
+                'postText' => $postText,
+                'page_id' => 0,
+                'group_id' => 0,
+                'event_id' => 0,
+                'postPrivacy' => '0',
+                'postType' => 'blog',
+                'blog_id' => (int) $article->id,
+                'time' => $now,
+                'registered' => $now,
+                'active' => '1',
+                'postShare' => '0',
+                'boosted' => '0',
+                'comments_status' => '1',
+                'send_notify' => '1',
+            ];
+
+            if (!empty($article->thumbnail) && Schema::hasColumn('Wo_Posts', 'postPhoto')) {
+                $postData['postPhoto'] = $article->thumbnail;
+            }
+
+            if (Schema::hasColumn('Wo_Posts', 'postLink')) {
+                $postData['postLink'] = $article->url ?? '';
+            }
+            if (Schema::hasColumn('Wo_Posts', 'postLinkTitle')) {
+                $postData['postLinkTitle'] = $article->title ?? '';
+            }
+            if (Schema::hasColumn('Wo_Posts', 'postLinkContent')) {
+                $postData['postLinkContent'] = \Illuminate\Support\Str::limit(
+                    strip_tags((string) ($article->description ?? '')),
+                    200
+                );
+            }
+            if (!empty($article->thumbnail) && Schema::hasColumn('Wo_Posts', 'postLinkImage')) {
+                $postData['postLinkImage'] = $article->thumbnail;
+            }
+
+            $postId = (int) DB::table('Wo_Posts')->insertGetId($postData);
+
+            // Keep post_id in sync with id (WoWonder / this project's convention)
+            if ($postId > 0 && Schema::hasColumn('Wo_Posts', 'post_id')) {
+                DB::table('Wo_Posts')->where('id', $postId)->update(['post_id' => $postId]);
+            }
+
+            return $postId > 0 ? $postId : null;
+        } catch (\Exception $e) {
+            Log::warning('Failed to publish blog to newsfeed: ' . $e->getMessage(), [
+                'blog_id' => $article->id,
+                'user_id' => $userId,
+            ]);
+            return null;
+        }
+    }
+
+    /**
+     * Remove feed/timeline post(s) for a deleted blog.
+     */
+    private function deleteBlogFeedPost(int $blogId): void
+    {
+        if (!Schema::hasTable('Wo_Posts') || $blogId <= 0) {
+            return;
+        }
+
+        try {
+            $postIds = DB::table('Wo_Posts')
+                ->where('blog_id', $blogId)
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->filter()
+                ->values()
+                ->all();
+
+            if (empty($postIds)) {
+                return;
+            }
+
+            if (Schema::hasTable('Wo_Comments')) {
+                DB::table('Wo_Comments')->whereIn('post_id', $postIds)->delete();
+            }
+            if (Schema::hasTable('Wo_Reactions')) {
+                DB::table('Wo_Reactions')->whereIn('post_id', $postIds)->delete();
+            }
+            if (Schema::hasTable('Wo_SavedPosts')) {
+                DB::table('Wo_SavedPosts')->whereIn('post_id', $postIds)->delete();
+            }
+
+            DB::table('Wo_Posts')->where('blog_id', $blogId)->delete();
+        } catch (\Exception $e) {
+            Log::warning('Failed to delete blog feed post: ' . $e->getMessage(), [
+                'blog_id' => $blogId,
+            ]);
+        }
     }
 }
 
