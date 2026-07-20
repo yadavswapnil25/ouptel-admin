@@ -57,6 +57,8 @@ use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\HashtagController;
 use App\Http\Controllers\Api\V1\CommunityPreferenceController;
 use App\Http\Controllers\Api\V1\AdsController;
+use App\Http\Controllers\Api\V1\BoostController;
+use App\Http\Controllers\Api\V1\UserAdsController;
 use App\Http\Controllers\Api\V1\SurveyController;
 use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Api\V1\StatesController;
@@ -475,6 +477,23 @@ Route::get('/hashtags/{hashtag}/posts', [HashtagController::class, 'getHashtagPo
 Route::get('/ads/sidebar', [AdsController::class, 'sidebar']);
 Route::get('/ads/sponsored', [AdsController::class, 'sponsored']);
 Route::get('/ads/blog', [AdsController::class, 'blog']);
+
+// Boost content (promote posts)
+Route::get('/boost/stats', [BoostController::class, 'stats']);
+Route::get('/boost/posts', [BoostController::class, 'posts']);
+Route::get('/boost/campaigns', [BoostController::class, 'campaigns']);
+Route::post('/boost/campaigns', [BoostController::class, 'store']);
+Route::post('/boost/toggle', [BoostController::class, 'togglePost']);
+Route::post('/boost/campaigns/{id}/status', [BoostController::class, 'updateStatus']);
+Route::delete('/boost/campaigns/{id}', [BoostController::class, 'destroy']);
+
+// User advertisements
+Route::get('/user-ads', [UserAdsController::class, 'index']);
+Route::get('/user-ads/{id}', [UserAdsController::class, 'show']);
+Route::post('/user-ads', [UserAdsController::class, 'store']);
+Route::post('/user-ads/{id}/update', [UserAdsController::class, 'update']);
+Route::post('/user-ads/{id}/status', [UserAdsController::class, 'updateStatus']);
+Route::delete('/user-ads/{id}', [UserAdsController::class, 'destroy']);
 
 // Survey popup routes
 Route::post('/survey/status', [SurveyController::class, 'status']);
