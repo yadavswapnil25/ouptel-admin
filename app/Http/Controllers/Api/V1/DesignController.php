@@ -520,5 +520,230 @@ class DesignController extends Controller
             return null;
         }
     }
+
+    /**
+     * Set avatar from an existing public storage file (avoids browser CORS on /storage URLs).
+     */
+    public function updateAvatarFromStorage(Request $request): JsonResponse
+    {
+        $tokenUserId = $this->resolveTokenUserId($request);
+        if ($tokenUserId === null) {
+            return $this->unauthorizedResponse();
+        }
+
+        $validator = Validator::make($request->all(), [
+            'image_url' => 'required_without:path|string|max:2048',
+            'path' => 'required_without:image_url|string|max:512',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => $validator->errors()->all(),
+            ], 422);
+        }
+
+        $storagePath = $this->resolvePublicStoragePath(
+            (string) ($request->input('path') ?: $request->input('image_url'))
+        );
+
+        if (!$storagePath) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_text' => 'Invalid image path.',
+                ],
+            ], 422);
+        }
+
+        return $this->applyProfileImageFromStoragePath($tokenUserId, $storagePath, 'avatar');
+    }
+
+    /**
+     * Set cover from an existing public storage file (avoids browser CORS on /storage URLs).
+     */
+    public function updateCoverFromStorage(Request $request): JsonResponse
+    {
+        $tokenUserId = $this->resolveTokenUserId($request);
+        if ($tokenUserId === null) {
+            return $this->unauthorizedResponse();
+        }
+
+        $validator = Validator::make($request->all(), [
+            'image_url' => 'required_without:path|string|max:2048',
+            'path' => 'required_without:image_url|string|max:512',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => $validator->errors()->all(),
+            ], 422);
+        }
+
+        $storagePath = $this->resolvePublicStoragePath(
+            (string) ($request->input('path') ?: $request->input('image_url'))
+        );
+
+        if (!$storagePath) {
+            return response()->json([
+                'api_status' => '400',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_text' => 'Invalid image path.',
+                ],
+            ], 422);
+        }
+
+        return $this->applyProfileImageFromStoragePath($tokenUserId, $storagePath, 'cover');
+    }
+
+    private function resolveTokenUserId(Request $request): int|string|null
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return null;
+        }
+
+        $token = substr($authHeader, 7);
+        return DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+    }
+
+    private function unauthorizedResponse(): JsonResponse
+    {
+        return response()->json([
+            'api_status' => '400',
+            'api_text' => 'failed',
+            'api_version' => '1.0',
+            'errors' => [
+                'error_id' => '5',
+                'error_text' => 'No session sent.',
+            ],
+        ], 401);
+    }
+
+    private function resolvePublicStoragePath(string $input): ?string
+    {
+        $input = trim($input);
+        if ($input === '') {
+            return null;
+        }
+
+        if (preg_match('#/storage/(.+)$#i', $input, $matches)) {
+            $input = $matches[1];
+        }
+
+        $input = ltrim($input, '/');
+        if (str_starts_with($input, 'storage/')) {
+            $input = substr($input, 8);
+        }
+
+        if ($input === '' || str_contains($input, '..')) {
+            return null;
+        }
+
+        $extension = strtolower(pathinfo($input, PATHINFO_EXTENSION));
+        if (!in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+            return null;
+        }
+
+        return $input;
+    }
+
+    private function applyProfileImageFromStoragePath(int|string $tokenUserId, string $storagePath, string $kind): JsonResponse
+    {
+        if (!Storage::disk('public')->exists($storagePath)) {
+            return response()->json([
+                'api_status' => '404',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_text' => 'Image file not found.',
+                ],
+            ], 404);
+        }
+
+        try {
+            $user = User::where('user_id', $tokenUserId)->first();
+            if (!$user) {
+                return response()->json([
+                    'api_status' => '400',
+                    'api_text' => 'failed',
+                    'api_version' => '1.0',
+                    'errors' => [
+                        'error_text' => 'User not found.',
+                    ],
+                ], 404);
+            }
+
+            $isAvatar = $kind === 'avatar';
+            $extension = pathinfo($storagePath, PATHINFO_EXTENSION) ?: 'jpg';
+            $filename = ($isAvatar ? 'avatar_' : 'cover_') . $tokenUserId . '_' . time() . '.' . $extension;
+            $destPath = 'upload/photos/' . date('Y/m') . '/' . $filename;
+
+            Storage::disk('public')->copy($storagePath, $destPath);
+
+            if ($isAvatar) {
+                if ($user->avatar && !str_contains($user->avatar, 'd-avatar') && !str_contains($user->avatar, 'f-avatar')) {
+                    Storage::disk('public')->delete($user->avatar);
+                }
+
+                DB::table('Wo_Users')->where('user_id', $tokenUserId)->update([
+                    'avatar' => $destPath,
+                ]);
+
+                $postType = 'profile_picture';
+                $newPostId = $this->createProfileMediaPost($tokenUserId, $postType, $destPath);
+
+                return response()->json([
+                    'api_status' => '200',
+                    'api_text' => 'success',
+                    'api_version' => '1.0',
+                    'message' => 'Avatar updated successfully',
+                    'avatar' => asset('storage/' . $destPath),
+                    'avatar_url' => asset('storage/' . $destPath),
+                    'avatar_path' => $destPath,
+                    'post_id' => $newPostId,
+                ]);
+            }
+
+            if ($user->cover && !str_contains($user->cover, 'cover.jpg')) {
+                Storage::disk('public')->delete($user->cover);
+            }
+
+            DB::table('Wo_Users')->where('user_id', $tokenUserId)->update([
+                'cover' => $destPath,
+            ]);
+
+            $newPostId = $this->createProfileMediaPost($tokenUserId, 'profile_cover_picture', $destPath);
+
+            return response()->json([
+                'api_status' => '200',
+                'api_text' => 'success',
+                'api_version' => '1.0',
+                'message' => 'Cover photo updated successfully',
+                'cover' => asset('storage/' . $destPath),
+                'cover_url' => asset('storage/' . $destPath),
+                'cover_path' => $destPath,
+                'post_id' => $newPostId,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'api_status' => '500',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_text' => 'Failed to update photo: ' . $e->getMessage(),
+                ],
+            ], 500);
+        }
+    }
 }
 

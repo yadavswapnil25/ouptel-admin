@@ -396,6 +396,8 @@ Route::put('/social-links', [SocialLinksController::class, 'updateSocialLinks'])
 Route::get('/design/settings', [DesignController::class, 'getDesignSettings']);
 Route::post('/design/avatar', [DesignController::class, 'updateAvatar']);
 Route::post('/design/cover', [DesignController::class, 'updateCover']);
+Route::post('/design/avatar-from-storage', [DesignController::class, 'updateAvatarFromStorage']);
+Route::post('/design/cover-from-storage', [DesignController::class, 'updateCoverFromStorage']);
 Route::post('/design/avatar/reset', [DesignController::class, 'resetAvatar']);
 Route::post('/design/cover/reset', [DesignController::class, 'resetCover']);
 Route::delete('/design/avatar', [DesignController::class, 'resetAvatar']);
