@@ -407,6 +407,18 @@ class PostController extends Controller
                 $postData['community_preference_id'] = $request->input('community_preference_id') ? (int) $request->input('community_preference_id') : null;
             }
 
+            $shareToStory = filter_var(
+                $request->input('share_to_story', $request->input('shareToStory', false)),
+                FILTER_VALIDATE_BOOLEAN,
+            );
+            if (
+                $shareToStory &&
+                \Illuminate\Support\Facades\Schema::hasColumn('Wo_Posts', 'expires_at') &&
+                ($postPhotoPath || $postFilePath || $postRecordPath || $request->hasFile('album_images'))
+            ) {
+                $postData['expires_at'] = time() + (60 * 60 * 24);
+            }
+
             // Create the post
             $post = Post::create($postData);
 

@@ -48,6 +48,7 @@ class Post extends Model
         'postPlaying',
         'postPhoto',
         'time',
+        'expires_at',
         'registered',
         'album_name',
         'multi_image',
@@ -84,6 +85,7 @@ class Post extends Model
 
     protected $casts = [
         'time' => 'integer',
+        'expires_at' => 'integer',
         'post_id' => 'integer',
         'user_id' => 'integer',
         'recipient_id' => 'integer',

@@ -1836,6 +1836,7 @@ class ProfileController extends Controller
                 'album_images' => $albumImages,
                 'album_images_count' => count($albumImages),
                 'time' => $post->time ?? time(),
+                'expires_at' => (int) ($post->expires_at ?? 0),
                 'created_at' => $post->time ? date('c', $post->time) : null,
                 'reactions_count' => $totalReactions,
                 'reactions' => [
