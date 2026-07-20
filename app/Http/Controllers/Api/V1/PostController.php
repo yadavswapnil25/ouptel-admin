@@ -54,9 +54,11 @@ class PostController extends Controller
         $validationRules = [
             'postText' => 'nullable|string|max:5000',
             'postPrivacy' => 'required|in:0,1,2,3,4', // 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group
-            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif,colored,traveling,listening,watching,playing,reaction,feeling',
-            'type' => 'nullable|in:regular,gif,feeling,colored', // Post creation type
+            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif,colored,traveling,listening,watching,playing,reaction,feeling,birthday',
+            'type' => 'nullable|in:regular,gif,feeling,colored,birthday', // Post creation type
             'feeling' => 'nullable|string|max:100', // Feeling parameter for type=feeling
+            'wall_post' => 'nullable|in:0,1,true,false',
+            'birthday_wish' => 'nullable|in:0,1,true,false',
             'page_id' => 'nullable|integer',
             'group_id' => 'nullable|integer',
             'event_id' => 'nullable|integer',
@@ -183,6 +185,34 @@ class PostController extends Controller
         $user = User::where('user_id', $tokenUserId)->first();
         if (!$user) {
             return response()->json(['ok' => false, 'message' => 'User not found'], 404);
+        }
+
+        $isBirthdayWish = $request->boolean('birthday_wish')
+            || strtolower((string) $request->input('postType', '')) === 'birthday'
+            || strtolower((string) $request->input('type', '')) === 'birthday';
+        $isWallPost = $request->boolean('wall_post') || $isBirthdayWish;
+        $recipientId = (int) $request->input('recipient_id', 0);
+
+        if ($isBirthdayWish || $isWallPost) {
+            if ($recipientId <= 0) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'recipient_id is required for timeline posts',
+                ], 422);
+            }
+            if ((string) $recipientId === (string) $tokenUserId) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'You cannot post on your own timeline using this action',
+                ], 422);
+            }
+        }
+
+        if ($isBirthdayWish && trim((string) $request->input('postText', '')) === '') {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Please write a birthday message',
+            ], 422);
         }
 
         // Validate content requirements
@@ -332,13 +362,22 @@ class PostController extends Controller
             } elseif ($explicitPostType === 'album' || ($hasAlbumImages && !empty($albumName))) {
                 // Force album type if explicitly set or if album images are provided
                 $postType = 'album';
+            } elseif ($isBirthdayWish) {
+                $postType = 'birthday';
+            }
+
+            $wallPostFeeling = '';
+            if ($isBirthdayWish) {
+                $wallPostFeeling = 'birthday';
+            } elseif ($isWallPost) {
+                $wallPostFeeling = 'wall_post';
             }
 
             // Prepare post data with proper null handling
             $postData = [
                 'post_id' => $postId,
                 'user_id' => $tokenUserId,
-                'recipient_id' => $request->input('recipient_id', 0),
+                'recipient_id' => $recipientId > 0 ? $recipientId : $request->input('recipient_id', 0),
                 'postText' => $postText,
                 'page_id' => $request->input('page_id', 0),
                 'group_id' => $request->input('group_id', 0),
@@ -363,7 +402,9 @@ class PostController extends Controller
                 'postShare' => '0',
                 'postPrivacy' => $request->input('postPrivacy', '0'),
                 'postType' => $postType,
-                'postFeeling' => $request->input('postFeeling', ''),
+                'postFeeling' => $wallPostFeeling !== ''
+                    ? $wallPostFeeling
+                    : $request->input('postFeeling', ''),
                 'postListening' => $request->input('postListening', ''),
                 'postTraveling' => $request->input('postTraveling', ''),
                 'postWatching' => $request->input('postWatching', ''),
@@ -790,13 +831,59 @@ class PostController extends Controller
      */
     private function sendPostNotifications(Post $post, string $userId): void
     {
-        // In a real implementation, you would:
-        // 1. Get user's friends/followers
-        // 2. Create notifications for them
-        // 3. Send push notifications if enabled
-        
-        // For now, we'll just log the action
-        Log::info("Post created by user {$userId} with ID {$post->id}");
+        if (!Schema::hasTable('Wo_Notifications')) {
+            return;
+        }
+
+        $recipientId = (int) ($post->recipient_id ?? 0);
+        $authorId = (int) ($post->user_id ?? 0);
+
+        if ($recipientId <= 0 || $recipientId === $authorId) {
+            return;
+        }
+
+        if (!$this->userAllowsNotification($recipientId, 'e_profile_wall_post')) {
+            return;
+        }
+
+        $postType = strtolower((string) ($post->postType ?? ''));
+        $postFeeling = strtolower((string) ($post->postFeeling ?? ''));
+        $isBirthdayWish = $postType === 'birthday' || $postFeeling === 'birthday';
+        $postPublicId = $post->post_id ?? $post->id;
+
+        try {
+            DB::table('Wo_Notifications')->insert([
+                'notifier_id' => $authorId,
+                'recipient_id' => $recipientId,
+                'post_id' => $postPublicId,
+                'type' => 'profile_wall_post',
+                'type2' => $isBirthdayWish ? 'birthday' : ($postType !== '' ? $postType : 'post'),
+                'text' => $post->postText ?? '',
+                'url' => '/post/' . $postPublicId,
+                'page_id' => (int) ($post->page_id ?? 0),
+                'group_id' => (int) ($post->group_id ?? 0),
+                'event_id' => 0,
+                'time' => time(),
+                'seen' => 0,
+            ]);
+        } catch (\Exception $e) {
+            Log::warning('Failed to create wall post notification: ' . $e->getMessage());
+        }
+    }
+
+    private function userAllowsNotification(int $userId, string $settingColumn): bool
+    {
+        if (!Schema::hasTable('Wo_Users') || !Schema::hasColumn('Wo_Users', $settingColumn)) {
+            return true;
+        }
+
+        try {
+            $value = DB::table('Wo_Users')->where('user_id', $userId)->value($settingColumn);
+
+            return !in_array((string) $value, ['0', 'off', 'false'], true);
+        } catch (\Exception $e) {
+            return true;
+        }
     }
 
     /**

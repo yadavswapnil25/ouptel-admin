@@ -690,8 +690,19 @@ class NotificationsController extends Controller
                 $notification['icon'] = 'wonder';
                 break;
             case 'profile_wall_post':
-                $notification['type_text'] = 'posted on your timeline';
-                $notification['icon'] = 'user';
+                if (($type2 ?? '') === 'birthday') {
+                    $notification['type_text'] = 'wished you a happy birthday on your timeline'
+                        . ($notificationText ? ' ' . $notificationText : '');
+                    $notification['icon'] = 'birthday-cake';
+                } else {
+                    $notification['type_text'] = 'posted on your timeline'
+                        . ($notificationText ? ' ' . $notificationText : '');
+                    $notification['icon'] = 'user';
+                }
+                break;
+            case 'birthday':
+                $notification['type_text'] = 'has a birthday today. Help them celebrate!';
+                $notification['icon'] = 'birthday-cake';
                 break;
             case 'visited_profile':
                 $notification['type_text'] = 'visited your profile';

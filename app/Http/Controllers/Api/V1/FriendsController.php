@@ -1536,9 +1536,18 @@ class FriendsController extends Controller
                 return $a['days_until'] <=> $b['days_until'];
             });
 
+            $todayBirthdayUserIds = array_values(array_map(
+                fn (array $item) => (string) $item['user_id'],
+                array_filter($birthdays, fn (array $item) => !empty($item['is_today']))
+            ));
+            $this->ensureBirthdayNotificationsForViewer((string) $tokenUserId, $todayBirthdayUserIds);
+
+            $ownBirthday = $this->getOwnBirthdayMeta((string) $tokenUserId);
+
             return response()->json([
                 'ok' => true,
                 'data' => array_slice($birthdays, 0, $limit),
+                'own_birthday' => $ownBirthday,
             ]);
         } catch (\Exception $e) {
             Log::error('Failed to fetch friend birthdays: ' . $e->getMessage());
@@ -2478,6 +2487,96 @@ class FriendsController extends Controller
             3 => $number . 'rd',
             default => $number . 'th',
         };
+    }
+
+    /**
+     * @param list<string> $birthdayUserIds
+     */
+    private function ensureBirthdayNotificationsForViewer(string $viewerId, array $birthdayUserIds): void
+    {
+        if ($birthdayUserIds === [] || !Schema::hasTable('Wo_Notifications')) {
+            return;
+        }
+
+        $todayStart = strtotime('today');
+
+        foreach ($birthdayUserIds as $birthdayUserId) {
+            if ($birthdayUserId === '' || $birthdayUserId === $viewerId) {
+                continue;
+            }
+
+            try {
+                $exists = DB::table('Wo_Notifications')
+                    ->where('recipient_id', $viewerId)
+                    ->where('notifier_id', $birthdayUserId)
+                    ->where('type', 'birthday')
+                    ->where('time', '>=', $todayStart)
+                    ->exists();
+
+                if ($exists) {
+                    continue;
+                }
+
+                $birthdayUser = DB::table('Wo_Users')->where('user_id', $birthdayUserId)->first();
+                $username = $birthdayUser->username ?? '';
+
+                DB::table('Wo_Notifications')->insert([
+                    'notifier_id' => $birthdayUserId,
+                    'recipient_id' => $viewerId,
+                    'type' => 'birthday',
+                    'url' => $username !== ''
+                        ? 'index.php?link1=timeline&u=' . $username
+                        : 'index.php?link1=timeline&u=' . $birthdayUserId,
+                    'time' => time(),
+                    'seen' => 0,
+                ]);
+            } catch (\Exception $e) {
+                Log::warning('Failed to create birthday notification: ' . $e->getMessage());
+            }
+        }
+    }
+
+    private function getOwnBirthdayMeta(string $userId): array
+    {
+        $default = [
+            'is_today' => false,
+            'turning_age' => null,
+            'age_ordinal' => null,
+        ];
+
+        if (!Schema::hasColumn('Wo_Users', 'birthday')) {
+            return $default;
+        }
+
+        $birthdayRaw = DB::table('Wo_Users')->where('user_id', $userId)->value('birthday');
+        $birthdayRaw = is_string($birthdayRaw) ? trim($birthdayRaw) : '';
+        if ($birthdayRaw === '' || $birthdayRaw === '0000-00-00') {
+            return $default;
+        }
+
+        try {
+            $birthDate = \Carbon\Carbon::parse($birthdayRaw);
+        } catch (\Exception $e) {
+            return $default;
+        }
+
+        $today = now()->startOfDay();
+        $nextBirthday = $birthDate->copy()->year($today->year)->startOfDay();
+        if ($nextBirthday->lt($today)) {
+            $nextBirthday->addYear();
+        }
+
+        if (!$today->equalTo($nextBirthday)) {
+            return $default;
+        }
+
+        $turningAge = $nextBirthday->year - $birthDate->year;
+
+        return [
+            'is_today' => true,
+            'turning_age' => $turningAge,
+            'age_ordinal' => $this->getOrdinalSuffix($turningAge),
+        ];
     }
 
     /**

@@ -1456,8 +1456,14 @@ class ProfileController extends Controller
 
         // Get total count for pagination metadata (respecting optional filter)
         $totalQuery = DB::table('Wo_Posts')
-            ->where('user_id', $user->user_id)
-            ->where('active', 1);
+            ->where('active', 1)
+            ->where(function ($q) use ($user) {
+                $q->where('user_id', $user->user_id)
+                    ->orWhere(function ($q2) use ($user) {
+                        $q2->where('recipient_id', $user->user_id)
+                            ->where('user_id', '!=', $user->user_id);
+                    });
+            });
 
         // Apply same filter logic used for fetching posts
         $this->applyTimelineFilter($totalQuery, $filter);
@@ -1651,8 +1657,14 @@ class ProfileController extends Controller
     {
         // Build query - match the exact same logic as getUserPosts and post_count calculation
         $query = DB::table('Wo_Posts')
-            ->where('user_id', $userId)
-            ->where('active', 1); // Use integer 1 to match post_count calculation
+            ->where('active', 1)
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere(function ($q2) use ($userId) {
+                        $q2->where('recipient_id', $userId)
+                            ->where('user_id', '!=', $userId);
+                    });
+            });
 
         // Handle cursor-based pagination
         if ($beforePostId > 0 && $beforePostId < PHP_INT_MAX) {
@@ -1682,8 +1694,14 @@ class ProfileController extends Controller
     {
         // Build query - match the exact same logic as getUserPosts and post_count calculation
         $query = DB::table('Wo_Posts')
-            ->where('user_id', $userId)
-            ->where('active', 1); // Use integer 1 to match post_count calculation
+            ->where('active', 1)
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)
+                    ->orWhere(function ($q2) use ($userId) {
+                        $q2->where('recipient_id', $userId)
+                            ->where('user_id', '!=', $userId);
+                    });
+            });
 
         // Apply optional filter (same as cursor-based)
         $this->applyTimelineFilter($query, $filter);
@@ -1772,6 +1790,22 @@ class ProfileController extends Controller
             ) {
                 $postType = 'blog';
             }
+
+            $recipient = null;
+            if (!empty($post->recipient_id) && (int) $post->recipient_id > 0) {
+                $recipientUser = DB::table('Wo_Users')->where('user_id', (int) $post->recipient_id)->first();
+                if ($recipientUser) {
+                    $recipient = [
+                        'user_id' => (int) $recipientUser->user_id,
+                        'username' => $recipientUser->username ?? 'Unknown',
+                        'name' => trim(($recipientUser->first_name ?? '') . ' ' . ($recipientUser->last_name ?? ''))
+                            ?: ($recipientUser->name ?? $recipientUser->username ?? 'Unknown User'),
+                        'first_name' => $recipientUser->first_name ?? '',
+                        'last_name' => $recipientUser->last_name ?? '',
+                        'avatar_url' => ($recipientUser->avatar) ? asset('storage/' . $recipientUser->avatar) : null,
+                    ];
+                }
+            }
             
             // Get album images if it's an album post (match new-feed format)
             $albumImages = [];
@@ -1829,6 +1863,10 @@ class ProfileController extends Controller
                 'id' => $post->id,
                 'post_id' => $post->post_id ?? $post->id,
                 'user_id' => $post->user_id,
+                'recipient_id' => (int) ($post->recipient_id ?? 0),
+                'recipient' => $recipient,
+                'postFeeling' => $post->postFeeling ?? '',
+                'post_feeling' => $post->postFeeling ?? '',
                 'user' => $authorPayload,
                 'author' => $authorPayload,
                 'postText' => $post->postText ?? '',
@@ -1941,8 +1979,14 @@ class ProfileController extends Controller
     {
         // Get user stats
         $postCount = DB::table('Wo_Posts')
-            ->where('user_id', $user->user_id)
             ->where('active', '1')
+            ->where(function ($q) use ($user) {
+                $q->where('user_id', $user->user_id)
+                    ->orWhere(function ($q2) use ($user) {
+                        $q2->where('recipient_id', $user->user_id)
+                            ->where('user_id', '!=', $user->user_id);
+                    });
+            })
             ->count();
 
         // Check follow status
@@ -1958,10 +2002,11 @@ class ProfileController extends Controller
             }
         }
 
+        $registeredAt = $this->resolveUserRegistrationTimestamp($user);
+
         // Check if viewing own profile
         $isOwner = ($user->user_id == $loggedUserId);
-
-        $registeredAt = $this->resolveUserRegistrationTimestamp($user);
+        $birthdayMeta = $this->getBirthdayMetaForUser($user, $loggedUserId, $isOwner);
 
         return [
             'user_id' => $user->user_id,
@@ -1982,7 +2027,77 @@ class ProfileController extends Controller
             'created_at' => $registeredAt ? date('c', $registeredAt) : null,
             'joined_at' => $registeredAt,
             'joined_at_text' => $registeredAt ? date('F Y', $registeredAt) : null,
+            'is_birthday_today' => $birthdayMeta['is_today'],
+            'birthday' => $birthdayMeta['birthday'],
+            'turning_age' => $birthdayMeta['turning_age'],
+            'age_ordinal' => $birthdayMeta['age_ordinal'],
         ];
+    }
+
+    private function getBirthdayMetaForUser(object $user, int $loggedUserId, bool $isOwner): array
+    {
+        $default = [
+            'birthday' => null,
+            'is_today' => false,
+            'turning_age' => null,
+            'age_ordinal' => null,
+        ];
+
+        if (!Schema::hasColumn('Wo_Users', 'birthday')) {
+            return $default;
+        }
+
+        $birthdayRaw = trim((string) ($user->birthday ?? ''));
+        if ($birthdayRaw === '' || $birthdayRaw === '0000-00-00') {
+            return $default;
+        }
+
+        $birthPrivacy = (string) ($user->birth_privacy ?? '0');
+        if (!$isOwner) {
+            if ($birthPrivacy === '2') {
+                return $default;
+            }
+            if ($birthPrivacy === '1' && !$this->isFriend($loggedUserId, (string) $user->user_id)) {
+                return $default;
+            }
+        }
+
+        try {
+            $birthDate = \Carbon\Carbon::parse($birthdayRaw);
+        } catch (\Exception $e) {
+            return $default;
+        }
+
+        $today = now()->startOfDay();
+        $nextBirthday = $birthDate->copy()->year($today->year)->startOfDay();
+        if ($nextBirthday->lt($today)) {
+            $nextBirthday->addYear();
+        }
+        $isToday = $today->equalTo($nextBirthday);
+        $turningAge = $nextBirthday->year - $birthDate->year;
+
+        return [
+            'birthday' => $birthdayRaw,
+            'is_today' => $isToday,
+            'turning_age' => $turningAge,
+            'age_ordinal' => $this->formatOrdinalSuffix($turningAge),
+        ];
+    }
+
+    private function formatOrdinalSuffix(int $number): string
+    {
+        $abs = abs($number);
+        $mod100 = $abs % 100;
+        if ($mod100 >= 11 && $mod100 <= 13) {
+            return $number . 'th';
+        }
+
+        return match ($abs % 10) {
+            1 => $number . 'st',
+            2 => $number . 'nd',
+            3 => $number . 'rd',
+            default => $number . 'th',
+        };
     }
 
     /**
