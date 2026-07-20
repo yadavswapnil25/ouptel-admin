@@ -231,6 +231,7 @@ Route::delete('/friends/{id}', [FriendsController::class, 'removeFriend']);
 Route::post('/friends/{id}/block', [FriendsController::class, 'blockUser']);
 Route::post('/friends/{id}/unblock', [FriendsController::class, 'unblockUser']);
 Route::get('/friends/suggested', [FriendsController::class, 'suggested']);
+Route::get('/friends/birthdays', [FriendsController::class, 'birthdays']);
 Route::post('/friends/update-sidebar-users', [FriendsController::class, 'updateSidebarUsers']); // Old API: requests.php?f=update_sidebar_users
 
 // Common Things routes

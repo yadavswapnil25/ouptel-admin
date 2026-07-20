@@ -1415,6 +1415,143 @@ class FriendsController extends Controller
     }
 
     /**
+     * Friends and following with birthdays today or within the next N days.
+     */
+    public function birthdays(Request $request): JsonResponse
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+        $token = substr($authHeader, 7);
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+        }
+
+        $daysAhead = max(1, min((int) $request->query('days', 30), 60));
+        $limit = max(1, min((int) $request->query('limit', 20), 50));
+
+        try {
+            if (!Schema::hasTable('Wo_Users') || !Schema::hasColumn('Wo_Users', 'birthday')) {
+                return response()->json(['ok' => true, 'data' => []]);
+            }
+
+            $friendIds = $this->getAcceptedWoFriendsPartnerIds((string) $tokenUserId);
+            $followingIds = $this->getFollowingUserIds((string) $tokenUserId);
+            $candidateIds = array_values(array_unique(array_merge($friendIds, $followingIds)));
+
+            if ($candidateIds === []) {
+                return response()->json(['ok' => true, 'data' => []]);
+            }
+
+            $blockedIds = [];
+            if (Schema::hasTable('Wo_Blocks')) {
+                $blockedIds = DB::table('Wo_Blocks')
+                    ->where('blocker', $tokenUserId)
+                    ->pluck('blocked')
+                    ->merge(
+                        DB::table('Wo_Blocks')
+                            ->where('blocked', $tokenUserId)
+                            ->pluck('blocker')
+                    )
+                    ->map(fn ($id) => (string) $id)
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+
+            if ($blockedIds !== []) {
+                $candidateIds = array_values(array_diff($candidateIds, $blockedIds));
+            }
+
+            if ($candidateIds === []) {
+                return response()->json(['ok' => true, 'data' => []]);
+            }
+
+            $users = DB::table('Wo_Users')
+                ->whereIn('user_id', $candidateIds)
+                ->where('active', '1')
+                ->whereNotNull('birthday')
+                ->where('birthday', '!=', '')
+                ->where('birthday', '!=', '0000-00-00')
+                ->get();
+
+            $today = now()->startOfDay();
+            $birthdays = [];
+
+            foreach ($users as $user) {
+                $userId = (string) $user->user_id;
+                $birthPrivacy = (string) ($user->birth_privacy ?? '0');
+                $isFriend = in_array($userId, $friendIds, true);
+
+                if ($birthPrivacy === '2') {
+                    continue;
+                }
+                if ($birthPrivacy === '1' && !$isFriend) {
+                    continue;
+                }
+
+                $birthdayRaw = trim((string) $user->birthday);
+                try {
+                    $birthDate = \Carbon\Carbon::parse($birthdayRaw);
+                } catch (\Exception $e) {
+                    continue;
+                }
+
+                $nextBirthday = $birthDate->copy()->year($today->year)->startOfDay();
+                if ($nextBirthday->lt($today)) {
+                    $nextBirthday->addYear();
+                }
+
+                $daysUntil = (int) $today->diffInDays($nextBirthday, false);
+                if ($daysUntil > $daysAhead) {
+                    continue;
+                }
+
+                $turningAge = $nextBirthday->year - $birthDate->year;
+
+                $birthdays[] = [
+                    'user_id' => $user->user_id,
+                    'username' => $user->username ?? '',
+                    'name' => $this->getUserName($user),
+                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'gender' => $user->gender ?? '',
+                    'birth_day' => (int) $birthDate->format('d'),
+                    'birth_month' => (int) $birthDate->format('m'),
+                    'birth_month_name' => $birthDate->format('F'),
+                    'turning_age' => $turningAge,
+                    'age_ordinal' => $this->getOrdinalSuffix($turningAge),
+                    'is_today' => $daysUntil === 0,
+                    'days_until' => $daysUntil,
+                    'is_friend' => $isFriend,
+                ];
+            }
+
+            usort($birthdays, function (array $a, array $b) {
+                if ($a['is_today'] !== $b['is_today']) {
+                    return $b['is_today'] <=> $a['is_today'];
+                }
+
+                return $a['days_until'] <=> $b['days_until'];
+            });
+
+            return response()->json([
+                'ok' => true,
+                'data' => array_slice($birthdays, 0, $limit),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch friend birthdays: ' . $e->getMessage());
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to fetch birthdays',
+                'data' => [],
+            ], 500);
+        }
+    }
+
+    /**
      * Update sidebar users (mimics old API: requests.php?f=update_sidebar_users)
      * This is the same as suggested() but matches the old API endpoint name
      * 
@@ -2300,6 +2437,47 @@ class FriendsController extends Controller
         } catch (\Exception $e) {
             // ignore – best-effort
         }
+    }
+
+    /**
+     * Active following IDs for a user.
+     *
+     * @return list<string>
+     */
+    private function getFollowingUserIds(string $userId): array
+    {
+        if (!Schema::hasTable('Wo_Followers')) {
+            return [];
+        }
+
+        try {
+            return DB::table('Wo_Followers')
+                ->where('follower_id', $userId)
+                ->where('active', '1')
+                ->pluck('following_id')
+                ->map(fn ($id) => (string) $id)
+                ->unique()
+                ->values()
+                ->all();
+        } catch (\Exception $e) {
+            return [];
+        }
+    }
+
+    private function getOrdinalSuffix(int $number): string
+    {
+        $abs = abs($number);
+        $mod100 = $abs % 100;
+        if ($mod100 >= 11 && $mod100 <= 13) {
+            return $number . 'th';
+        }
+
+        return match ($abs % 10) {
+            1 => $number . 'st',
+            2 => $number . 'nd',
+            3 => $number . 'rd',
+            default => $number . 'th',
+        };
     }
 
     /**
