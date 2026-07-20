@@ -611,7 +611,16 @@ class SettingsController extends Controller
                 $updateData['language'] = $userData['language'];
             }
 
-            if (!empty($updateData)) {
+            if (isset($userData['relationship_id']) && Schema::hasColumn('Wo_Users', 'relationship_id')) {
+                $relationshipId = (int) $userData['relationship_id'];
+                if ($relationshipId >= 0 && $relationshipId <= 4) {
+                    $updateData['relationship_id'] = (string) $relationshipId;
+                } else {
+                    $errors[] = 'Invalid relationship status.';
+                }
+            }
+
+            if (empty($errors) && !empty($updateData)) {
                 DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
             }
         }
@@ -866,7 +875,16 @@ class SettingsController extends Controller
             }
         }
 
-        if (!empty($updateData)) {
+        if (isset($userData['relationship_id']) && Schema::hasColumn('Wo_Users', 'relationship_id')) {
+            $relationshipId = (int) $userData['relationship_id'];
+            if ($relationshipId >= 0 && $relationshipId <= 4) {
+                $updateData['relationship_id'] = (string) $relationshipId;
+            } else {
+                $errors[] = 'Invalid relationship status.';
+            }
+        }
+
+        if (empty($errors) && !empty($updateData)) {
             DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
         }
 

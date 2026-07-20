@@ -366,6 +366,11 @@ class ProfileController extends Controller
         $userData['college'] = $user->college ?? '';
         $userData['university'] = $user->university ?? '';
         $userData['website'] = $user->website ?? '';
+        if (Schema::hasColumn('Wo_Users', 'relationship_id')) {
+            $userData['relationship_id'] = (int) ($userRaw->relationship_id ?? 0);
+        } else {
+            $userData['relationship_id'] = 0;
+        }
 
         $interestFields = [
             'favourite_tv_shows' => ['favorite_tv_shows', 'favourite_tv_shows'],
