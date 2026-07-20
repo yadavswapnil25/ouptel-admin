@@ -2192,6 +2192,20 @@ class ProfileController extends Controller
 
             $frontendBase = rtrim((string) env('FRONTEND_URL', config('app.url')), '/');
 
+            $channelSummary = null;
+            $channelId = (int) ($blog->channel_id ?? 0);
+            if ($channelId > 0 && Schema::hasTable('Wo_Blog_Channels')) {
+                $channel = DB::table('Wo_Blog_Channels')->where('id', $channelId)->first();
+                if ($channel) {
+                    $channelSummary = [
+                        'id' => (int) $channel->id,
+                        'name' => $channel->name ?? '',
+                        'slug' => $channel->slug ?? '',
+                        'url' => "{$frontendBase}/blog/channels/{$channel->id}",
+                    ];
+                }
+            }
+
             return [
                 'id' => (int) $blog->id,
                 'title' => $blog->title ?? '',
@@ -2201,6 +2215,8 @@ class ProfileController extends Controller
                 'url' => "{$frontendBase}/blog/{$blog->id}",
                 'views' => (int) ($blog->view ?? 0),
                 'posted' => $blog->posted ?? null,
+                'channel_id' => $channelId > 0 ? $channelId : null,
+                'channel' => $channelSummary,
             ];
         } catch (\Exception $e) {
             return null;

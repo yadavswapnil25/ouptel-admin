@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Models\Article;
 use App\Models\BlogCategory;
+use App\Models\BlogChannel;
 use App\Models\BlogComment;
 use App\Models\BlogCommentReply;
 use App\Models\BlogReaction;
@@ -35,6 +36,10 @@ class BlogsController extends BaseController
 
         if ($request->filled('category')) {
             $query->where('category', $request->query('category'));
+        }
+
+        if ($request->filled('channel_id') && Schema::hasColumn('Wo_Blog', 'channel_id')) {
+            $query->where('channel_id', (int) $request->query('channel_id'));
         }
 
         // Text search by term (title, description, content, tags)
@@ -96,6 +101,19 @@ class BlogsController extends BaseController
 
         $data = $paginator->getCollection()->map(function (Article $article) use ($tokenUserId) {
             $ownerId = optional($article->user)->user_id ?? $article->user ?? null;
+            $channelSummary = null;
+            if (!empty($article->channel_id) && Schema::hasTable('Wo_Blog_Channels')) {
+                $channel = BlogChannel::query()->where('id', $article->channel_id)->first();
+                if ($channel) {
+                    $channelSummary = [
+                        'id' => (int) $channel->id,
+                        'name' => $channel->name,
+                        'slug' => $channel->slug,
+                        'url' => $channel->url,
+                        'avatar_url' => $channel->avatar_url,
+                    ];
+                }
+            }
             return [
                 'id' => $article->id,
                 'title' => $article->title,
@@ -103,6 +121,8 @@ class BlogsController extends BaseController
                 'description' => $article->description,
                 'thumbnail' => $article->thumbnail_url,
                 'category' => $article->category,
+                'channel_id' => $article->channel_id ? (int) $article->channel_id : null,
+                'channel' => $channelSummary,
                 'posted_at' => $article->posted_date,
                 'views' => $article->views_count,
                 'views_count' => $article->views_count,
@@ -318,6 +338,8 @@ class BlogsController extends BaseController
                 'friend_request_sent' => $friendRequestSent,
                 'is_reported' => $isReported,
                 'author' => $userData,
+                'channel_id' => $article->channel_id ? (int) $article->channel_id : null,
+                'channel' => $this->formatChannelSummary($article->channel_id),
             ],
         ];
 
@@ -933,6 +955,8 @@ class BlogsController extends BaseController
                 'description' => $article->description,
                 'content' => $article->content,
                 'category' => $article->category,
+                'channel_id' => $article->channel_id ? (int) $article->channel_id : null,
+                'channel' => $this->formatChannelSummary($article->channel_id),
                 'thumbnail' => $article->thumbnail_url,
                 'tags' => $article->tags ? explode(',', $article->tags) : [],
                 'posted' => $article->posted,
@@ -980,10 +1004,31 @@ class BlogsController extends BaseController
             'description' => ['required', 'string'],
             'content' => ['required', 'string'],
             'category' => ['required', 'integer'],
+            'channel_id' => ['required', 'integer', 'min:1'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
             'tags' => ['nullable', 'string'],
             'active' => ['nullable', 'boolean'],
         ]);
+
+        $channel = null;
+        if (Schema::hasTable('Wo_Blog_Channels')) {
+            $channel = BlogChannel::query()
+                ->where('id', (int) $validated['channel_id'])
+                ->where('user_id', (string) $userId)
+                ->where('active', '1')
+                ->first();
+        }
+        if (!$channel) {
+            return response()->json([
+                'api_status' => 400,
+                'ok' => false,
+                'message' => 'Please select one of your active blog channels',
+                'errors' => [
+                    'error_id' => 10,
+                    'error_text' => 'Invalid or missing channel_id',
+                ],
+            ], 422);
+        }
 
         // Handle thumbnail file upload
         $thumbnailPath = '';
@@ -1004,6 +1049,9 @@ class BlogsController extends BaseController
         $article->description = $validated['description'];
         $article->content = $validated['content'];
         $article->category = $validated['category'];
+        if (Schema::hasColumn('Wo_Blog', 'channel_id')) {
+            $article->channel_id = (int) $channel->id;
+        }
         $article->thumbnail = $thumbnailPath;
         $article->tags = $validated['tags'] ?? '';
         $article->posted = time();
@@ -1026,6 +1074,8 @@ class BlogsController extends BaseController
                 'description' => $article->description,
                 'content' => $article->content,
                 'category' => $article->category,
+                'channel_id' => $article->channel_id ? (int) $article->channel_id : null,
+                'channel' => $this->formatChannelSummary($article->channel_id),
                 'thumbnail' => $article->thumbnail_url,
                 'tags' => $article->tags ? explode(',', $article->tags) : [],
                 'posted' => $article->posted,
@@ -1345,6 +1395,25 @@ class BlogsController extends BaseController
                 'blog_id' => $blogId,
             ]);
         }
+    }
+
+    private function formatChannelSummary($channelId): ?array
+    {
+        $channelId = (int) $channelId;
+        if ($channelId <= 0 || !Schema::hasTable('Wo_Blog_Channels')) {
+            return null;
+        }
+        $channel = BlogChannel::query()->where('id', $channelId)->first();
+        if (!$channel) {
+            return null;
+        }
+        return [
+            'id' => (int) $channel->id,
+            'name' => $channel->name,
+            'slug' => $channel->slug,
+            'url' => $channel->url,
+            'avatar_url' => $channel->avatar_url,
+        ];
     }
 }
 

@@ -22,6 +22,7 @@ class Article extends Model
         'description',
         'content',
         'category',
+        'channel_id',
         'thumbnail',
         'posted',
         'active',
@@ -35,6 +36,7 @@ class Article extends Model
         'active' => 'boolean',
         'view' => 'integer',
         'shared' => 'integer',
+        'channel_id' => 'integer',
     ];
 
     // Mutator to prevent null values for thumbnail field
@@ -67,6 +69,11 @@ class Article extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(BlogCategory::class, 'category', 'id');
+    }
+
+    public function channel(): BelongsTo
+    {
+        return $this->belongsTo(BlogChannel::class, 'channel_id', 'id');
     }
 
     public function comments(): HasMany

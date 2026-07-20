@@ -488,6 +488,39 @@ class PeopleFollowController extends Controller
                     $q->whereIn('user_id', $followingUserIds)
                       // Include posts where current user is explicitly tagged/recipient.
                       ->orWhere('recipient_id', $userId);
+
+                    // Include blog posts from channels the user follows
+                    if (
+                        Schema::hasTable('Wo_Blog_Channel_Followers')
+                        && Schema::hasTable('Wo_Blog')
+                        && Schema::hasColumn('Wo_Blog', 'channel_id')
+                    ) {
+                        $followedChannelIds = DB::table('Wo_Blog_Channel_Followers')
+                            ->where('user_id', $userId)
+                            ->pluck('channel_id')
+                            ->map(fn ($id) => (int) $id)
+                            ->filter()
+                            ->values()
+                            ->all();
+
+                        if (!empty($followedChannelIds)) {
+                            $blogIds = DB::table('Wo_Blog')
+                                ->whereIn('channel_id', $followedChannelIds)
+                                ->where('active', '1')
+                                ->pluck('id')
+                                ->map(fn ($id) => (int) $id)
+                                ->filter()
+                                ->values()
+                                ->all();
+
+                            if (!empty($blogIds)) {
+                                $q->orWhere(function ($q2) use ($blogIds) {
+                                    $q2->whereIn('blog_id', $blogIds)
+                                       ->where('blog_id', '>', 0);
+                                });
+                            }
+                        }
+                    }
                 });
 
             if ($filter) {

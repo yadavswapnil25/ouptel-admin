@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\GroupsController;
 use App\Http\Controllers\Api\V1\PagesController;
 use App\Http\Controllers\Api\V1\CountriesController;
 use App\Http\Controllers\Api\V1\BlogsController;
+use App\Http\Controllers\Api\V1\BlogChannelsController;
 use App\Http\Controllers\Api\V1\ProductsController;
 use App\Http\Controllers\Api\V1\DirectoryController;
 use App\Http\Controllers\Api\V1\EventsController;
@@ -128,6 +129,17 @@ Route::put('/blogs/{id}', [BlogsController::class, 'updateArticle']); // 5.3 Upd
 Route::post('/blogs/{id}', [BlogsController::class, 'updateArticle']); // 5.3 Update My Article (POST alternative)
 Route::delete('/blogs/{id}', [BlogsController::class, 'deleteArticle']); // 5.4 Delete My Article
 Route::post('/blogs/{id}/delete', [BlogsController::class, 'deleteArticle']); // 5.4 Delete My Article (POST alternative)
+
+// Blog channels
+Route::get('/blog-channels', [BlogChannelsController::class, 'index']);
+Route::get('/blog-channels/my', [BlogChannelsController::class, 'my']);
+Route::get('/blog-channels/{id}/blogs', [BlogChannelsController::class, 'blogs']);
+Route::get('/blog-channels/{id}', [BlogChannelsController::class, 'show']);
+Route::post('/blog-channels', [BlogChannelsController::class, 'store']);
+Route::put('/blog-channels/{id}', [BlogChannelsController::class, 'update']);
+Route::post('/blog-channels/{id}', [BlogChannelsController::class, 'update']);
+Route::delete('/blog-channels/{id}', [BlogChannelsController::class, 'destroy']);
+Route::post('/blog-channels/{id}/follow', [BlogChannelsController::class, 'toggleFollow']);
 Route::get('/products', [ProductsController::class, 'index']);
 Route::get('/products/meta', [ProductsController::class, 'meta']);
 Route::get('/my-products', [ProductsController::class, 'my']);
