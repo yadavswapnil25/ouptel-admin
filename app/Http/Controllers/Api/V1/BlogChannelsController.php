@@ -151,6 +151,75 @@ class BlogChannelsController extends BaseController
         ]);
     }
 
+    /**
+     * Owner dashboard: channel stats and recent blogs.
+     */
+    public function dashboard(Request $request, $id): JsonResponse
+    {
+        $auth = $this->requireAuth($request);
+        if ($auth instanceof JsonResponse) {
+            return $auth;
+        }
+        $userId = $auth;
+
+        if (!Schema::hasTable('Wo_Blog_Channels')) {
+            return response()->json(['ok' => false, 'message' => 'Channel not found'], 404);
+        }
+
+        $channel = BlogChannel::query()->where('id', (int) $id)->first();
+        if (!$channel) {
+            return response()->json(['ok' => false, 'message' => 'Channel not found'], 404);
+        }
+        if ((string) $channel->user_id !== (string) $userId) {
+            return response()->json(['ok' => false, 'message' => 'You are not the channel owner'], 403);
+        }
+
+        $blogQuery = Article::query()
+            ->where('channel_id', $channel->id)
+            ->where('active', '1');
+
+        $totalViews = (int) (clone $blogQuery)->sum('view');
+        $blogIds = (clone $blogQuery)->pluck('id');
+        $totalComments = 0;
+        if ($blogIds->isNotEmpty() && Schema::hasTable('Wo_BlogComments')) {
+            $totalComments = (int) DB::table('Wo_BlogComments')
+                ->whereIn('blog_id', $blogIds->all())
+                ->count();
+        }
+
+        $recentBlogs = Article::query()
+            ->where('channel_id', $channel->id)
+            ->where('active', '1')
+            ->orderByDesc('id')
+            ->limit(10)
+            ->get()
+            ->map(function (Article $article) {
+                return [
+                    'id' => $article->id,
+                    'title' => $article->title,
+                    'thumbnail' => $article->thumbnail_url,
+                    'posted_at' => $article->posted_date,
+                    'views_count' => $article->views_count,
+                    'comments_count' => $article->comments_count,
+                    'url' => $article->url,
+                ];
+            });
+
+        return response()->json([
+            'ok' => true,
+            'data' => [
+                'channel' => $channel->toSummaryArray($userId),
+                'stats' => [
+                    'followers_count' => $channel->followers_count,
+                    'blogs_count' => $channel->blogs_count,
+                    'total_views' => $totalViews,
+                    'total_comments' => $totalComments,
+                ],
+                'recent_blogs' => $recentBlogs,
+            ],
+        ]);
+    }
+
     public function blogs(Request $request, $id): JsonResponse
     {
         if (!Schema::hasTable('Wo_Blog_Channels')) {

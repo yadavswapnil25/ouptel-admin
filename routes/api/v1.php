@@ -134,6 +134,7 @@ Route::post('/blogs/{id}/delete', [BlogsController::class, 'deleteArticle']); //
 Route::get('/blog-channels', [BlogChannelsController::class, 'index']);
 Route::get('/blog-channels/my', [BlogChannelsController::class, 'my']);
 Route::get('/blog-channels/{id}/blogs', [BlogChannelsController::class, 'blogs']);
+Route::get('/blog-channels/{id}/dashboard', [BlogChannelsController::class, 'dashboard']);
 Route::get('/blog-channels/{id}', [BlogChannelsController::class, 'show']);
 Route::post('/blog-channels', [BlogChannelsController::class, 'store']);
 Route::put('/blog-channels/{id}', [BlogChannelsController::class, 'update']);
