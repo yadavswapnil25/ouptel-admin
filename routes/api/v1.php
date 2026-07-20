@@ -62,6 +62,7 @@ use App\Http\Controllers\Api\V1\UserAdsController;
 use App\Http\Controllers\Api\V1\SurveyController;
 use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Api\V1\StatesController;
+use App\Http\Controllers\Api\V1\ActivityController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -233,6 +234,8 @@ Route::post('/friends/{id}/unblock', [FriendsController::class, 'unblockUser']);
 Route::get('/friends/suggested', [FriendsController::class, 'suggested']);
 Route::get('/friends/birthdays', [FriendsController::class, 'birthdays']);
 Route::post('/friends/update-sidebar-users', [FriendsController::class, 'updateSidebarUsers']); // Old API: requests.php?f=update_sidebar_users
+
+Route::get('/activities/recent', [ActivityController::class, 'recent']);
 
 // Common Things routes
 Route::get('/common-things', [CommonThingsController::class, 'index']);
