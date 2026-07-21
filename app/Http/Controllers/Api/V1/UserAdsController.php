@@ -31,7 +31,7 @@ class UserAdsController extends Controller
         $status = $request->query('status');
         $query = DB::table('Wo_UserAds')->where('user_id', $userId)->orderByDesc('id');
         if ($status) {
-            $query->where('status', $status);
+            $this->applyStatusFilter($query, (string) $status);
         }
 
         $ads = $query->limit(50)->get()->map(fn ($ad) => $this->formatAd($ad))->values();
@@ -150,7 +150,7 @@ class UserAdsController extends Controller
             'start' => $request->input('start', ''),
             'end' => $request->input('end', ''),
             'posted' => time(),
-            'status' => 'active',
+            'status' => $this->encodeStatus('active'),
             'views' => 0,
             'clicks' => 0,
         ];
@@ -280,7 +280,7 @@ class UserAdsController extends Controller
         $updated = DB::table('Wo_UserAds')
             ->where('id', $id)
             ->where('user_id', $userId)
-            ->update(['status' => $request->input('status')]);
+            ->update(['status' => $this->encodeStatus($request->input('status'))]);
 
         if (!$updated) {
             return response()->json(['api_status' => '404', 'message' => 'Ad not found'], 404);
@@ -338,7 +338,7 @@ class UserAdsController extends Controller
             'budget' => (float) ($ad->budget ?? 0),
             'start' => $ad->start ?? '',
             'end' => $ad->end ?? '',
-            'status' => $ad->status ?? 'active',
+            'status' => $this->decodeStatus($ad->status ?? null),
             'views' => (int) ($ad->views ?? 0),
             'clicks' => (int) ($ad->clicks ?? 0),
             'posted' => (int) ($ad->posted ?? 0),
@@ -354,6 +354,62 @@ class UserAdsController extends Controller
         $ids = array_values(array_unique(array_filter(array_map('intval', $preferences))));
 
         return implode(',', $ids);
+    }
+
+    private function statusColumnIsInteger(): bool
+    {
+        static $cached = null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
+        if (!Schema::hasTable('Wo_UserAds') || !Schema::hasColumn('Wo_UserAds', 'status')) {
+            $cached = false;
+
+            return $cached;
+        }
+
+        $type = Schema::getColumnType('Wo_UserAds', 'status');
+        $cached = in_array($type, ['integer', 'bigint', 'smallint', 'tinyint', 'int'], true);
+
+        return $cached;
+    }
+
+    private function encodeStatus(string $status): int|string
+    {
+        $normalized = $status === 'paused' ? 'paused' : 'active';
+
+        if ($this->statusColumnIsInteger()) {
+            return $normalized === 'active' ? 1 : 0;
+        }
+
+        return $normalized;
+    }
+
+    private function decodeStatus(mixed $status): string
+    {
+        if ($status === 1 || $status === '1') {
+            return 'active';
+        }
+
+        if ($status === 0 || $status === '0') {
+            return 'paused';
+        }
+
+        return in_array($status, ['active', 'paused'], true) ? $status : 'paused';
+    }
+
+    private function applyStatusFilter($query, string $status): void
+    {
+        if ($status === 'active') {
+            $query->whereIn('status', $this->statusColumnIsInteger() ? [1, '1'] : ['active']);
+
+            return;
+        }
+
+        if ($status === 'paused') {
+            $query->whereIn('status', $this->statusColumnIsInteger() ? [0, '0'] : ['paused']);
+        }
     }
 
     private function parseCommunityPreferences(?string $value): array
