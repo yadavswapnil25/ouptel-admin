@@ -1437,6 +1437,10 @@ class BlogsController extends BaseController
     {
         $files = $request->file('images');
         if (!$files) {
+            $allFiles = $request->allFiles();
+            $files = $allFiles['images'] ?? [];
+        }
+        if (!$files) {
             return [];
         }
         if (!is_array($files)) {
