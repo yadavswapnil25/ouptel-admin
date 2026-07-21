@@ -34,6 +34,7 @@ use App\Http\Controllers\Api\V1\CommentController;
 use App\Http\Controllers\Api\V1\FollowController;
 use App\Http\Controllers\Api\V1\SettingsController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\ProfileInterestFieldsController;
 use App\Http\Controllers\Api\V1\PrivacyController;
 use App\Http\Controllers\Api\V1\PasswordController;
 use App\Http\Controllers\Api\V1\SessionController;
@@ -371,6 +372,7 @@ Route::post('/settings/update-user-data', [SettingsController::class, 'updateUse
 // Profile routes (mimics old WoWonder API)
 Route::get('/profile/user-data', [ProfileController::class, 'getUserData']);
 Route::post('/profile/user-data', [ProfileController::class, 'getUserData']);
+Route::get('/profile/interest-fields', [ProfileInterestFieldsController::class, 'index']);
 Route::get('/update-data', [ProfileController::class, 'updateData']);
 Route::post('/update-data', [ProfileController::class, 'updateData']);
 Route::get('/timeline', [ProfileController::class, 'getTimeline']); // Get user timeline (old API: ajax_loading.php?link1=timeline&u=username)

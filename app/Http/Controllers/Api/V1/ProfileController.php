@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\ProfileInterestService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -372,26 +373,10 @@ class ProfileController extends Controller
             $userData['relationship_id'] = 0;
         }
 
-        $interestFields = [
-            'favourite_tv_shows' => ['favorite_tv_shows', 'favourite_tv_shows'],
-            'favourite_music_bands' => ['favorite_music_bands', 'favourite_music_bands'],
-            'favourite_movies' => ['favorite_movies', 'favourite_movies'],
-            'favourite_books' => ['favorite_books', 'favourite_books'],
-            'favourite_games' => ['favorite_games', 'favourite_games'],
-        ];
-
-        foreach ($interestFields as $column => $aliases) {
-            $value = '';
-            if (Schema::hasColumn('Wo_Users', $column)) {
-                $value = trim((string) ($userRaw->{$column} ?? ''));
-            }
-            foreach ($aliases as $alias) {
-                $userData[$alias] = $value;
-            }
-        }
+        ProfileInterestService::applyLegacyInterestAliases($userRaw, $userData);
+        $userData['profile_interests'] = ProfileInterestService::buildProfileInterestsPayload($userRaw);
 
         // Add location background image URL from admin-managed Wo_States (if available).
-        // Prefer city-wise match first, then state/region.
         $userData['state_background_url'] = null;
         if (($stateName !== '' || $cityName !== '') && Schema::hasTable('Wo_States')) {
             try {

@@ -892,38 +892,12 @@ class SettingsController extends Controller
     }
 
     /**
-     * Update profile interests (TV, music, movies, books, games).
+     * Update profile interests (admin-configurable fields).
      */
     private function updateInterestsSettings(User $user, array $userData): array
     {
-        $fieldMap = [
-            'favourite_tv_shows' => ['favorite_tv_shows', 'favourite_tv_shows', 'tv_shows'],
-            'favourite_music_bands' => ['favorite_music_bands', 'favourite_music_bands', 'music_bands', 'music_artists'],
-            'favourite_movies' => ['favorite_movies', 'favourite_movies', 'movies', 'films'],
-            'favourite_books' => ['favorite_books', 'favourite_books', 'books'],
-            'favourite_games' => ['favorite_games', 'favourite_games', 'games'],
-        ];
-
-        $updateData = [];
-
-        foreach ($fieldMap as $column => $aliases) {
-            if (!Schema::hasColumn('Wo_Users', $column)) {
-                continue;
-            }
-
-            foreach ($aliases as $alias) {
-                if (!array_key_exists($alias, $userData)) {
-                    continue;
-                }
-
-                $value = trim((string) $userData[$alias]);
-                if (mb_strlen($value) > 500) {
-                    $value = mb_substr($value, 0, 497) . '...';
-                }
-                $updateData[$column] = $value;
-                break;
-            }
-        }
+        $userRaw = DB::table('Wo_Users')->where('user_id', $user->user_id)->first();
+        $updateData = \App\Services\ProfileInterestService::buildUpdatePayload($userData, $userRaw);
 
         if (!empty($updateData)) {
             DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
