@@ -35,6 +35,10 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'manage-user-stories', 'label' => 'User Stories', 'group' => 'Manage Features'],
             ['key' => 'manage-community-preferences', 'label' => 'Community Preferences', 'group' => 'Manage Features'],
 
+            // Marketing
+            ['key' => 'manage-user-ads', 'label' => 'User Ads', 'group' => 'Marketing'],
+            ['key' => 'manage-boost-campaigns', 'label' => 'Boost Campaigns', 'group' => 'Marketing'],
+
             // Groups
             ['key' => 'manage-groups', 'label' => 'Groups', 'group' => 'Groups'],
             ['key' => 'manage-group-categories', 'label' => 'Group Categories', 'group' => 'Groups'],
