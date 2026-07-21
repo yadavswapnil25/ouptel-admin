@@ -89,6 +89,9 @@ class UserAdsController extends Controller
             'audience_countries' => 'nullable|array',
             'audience_countries.*' => 'integer|min:1',
             'gender' => 'nullable|in:all,male,female',
+            'age_group' => 'nullable|in:all,18-24,25-34,35-44,45-54,55+',
+            'community_preferences' => 'nullable|array',
+            'community_preferences.*' => 'integer|min:1',
             'bidding' => 'nullable|in:clicks,views',
             'appears' => 'nullable|in:post,sidebar,video',
             'budget' => 'nullable|numeric|min:100|max:25000',
@@ -128,8 +131,9 @@ class UserAdsController extends Controller
         $mediaPath = $this->storeMedia($request->file('media'));
         $countries = $request->input('audience_countries', []);
         $audience = is_array($countries) ? implode(',', array_map('intval', $countries)) : '';
+        $communityPrefs = $this->normalizeCommunityPreferences($request->input('community_preferences', []));
 
-        $adId = DB::table('Wo_UserAds')->insertGetId([
+        $insert = [
             'user_id' => $userId,
             'page_id' => (int) $request->input('page_id', 0),
             'name' => trim($request->input('name')),
@@ -149,7 +153,16 @@ class UserAdsController extends Controller
             'status' => 'active',
             'views' => 0,
             'clicks' => 0,
-        ]);
+        ];
+
+        if (Schema::hasColumn('Wo_UserAds', 'age_group')) {
+            $insert['age_group'] = $request->input('age_group', 'all');
+        }
+        if (Schema::hasColumn('Wo_UserAds', 'community_preferences')) {
+            $insert['community_preferences'] = $communityPrefs;
+        }
+
+        $adId = DB::table('Wo_UserAds')->insertGetId($insert);
 
         $ad = DB::table('Wo_UserAds')->where('id', $adId)->first();
 
@@ -185,6 +198,9 @@ class UserAdsController extends Controller
             'location' => 'nullable|string|max:255',
             'audience_countries' => 'nullable|array',
             'gender' => 'nullable|in:all,male,female',
+            'age_group' => 'nullable|in:all,18-24,25-34,35-44,45-54,55+',
+            'community_preferences' => 'nullable|array',
+            'community_preferences.*' => 'integer|min:1',
             'bidding' => 'nullable|in:clicks,views',
             'appears' => 'nullable|in:post,sidebar,video',
             'budget' => 'nullable|numeric|min:100|max:25000',
@@ -215,6 +231,14 @@ class UserAdsController extends Controller
         if ($request->has('audience_countries')) {
             $countries = $request->input('audience_countries', []);
             $update['audience'] = is_array($countries) ? implode(',', array_map('intval', $countries)) : '';
+        }
+        if ($request->has('age_group') && Schema::hasColumn('Wo_UserAds', 'age_group')) {
+            $update['age_group'] = $request->input('age_group', 'all');
+        }
+        if ($request->has('community_preferences') && Schema::hasColumn('Wo_UserAds', 'community_preferences')) {
+            $update['community_preferences'] = $this->normalizeCommunityPreferences(
+                $request->input('community_preferences', [])
+            );
         }
         if ($request->hasFile('media')) {
             $this->deleteMedia($ad->ad_media ?? '');
@@ -306,6 +330,8 @@ class UserAdsController extends Controller
                 ? array_map('intval', explode(',', $ad->audience))
                 : [],
             'gender' => $ad->gender ?? 'all',
+            'age_group' => $ad->age_group ?? 'all',
+            'community_preferences' => $this->parseCommunityPreferences($ad->community_preferences ?? ''),
             'bidding' => $ad->bidding ?? 'views',
             'appears' => $ad->appears ?? 'post',
             'ad_media_url' => $this->mediaUrl($media),
@@ -317,6 +343,27 @@ class UserAdsController extends Controller
             'clicks' => (int) ($ad->clicks ?? 0),
             'posted' => (int) ($ad->posted ?? 0),
         ];
+    }
+
+    private function normalizeCommunityPreferences(mixed $preferences): string
+    {
+        if (!is_array($preferences)) {
+            return '';
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $preferences))));
+
+        return implode(',', $ids);
+    }
+
+    private function parseCommunityPreferences(?string $value): array
+    {
+        $value = trim((string) $value);
+        if ($value === '') {
+            return [];
+        }
+
+        return array_values(array_filter(array_map('intval', explode(',', $value))));
     }
 
     private function storeMedia($file): string
