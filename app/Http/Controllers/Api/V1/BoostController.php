@@ -158,7 +158,7 @@ class BoostController extends Controller
             'audience_countries' => 'nullable|array',
             'audience_countries.*' => 'integer|min:1',
             'duration_days' => 'nullable|integer|min:1|max:90',
-            'budget' => 'nullable|numeric|min:0',
+            'budget' => 'nullable|numeric|min:100|max:25000',
             'activate' => 'nullable|boolean',
         ]);
 
