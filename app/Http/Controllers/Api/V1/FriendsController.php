@@ -646,12 +646,31 @@ class FriendsController extends Controller
             ], 404);
         }
 
+        $fromId = (string) $tokenUserId;
+        $toId = (string) $recipientId;
+
+        // New friend request only — cancel/unfriend paths are unchanged
+        if (
+            ! $this->isFriend($fromId, $toId)
+            && ! $this->hasPendingFriendRequestFrom($fromId, $toId)
+        ) {
+            $preferenceCheck = $this->validateSharedCommunityPreferences($fromId, $toId);
+            if (! $preferenceCheck['ok']) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 7,
+                        'error_text' => $preferenceCheck['message'],
+                    ],
+                    'message' => $preferenceCheck['message'],
+                ], 422);
+            }
+        }
+
         try {
             DB::beginTransaction();
 
             $followMessage = 'invalid';
-            $fromId = (string) $tokenUserId;
-            $toId = (string) $recipientId;
 
             // Friend requests only (Wo_Friends + notification) — never touch Wo_Followers
             if ($this->isFriend($fromId, $toId)) {
@@ -1780,12 +1799,100 @@ class FriendsController extends Controller
             $suggested->whereNotIn('user_id', $excludeIds);
         }
 
+        // Only suggest users who share at least one community preference with the viewer
+        $viewerPreferenceIds = $this->getUserCommunityPreferenceIds($userId);
+        if (!empty($viewerPreferenceIds) && Schema::hasTable('user_community_preferences')) {
+            $matchingUserIds = DB::table('user_community_preferences')
+                ->whereIn('preference_id', $viewerPreferenceIds)
+                ->pluck('user_id')
+                ->map(fn ($id) => (string) $id)
+                ->unique()
+                ->values()
+                ->all();
+
+            if (empty($matchingUserIds)) {
+                return collect();
+            }
+
+            $suggested->whereIn('user_id', $matchingUserIds);
+        }
+
         $suggested = $suggested->orderByDesc('lastseen')
             ->orderByDesc('user_id')
             ->limit($limit)
             ->get();
 
         return $suggested;
+    }
+
+    /**
+     * @return array{ok: bool, message: string}
+     */
+    private function validateSharedCommunityPreferences(string $senderId, string $recipientId): array
+    {
+        if (! Schema::hasTable('user_community_preferences')) {
+            return ['ok' => true, 'message' => ''];
+        }
+
+        $senderPrefs = $this->getUserCommunityPreferenceIds($senderId);
+        if (empty($senderPrefs)) {
+            return ['ok' => true, 'message' => ''];
+        }
+
+        $recipientPrefs = $this->getUserCommunityPreferenceIds($recipientId);
+        $sharedIds = array_values(array_intersect($senderPrefs, $recipientPrefs));
+        if (! empty($sharedIds)) {
+            return ['ok' => true, 'message' => ''];
+        }
+
+        $senderLabels = $this->getCommunityPreferenceLabels($senderPrefs);
+        $labelText = ! empty($senderLabels)
+            ? implode(', ', $senderLabels)
+            : 'your selected communities';
+
+        return [
+            'ok' => false,
+            'message' => 'You can only send friend requests to users who share your community preferences (' . $labelText . ').',
+        ];
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function getUserCommunityPreferenceIds(string $userId): array
+    {
+        if (! Schema::hasTable('user_community_preferences')) {
+            return [];
+        }
+
+        return DB::table('user_community_preferences')
+            ->where('user_id', $userId)
+            ->pluck('preference_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * @param  list<int>  $preferenceIds
+     * @return list<string>
+     */
+    private function getCommunityPreferenceLabels(array $preferenceIds): array
+    {
+        if (empty($preferenceIds) || ! Schema::hasTable('community_preferences')) {
+            return [];
+        }
+
+        return DB::table('community_preferences')
+            ->whereIn('id', $preferenceIds)
+            ->orderBy('name')
+            ->pluck('name')
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->values()
+            ->all();
     }
 
     /**
