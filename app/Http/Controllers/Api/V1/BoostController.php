@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Helpers\ImageHelper;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -58,10 +59,7 @@ class BoostController extends Controller
             ->get();
 
         $items = $posts->map(function ($post) {
-            $photo = $post->postPhoto ?? '';
-            $photoUrl = $photo
-                ? (str_starts_with($photo, 'http') ? $photo : asset('storage/' . ltrim($photo, '/')))
-                : null;
+            $photoUrl = $this->resolvePostThumbnailUrl($post);
 
             return [
                 'id' => $post->id,
@@ -110,10 +108,7 @@ class BoostController extends Controller
 
         $items = $campaigns->map(function ($campaign) use ($postsById) {
             $post = $postsById->get($campaign->post_id);
-            $photo = $post->postPhoto ?? '';
-            $photoUrl = $photo
-                ? (str_starts_with($photo, 'http') ? $photo : asset('storage/' . ltrim($photo, '/')))
-                : null;
+            $photoUrl = $post ? $this->resolvePostThumbnailUrl($post) : null;
 
             return [
                 'id' => $campaign->id,
@@ -469,5 +464,77 @@ class BoostController extends Controller
                     ->update(['status' => 'paused', 'updated_at' => time()]);
             }
         }
+    }
+
+    private function resolvePostThumbnailUrl(object $post): ?string
+    {
+        $postType = strtolower((string) ($post->postType ?? ''));
+        $photo = trim((string) ($post->postPhoto ?? ''));
+
+        if ($photo !== '') {
+            if ($postType === 'gif' || filter_var($photo, FILTER_VALIDATE_URL)) {
+                return preg_replace('#([^:])//+#', '$1/', $photo);
+            }
+
+            $resolved = $this->resolveStorageMediaUrl($photo);
+            if ($resolved) {
+                return $resolved;
+            }
+        }
+
+        $albumImage = $this->firstAlbumImagePath((int) ($post->id ?? 0));
+        if ($albumImage) {
+            return $this->resolveStorageMediaUrl($albumImage);
+        }
+
+        $file = trim((string) ($post->postFile ?? ''));
+        if ($file !== '' && $this->isImagePath($file)) {
+            return $this->resolveStorageMediaUrl($file);
+        }
+
+        return null;
+    }
+
+    private function firstAlbumImagePath(int $postId): ?string
+    {
+        if ($postId <= 0 || !Schema::hasTable('Wo_Albums_Media')) {
+            return null;
+        }
+
+        $image = DB::table('Wo_Albums_Media')
+            ->where('post_id', $postId)
+            ->orderBy('id')
+            ->value('image');
+
+        $image = trim((string) $image);
+
+        return $image !== '' ? $image : null;
+    }
+
+    private function resolveStorageMediaUrl(string $path): ?string
+    {
+        $path = trim($path);
+        if ($path === '') {
+            return null;
+        }
+
+        if (filter_var($path, FILTER_VALIDATE_URL)) {
+            return preg_replace('#([^:])//+#', '$1/', $path);
+        }
+
+        $normalized = ltrim($path, '/');
+        if (str_starts_with($normalized, 'storage/')) {
+            $normalized = substr($normalized, 8);
+        }
+
+        $url = ImageHelper::getImageUrl($normalized, 'post');
+        $placeholder = ImageHelper::getPlaceholder('post');
+
+        return $url !== $placeholder ? $url : null;
+    }
+
+    private function isImagePath(string $path): bool
+    {
+        return (bool) preg_match('/\.(jpe?g|png|gif|webp|bmp|svg)$/i', $path);
     }
 }
