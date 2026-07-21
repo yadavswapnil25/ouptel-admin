@@ -425,6 +425,17 @@ class ProfileController extends Controller
             $userData['joined_at_text'] = date('F Y', $registeredAt);
         }
 
+        $isOwner = ((int) $user->user_id === (int) $loggedUserId);
+        $birthdayMeta = $this->getBirthdayMetaForUser($userRaw ?: $user, $loggedUserId, $isOwner);
+        $userData['birthday'] = $birthdayMeta['birthday'];
+        $userData['is_birthday_today'] = $birthdayMeta['is_today'];
+        $userData['days_until_birthday'] = $birthdayMeta['days_until'];
+        $userData['turning_age'] = $birthdayMeta['turning_age'];
+        $userData['age_ordinal'] = $birthdayMeta['age_ordinal'];
+        $userData['birth_day'] = $birthdayMeta['birth_day'];
+        $userData['birth_month'] = $birthdayMeta['birth_month'];
+        $userData['birth_month_name'] = $birthdayMeta['birth_month_name'];
+
         return $userData;
     }
 
@@ -2014,8 +2025,12 @@ class ProfileController extends Controller
             'joined_at_text' => $registeredAt ? date('F Y', $registeredAt) : null,
             'is_birthday_today' => $birthdayMeta['is_today'],
             'birthday' => $birthdayMeta['birthday'],
+            'days_until_birthday' => $birthdayMeta['days_until'],
             'turning_age' => $birthdayMeta['turning_age'],
             'age_ordinal' => $birthdayMeta['age_ordinal'],
+            'birth_day' => $birthdayMeta['birth_day'],
+            'birth_month' => $birthdayMeta['birth_month'],
+            'birth_month_name' => $birthdayMeta['birth_month_name'],
         ];
     }
 
@@ -2024,8 +2039,12 @@ class ProfileController extends Controller
         $default = [
             'birthday' => null,
             'is_today' => false,
+            'days_until' => null,
             'turning_age' => null,
             'age_ordinal' => null,
+            'birth_day' => null,
+            'birth_month' => null,
+            'birth_month_name' => null,
         ];
 
         if (!Schema::hasColumn('Wo_Users', 'birthday')) {
@@ -2058,14 +2077,19 @@ class ProfileController extends Controller
         if ($nextBirthday->lt($today)) {
             $nextBirthday->addYear();
         }
-        $isToday = $today->equalTo($nextBirthday);
+        $daysUntil = (int) $today->diffInDays($nextBirthday, false);
+        $isToday = $daysUntil === 0;
         $turningAge = $nextBirthday->year - $birthDate->year;
 
         return [
             'birthday' => $birthdayRaw,
             'is_today' => $isToday,
+            'days_until' => $daysUntil,
             'turning_age' => $turningAge,
             'age_ordinal' => $this->formatOrdinalSuffix($turningAge),
+            'birth_day' => (int) $birthDate->format('d'),
+            'birth_month' => (int) $birthDate->format('m'),
+            'birth_month_name' => $birthDate->format('F'),
         ];
     }
 
