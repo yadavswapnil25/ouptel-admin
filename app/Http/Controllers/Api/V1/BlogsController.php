@@ -7,6 +7,7 @@ use App\Models\BlogCategory;
 use App\Models\BlogChannel;
 use App\Models\BlogComment;
 use App\Models\BlogCommentReply;
+use App\Models\BlogImage;
 use App\Models\BlogReaction;
 use App\Models\Report;
 use App\Models\User;
@@ -216,7 +217,7 @@ class BlogsController extends BaseController
     {
         // TEMPORARY: allow fetching any article by ID, regardless of active/user
         // (no authentication or visibility restrictions)
-        $article = Article::query()->where('id', $id)->first();
+        $article = Article::query()->with('images')->where('id', $id)->first();
         
         if (!$article) {
             return response()->json([
@@ -318,6 +319,7 @@ class BlogsController extends BaseController
                 'thumbnail' => $article->thumbnail,
                 'thumbnail_url' => $article->thumbnail_url,
                 'image_url' => $article->thumbnail_url,
+                'images' => $this->formatBlogImages($article),
                 'tags' => $article->tags ? explode(',', $article->tags) : [],
                 'posted' => $article->posted,
                 'posted_at' => $article->posted_date,
@@ -1006,6 +1008,8 @@ class BlogsController extends BaseController
             'category' => ['required', 'integer'],
             'channel_id' => ['required', 'integer', 'min:1'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
+            'images' => ['nullable', 'array', 'max:10'],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
             'tags' => ['nullable', 'string'],
             'active' => ['nullable', 'boolean'],
         ]);
@@ -1033,13 +1037,12 @@ class BlogsController extends BaseController
         // Handle thumbnail file upload
         $thumbnailPath = '';
         if ($request->hasFile('thumbnail')) {
-            $file = $request->file('thumbnail');
-            $year = date('Y');
-            $month = date('m');
-            $dir = "upload/photos/{$year}/{$month}";
-            $filename = uniqid('blog_') . '.' . $file->getClientOriginalExtension();
-            $file->move(public_path($dir), $filename);
-            $thumbnailPath = "{$dir}/{$filename}";
+            $thumbnailPath = $this->storeSingleBlogImageFile($request->file('thumbnail'));
+        }
+
+        $galleryPaths = $this->storeBlogImageFiles($request);
+        if ($thumbnailPath === '' && !empty($galleryPaths)) {
+            $thumbnailPath = $galleryPaths[0];
         }
 
         // Create the article and publish it immediately.
@@ -1060,6 +1063,10 @@ class BlogsController extends BaseController
         $article->shared = 0;
         $article->save();
 
+        if (!empty($galleryPaths)) {
+            $this->saveBlogImages((int) $article->id, $galleryPaths);
+        }
+
         // Publish to newsfeed + user profile timeline (WoWonder: Wo_RegisterPost with blog_id)
         $feedPostId = $this->createBlogFeedPost((int) $userId, $article);
 
@@ -1077,6 +1084,7 @@ class BlogsController extends BaseController
                 'channel_id' => $article->channel_id ? (int) $article->channel_id : null,
                 'channel' => $this->formatChannelSummary($article->channel_id),
                 'thumbnail' => $article->thumbnail_url,
+                'images' => $this->formatBlogImages($article->fresh('images')),
                 'tags' => $article->tags ? explode(',', $article->tags) : [],
                 'posted' => $article->posted,
                 'posted_at' => $article->posted_date,
@@ -1131,6 +1139,8 @@ class BlogsController extends BaseController
             'content' => ['sometimes', 'required', 'string'],
             'category' => ['sometimes', 'required', 'integer'],
             'thumbnail' => ['nullable', 'image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
+            'images' => ['nullable', 'array', 'max:10'],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,gif,webp', 'max:5120'],
             'tags' => ['nullable', 'string'],
             'active' => ['nullable', 'boolean'],
         ]);
@@ -1149,14 +1159,9 @@ class BlogsController extends BaseController
             $article->category = $validated['category'];
         }
         if ($request->hasFile('thumbnail')) {
-            $file = $request->file('thumbnail');
-            $year = date('Y');
-            $month = date('m');
-            $dir = "upload/photos/{$year}/{$month}";
-            $filename = uniqid('blog_') . '.' . $file->getClientOriginalExtension();
-            $file->move(public_path($dir), $filename);
-            $article->thumbnail = "{$dir}/{$filename}";
+            $article->thumbnail = $this->storeSingleBlogImageFile($request->file('thumbnail'));
         }
+        $galleryPaths = $this->storeBlogImageFiles($request);
         if (isset($validated['tags'])) {
             $article->tags = $validated['tags'] ?? '';
         }
@@ -1164,6 +1169,10 @@ class BlogsController extends BaseController
             $article->active = $validated['active'];
         }
         $article->save();
+
+        if (!empty($galleryPaths)) {
+            $this->saveBlogImages((int) $article->id, $galleryPaths);
+        }
 
         return response()->json([
             'api_status' => 200,
@@ -1177,6 +1186,7 @@ class BlogsController extends BaseController
                 'content' => $article->content,
                 'category' => $article->category,
                 'thumbnail' => $article->thumbnail_url,
+                'images' => $this->formatBlogImages($article->fresh('images')),
                 'tags' => $article->tags ? explode(',', $article->tags) : [],
                 'posted' => $article->posted,
                 'posted_at' => $article->posted_date,
@@ -1238,6 +1248,10 @@ class BlogsController extends BaseController
             // Delete blog reactions
             if (Schema::hasTable('Wo_Blog_Reaction')) {
                 DB::table('Wo_Blog_Reaction')->where('blog_id', $id)->delete();
+            }
+
+            if (Schema::hasTable('Wo_Blog_Images')) {
+                BlogImage::query()->where('blog_id', $id)->delete();
             }
 
             // Remove newsfeed / profile timeline post linked to this blog
@@ -1414,6 +1428,90 @@ class BlogsController extends BaseController
             'url' => $channel->url,
             'avatar_url' => $channel->avatar_url,
         ];
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function storeBlogImageFiles(Request $request): array
+    {
+        $files = $request->file('images');
+        if (!$files) {
+            return [];
+        }
+        if (!is_array($files)) {
+            $files = [$files];
+        }
+
+        $paths = [];
+        foreach ($files as $file) {
+            if (!$file || !$file->isValid()) {
+                continue;
+            }
+            $paths[] = $this->storeSingleBlogImageFile($file);
+        }
+
+        return $paths;
+    }
+
+    private function storeSingleBlogImageFile($file): string
+    {
+        $year = date('Y');
+        $month = date('m');
+        $dir = "upload/photos/{$year}/{$month}";
+        $fullDir = public_path($dir);
+        if (!is_dir($fullDir)) {
+            mkdir($fullDir, 0755, true);
+        }
+        $filename = uniqid('blog_') . '.' . $file->getClientOriginalExtension();
+        $file->move($fullDir, $filename);
+
+        return "{$dir}/{$filename}";
+    }
+
+    /**
+     * @param array<int, string> $paths
+     */
+    private function saveBlogImages(int $blogId, array $paths): void
+    {
+        if (!Schema::hasTable('Wo_Blog_Images') || empty($paths)) {
+            return;
+        }
+
+        $existingCount = BlogImage::query()->where('blog_id', $blogId)->count();
+        $now = time();
+
+        foreach ($paths as $index => $path) {
+            BlogImage::create([
+                'blog_id' => $blogId,
+                'image' => $path,
+                'sort_order' => $existingCount + $index,
+                'created_at' => $now,
+            ]);
+        }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function formatBlogImages(Article $article): array
+    {
+        if (!Schema::hasTable('Wo_Blog_Images')) {
+            return [];
+        }
+
+        $images = $article->relationLoaded('images')
+            ? $article->images
+            : $article->images()->get();
+
+        return $images->map(function (BlogImage $img) {
+            return [
+                'id' => (int) $img->id,
+                'image' => $img->image,
+                'image_url' => $img->image_url,
+                'sort_order' => (int) $img->sort_order,
+            ];
+        })->values()->all();
     }
 }
 

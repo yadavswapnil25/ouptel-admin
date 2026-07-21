@@ -86,6 +86,11 @@ class Article extends Model
         return $this->hasMany(BlogReaction::class, 'blog_id', 'id');
     }
 
+    public function images(): HasMany
+    {
+        return $this->hasMany(BlogImage::class, 'blog_id', 'id')->orderBy('sort_order')->orderBy('id');
+    }
+
     public function getThumbnailUrlAttribute()
     {
         if (!empty($this->thumbnail)) {
