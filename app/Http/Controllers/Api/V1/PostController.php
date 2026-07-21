@@ -1117,6 +1117,13 @@ class PostController extends Controller
         // Get activity data
         $activityData = $this->getActivityData($post);
 
+        $albumImages = [];
+        $isAlbumPost = !empty($post->album_name) ||
+            ($post->multi_image_post == 1 || $post->multi_image_post == '1');
+        if ($isAlbumPost) {
+            $albumImages = $this->getAlbumImages((int) $post->id);
+        }
+
         return [
             'id' => $post->id,
             'post_id' => $post->post_id,
@@ -1142,6 +1149,8 @@ class PostController extends Controller
             'post_sticker' => $post->postSticker,
             'album_name' => $post->album_name,
             'multi_image_post' => (bool) $post->multi_image_post,
+            'album_images' => $albumImages,
+            'album_images_count' => count($albumImages),
             'is_owner' => $post->user_id == $userId,
             'is_active' => $post->is_active,
             'is_boosted' => $post->is_boosted,
