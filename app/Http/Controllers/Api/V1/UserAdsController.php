@@ -43,6 +43,60 @@ class UserAdsController extends Controller
         ]);
     }
 
+    /**
+     * Active user advertisements for newsfeed placement (appears=post).
+     */
+    public function feed(Request $request): JsonResponse
+    {
+        if (!Schema::hasTable('Wo_UserAds')) {
+            return response()->json([
+                'api_status' => '200',
+                'api_text' => 'success',
+                'data' => [],
+            ]);
+        }
+
+        $limit = max(1, min((int) $request->query('limit', 20), 50));
+        $today = now()->toDateString();
+
+        $query = DB::table('Wo_UserAds')->orderByDesc('id');
+        $this->applyStatusFilter($query, 'active');
+
+        if (Schema::hasColumn('Wo_UserAds', 'appears')) {
+            $query->where(function ($q) {
+                $q->where('appears', 'post')
+                    ->orWhereNull('appears')
+                    ->orWhere('appears', '');
+            });
+        }
+
+        if (Schema::hasColumn('Wo_UserAds', 'start')) {
+            $query->where(function ($q) use ($today) {
+                $q->whereNull('start')
+                    ->orWhere('start', '')
+                    ->orWhere('start', '0000-00-00')
+                    ->orWhereDate('start', '<=', $today);
+            });
+        }
+
+        if (Schema::hasColumn('Wo_UserAds', 'end')) {
+            $query->where(function ($q) use ($today) {
+                $q->whereNull('end')
+                    ->orWhere('end', '')
+                    ->orWhere('end', '0000-00-00')
+                    ->orWhereDate('end', '>=', $today);
+            });
+        }
+
+        $ads = $query->limit($limit)->get()->map(fn ($ad) => $this->formatAd($ad))->values();
+
+        return response()->json([
+            'api_status' => '200',
+            'api_text' => 'success',
+            'data' => $ads,
+        ]);
+    }
+
     public function show(Request $request, int $id): JsonResponse
     {
         $userId = $this->resolveUserId($request);

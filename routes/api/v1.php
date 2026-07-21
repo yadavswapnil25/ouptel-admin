@@ -494,6 +494,7 @@ Route::post('/boost/campaigns/{id}/status', [BoostController::class, 'updateStat
 Route::delete('/boost/campaigns/{id}', [BoostController::class, 'destroy']);
 
 // User advertisements
+Route::get('/user-ads/feed', [UserAdsController::class, 'feed']);
 Route::get('/user-ads', [UserAdsController::class, 'index']);
 Route::get('/user-ads/{id}', [UserAdsController::class, 'show']);
 Route::post('/user-ads', [UserAdsController::class, 'store']);
