@@ -1,21 +1,26 @@
 <?php
 
-namespace App\Filament\Resources;
+namespace App\Filament\Admin\Resources;
 
-use App\Filament\Resources\NewsArticleResource\Pages;
-use App\Filament\Resources\NewsArticleResource\RelationManagers;
+use App\Filament\Admin\Concerns\HasPanelAccess;
+use App\Filament\Admin\Resources\NewsArticleResource\Pages;
 use App\Models\NewsArticle;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
 
 class NewsArticleResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-news-articles';
     protected static ?string $model = NewsArticle::class;
     protected static ?string $navigationIcon = 'heroicon-o-newspaper';
+    protected static ?string $navigationLabel = 'News Articles';
+    protected static ?string $modelLabel = 'News Article';
+    protected static ?string $pluralModelLabel = 'News Articles';
     protected static ?string $navigationGroup = 'News Management';
     protected static ?int $navigationSort = 1;
 
@@ -28,23 +33,23 @@ class NewsArticleResource extends Resource
                         Forms\Components\TextInput::make('title')
                             ->required()
                             ->maxLength(255)
-                            ->columnSpan('full'),
+                            ->columnSpanFull(),
 
                         Forms\Components\TextInput::make('slug')
                             ->required()
                             ->unique(NewsArticle::class, 'slug', ignoreRecord: true)
                             ->maxLength(255)
-                            ->columnSpan('full'),
+                            ->columnSpanFull(),
 
                         Forms\Components\Textarea::make('excerpt')
                             ->required()
                             ->maxLength(500)
-                            ->columnSpan('full')
+                            ->columnSpanFull()
                             ->rows(3),
 
                         Forms\Components\RichEditor::make('content')
                             ->required()
-                            ->columnSpan('full'),
+                            ->columnSpanFull(),
                     ])
                     ->columns(2),
 
@@ -77,7 +82,7 @@ class NewsArticleResource extends Resource
                         Forms\Components\TextInput::make('featured_image')
                             ->label('Featured Image URL')
                             ->url()
-                            ->columnSpan('full'),
+                            ->columnSpanFull(),
 
                         Forms\Components\Toggle::make('featured')
                             ->label('Mark as Featured')
@@ -120,15 +125,18 @@ class NewsArticleResource extends Resource
                 Tables\Columns\TextColumn::make('author_name')
                     ->searchable(),
 
-                Tables\Columns\BooleanColumn::make('featured')
-                    ->label('Featured'),
+                Tables\Columns\IconColumn::make('featured')
+                    ->label('Featured')
+                    ->boolean(),
 
-                Tables\Columns\BadgeColumn::make('status')
-                    ->colors([
+                Tables\Columns\TextColumn::make('status')
+                    ->badge()
+                    ->color(fn (string $state): string => match ($state) {
                         'draft' => 'info',
                         'published' => 'success',
                         'archived' => 'gray',
-                    ])
+                        default => 'gray',
+                    })
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('views')
@@ -169,9 +177,7 @@ class NewsArticleResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array

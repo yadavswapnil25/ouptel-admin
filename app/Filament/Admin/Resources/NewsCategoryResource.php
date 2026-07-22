@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Filament\Resources;
+namespace App\Filament\Admin\Resources;
 
-use App\Filament\Resources\NewsCategoryResource\Pages;
-use App\Filament\Resources\NewsCategoryResource\RelationManagers;
+use App\Filament\Admin\Concerns\HasPanelAccess;
+use App\Filament\Admin\Resources\NewsCategoryResource\Pages;
 use App\Models\NewsCategory;
 use Filament\Forms;
 use Filament\Forms\Form;
@@ -13,8 +13,14 @@ use Filament\Tables\Table;
 
 class NewsCategoryResource extends Resource
 {
+    use HasPanelAccess;
+
+    protected static string $permissionKey = 'manage-news-categories';
     protected static ?string $model = NewsCategory::class;
     protected static ?string $navigationIcon = 'heroicon-o-tag';
+    protected static ?string $navigationLabel = 'News Categories';
+    protected static ?string $modelLabel = 'News Category';
+    protected static ?string $pluralModelLabel = 'News Categories';
     protected static ?string $navigationGroup = 'News Management';
     protected static ?int $navigationSort = 2;
 
@@ -34,7 +40,7 @@ class NewsCategoryResource extends Resource
 
                 Forms\Components\Textarea::make('description')
                     ->maxLength(500)
-                    ->columnSpan('full'),
+                    ->columnSpanFull(),
 
                 Forms\Components\TextInput::make('icon')
                     ->maxLength(255)
@@ -69,7 +75,8 @@ class NewsCategoryResource extends Resource
                 Tables\Columns\TextColumn::make('display_order')
                     ->sortable(),
 
-                Tables\Columns\BooleanColumn::make('status')
+                Tables\Columns\IconColumn::make('status')
+                    ->boolean()
                     ->sortable(),
 
                 Tables\Columns\TextColumn::make('articles_count')
@@ -92,9 +99,7 @@ class NewsCategoryResource extends Resource
 
     public static function getRelations(): array
     {
-        return [
-            //
-        ];
+        return [];
     }
 
     public static function getPages(): array
