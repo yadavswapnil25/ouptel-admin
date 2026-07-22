@@ -55,9 +55,14 @@ class NewsArticleResource extends Resource
 
                 Forms\Components\Section::make('Publishing Details')
                     ->schema([
-                        Forms\Components\Select::make('category_id')
-                            ->relationship('category', 'name')
-                            ->required(),
+                        Forms\Components\Select::make('categories')
+                            ->label('Categories')
+                            ->relationship('categories', 'name')
+                            ->multiple()
+                            ->preload()
+                            ->searchable()
+                            ->required()
+                            ->helperText('Select one or more categories for this article.'),
 
                         Forms\Components\Select::make('status')
                             ->options([
@@ -118,9 +123,11 @@ class NewsArticleResource extends Resource
                     ->searchable()
                     ->sortable(),
 
-                Tables\Columns\TextColumn::make('category.name')
+                Tables\Columns\TextColumn::make('categories.name')
+                    ->label('Categories')
                     ->badge()
-                    ->sortable(),
+                    ->separator(',')
+                    ->wrap(),
 
                 Tables\Columns\TextColumn::make('author_name')
                     ->searchable(),
@@ -155,8 +162,10 @@ class NewsArticleResource extends Resource
                         'archived' => 'Archived',
                     ]),
 
-                Tables\Filters\SelectFilter::make('category_id')
-                    ->relationship('category', 'name'),
+                Tables\Filters\SelectFilter::make('categories')
+                    ->relationship('categories', 'name')
+                    ->multiple()
+                    ->preload(),
 
                 Tables\Filters\TernaryFilter::make('featured')
                     ->label('Featured Only'),

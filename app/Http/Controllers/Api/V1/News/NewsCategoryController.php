@@ -41,6 +41,7 @@ class NewsCategoryController extends Controller
         }
 
         $articles = $category->publishedArticles()
+            ->with('categories')
             ->latest()
             ->paginate(15);
 

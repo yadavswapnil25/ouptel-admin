@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Api\V1\News;
 
 use App\Models\NewsArticle;
-use App\Models\NewsCategory;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -16,32 +15,29 @@ class NewsArticleController extends Controller
     public function index(Request $request): JsonResponse
     {
         $query = NewsArticle::published()
-            ->with('category')
+            ->with('categories')
             ->latest();
 
-        // Filter by category
-        if ($request->has('category')) {
+        if ($request->filled('category')) {
             $query->byCategory($request->input('category'));
         }
 
-        // Filter by search
-        if ($request->has('search')) {
+        if ($request->filled('search')) {
             $search = $request->input('search');
-            $query->where('title', 'like', "%{$search}%")
-                  ->orWhere('excerpt', 'like', "%{$search}%");
+            $query->where(function ($q) use ($search) {
+                $q->where('title', 'like', "%{$search}%")
+                    ->orWhere('excerpt', 'like', "%{$search}%");
+            });
         }
 
-        // Filter by featured
         if ($request->boolean('featured')) {
             $query->featured();
         }
 
-        // Filter by breaking news
         if ($request->boolean('breaking')) {
             $query->breaking();
         }
 
-        // Pagination
         $perPage = $request->input('per_page', 15);
         $articles = $query->paginate($perPage);
 
@@ -64,11 +60,11 @@ class NewsArticleController extends Controller
      */
     public function show(string $identifier): JsonResponse
     {
-        // Try to find by ID first, then by slug
         $article = NewsArticle::published()
-            ->where('id', $identifier)
-            ->orWhere('slug', $identifier)
-            ->with('category')
+            ->with('categories')
+            ->where(function ($q) use ($identifier) {
+                $q->where('id', $identifier)->orWhere('slug', $identifier);
+            })
             ->first();
 
         if (!$article) {
@@ -78,14 +74,18 @@ class NewsArticleController extends Controller
             ], 404);
         }
 
-        // Increment views count
         $article->increment('views');
 
-        // Get related articles
+        $categoryIds = $article->categories->pluck('id');
+
         $related = NewsArticle::published()
-            ->where('category_id', $article->category_id)
+            ->with('categories')
             ->where('id', '!=', $article->id)
-            ->with('category')
+            ->when($categoryIds->isNotEmpty(), function ($q) use ($categoryIds) {
+                $q->whereHas('categories', function ($cq) use ($categoryIds) {
+                    $cq->whereIn('news_categories.id', $categoryIds);
+                });
+            })
             ->latest()
             ->limit(5)
             ->get();
@@ -97,9 +97,6 @@ class NewsArticleController extends Controller
         ]);
     }
 
-    /**
-     * Get trending articles (most viewed in last 24 hours)
-     */
     public function trending(Request $request): JsonResponse
     {
         $limit = $request->input('limit', 10);
@@ -107,7 +104,7 @@ class NewsArticleController extends Controller
         $trending = NewsArticle::published()
             ->recentTwentyFourHours()
             ->trending()
-            ->with('category')
+            ->with('categories')
             ->limit($limit)
             ->get();
 
@@ -117,15 +114,12 @@ class NewsArticleController extends Controller
         ]);
     }
 
-    /**
-     * Get featured articles
-     */
     public function featured(Request $request): JsonResponse
     {
         $limit = $request->input('limit', 5);
 
         $featured = NewsArticle::featured()
-            ->with('category')
+            ->with('categories')
             ->limit($limit)
             ->get();
 
@@ -135,15 +129,12 @@ class NewsArticleController extends Controller
         ]);
     }
 
-    /**
-     * Get breaking news
-     */
     public function breaking(Request $request): JsonResponse
     {
         $limit = $request->input('limit', 5);
 
         $breaking = NewsArticle::breaking()
-            ->with('category')
+            ->with('categories')
             ->latest()
             ->limit($limit)
             ->get();
@@ -154,9 +145,6 @@ class NewsArticleController extends Controller
         ]);
     }
 
-    /**
-     * Create a new article (Admin only)
-     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -164,7 +152,8 @@ class NewsArticleController extends Controller
             'slug' => 'required|string|unique:news_articles|max:255',
             'excerpt' => 'required|string',
             'content' => 'required|string',
-            'category_id' => 'required|exists:news_categories,id',
+            'category_ids' => 'required|array|min:1',
+            'category_ids.*' => 'integer|exists:news_categories,id',
             'featured_image' => 'nullable|url',
             'author_name' => 'nullable|string|max:255',
             'featured' => 'boolean',
@@ -173,9 +162,14 @@ class NewsArticleController extends Controller
             'status' => 'required|in:draft,published,archived',
         ]);
 
+        $categoryIds = $validated['category_ids'];
+        unset($validated['category_ids']);
+
         $validated['author_id'] = auth()->id();
 
         $article = NewsArticle::create($validated);
+        $article->categories()->sync($categoryIds);
+        $article->load('categories');
 
         return response()->json([
             'status' => 'success',
@@ -184,9 +178,6 @@ class NewsArticleController extends Controller
         ], 201);
     }
 
-    /**
-     * Update an article (Admin only)
-     */
     public function update(Request $request, NewsArticle $article): JsonResponse
     {
         $validated = $request->validate([
@@ -194,7 +185,8 @@ class NewsArticleController extends Controller
             'slug' => 'string|unique:news_articles,slug,' . $article->id . '|max:255',
             'excerpt' => 'string',
             'content' => 'string',
-            'category_id' => 'exists:news_categories,id',
+            'category_ids' => 'sometimes|array|min:1',
+            'category_ids.*' => 'integer|exists:news_categories,id',
             'featured_image' => 'nullable|url',
             'author_name' => 'nullable|string|max:255',
             'featured' => 'boolean',
@@ -203,7 +195,16 @@ class NewsArticleController extends Controller
             'status' => 'in:draft,published,archived',
         ]);
 
+        $categoryIds = $validated['category_ids'] ?? null;
+        unset($validated['category_ids']);
+
         $article->update($validated);
+
+        if (is_array($categoryIds)) {
+            $article->categories()->sync($categoryIds);
+        }
+
+        $article->load('categories');
 
         return response()->json([
             'status' => 'success',
@@ -212,9 +213,6 @@ class NewsArticleController extends Controller
         ]);
     }
 
-    /**
-     * Delete an article (Admin only)
-     */
     public function destroy(NewsArticle $article): JsonResponse
     {
         $article->delete();
@@ -225,9 +223,6 @@ class NewsArticleController extends Controller
         ]);
     }
 
-    /**
-     * Increment share count
-     */
     public function share(NewsArticle $article): JsonResponse
     {
         $article->increment('shares');

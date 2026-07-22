@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class NewsCategory extends Model
 {
@@ -31,32 +31,31 @@ class NewsCategory extends Model
     ];
 
     /**
-     * Get all articles in this category
+     * Articles in this category (many-to-many).
      */
-    public function articles(): HasMany
+    public function articles(): BelongsToMany
     {
-        return $this->hasMany(NewsArticle::class, 'category_id');
+        return $this->belongsToMany(
+            NewsArticle::class,
+            'news_article_category',
+            'news_category_id',
+            'news_article_id'
+        )->withTimestamps();
     }
 
     /**
-     * Get all published articles in this category
+     * Published articles in this category.
      */
-    public function publishedArticles(): HasMany
+    public function publishedArticles(): BelongsToMany
     {
         return $this->articles()->published();
     }
 
-    /**
-     * Scope to get active categories
-     */
     public function scopeActive($query)
     {
         return $query->where('status', true);
     }
 
-    /**
-     * Scope to order by display order
-     */
     public function scopeOrdered($query)
     {
         return $query->orderBy('display_order', 'asc');

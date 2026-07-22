@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class NewsArticle extends Model
 {
@@ -19,7 +20,6 @@ class NewsArticle extends Model
         'slug',
         'excerpt',
         'content',
-        'category_id',
         'featured_image',
         'author_id',
         'author_name',
@@ -41,74 +41,84 @@ class NewsArticle extends Model
         'updated_at' => 'datetime',
     ];
 
+    protected $appends = [
+        'category_id',
+        'category',
+    ];
+
     /**
-     * Get the category this article belongs to
+     * Categories this article belongs to (many-to-many).
      */
-    public function category(): BelongsTo
+    public function categories(): BelongsToMany
     {
-        return $this->belongsTo(NewsCategory::class, 'category_id');
+        return $this->belongsToMany(
+            NewsCategory::class,
+            'news_article_category',
+            'news_article_id',
+            'news_category_id'
+        )->withTimestamps();
     }
 
     /**
-     * Get the author of this article
+     * Backward-compatible primary category (first attached by display order).
      */
+    public function getCategoryAttribute(): ?NewsCategory
+    {
+        if ($this->relationLoaded('categories')) {
+            return $this->categories->sortBy('display_order')->values()->first();
+        }
+
+        return $this->categories()->ordered()->first();
+    }
+
+    /**
+     * Backward-compatible primary category id.
+     */
+    public function getCategoryIdAttribute(): ?int
+    {
+        $category = $this->category;
+
+        return $category?->id;
+    }
+
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'author_id');
     }
 
-    /**
-     * Scope to get published articles
-     */
     public function scopePublished($query)
     {
         return $query->where('status', 'published')
             ->where('published_at', '<=', now());
     }
 
-    /**
-     * Scope to get featured articles
-     */
     public function scopeFeatured($query)
     {
         return $query->where('featured', true)->published();
     }
 
-    /**
-     * Scope to get breaking news
-     */
     public function scopeBreaking($query)
     {
         return $query->where('breaking', true)->published();
     }
 
-    /**
-     * Scope to get articles by category
-     */
     public function scopeByCategory($query, $categoryId)
     {
-        return $query->where('category_id', $categoryId);
+        return $query->whereHas('categories', function ($q) use ($categoryId) {
+            $q->where('news_categories.id', $categoryId);
+        });
     }
 
-    /**
-     * Scope to order by latest
-     */
     public function scopeLatest($query)
     {
         return $query->orderBy('published_at', 'desc');
     }
 
-    /**
-     * Scope to order by trending (most views)
-     */
     public function scopeTrending($query)
     {
         return $query->orderBy('views', 'desc');
     }
 
-    /**
-     * Get articles from the last 24 hours
-     */
     public function scopeRecentTwentyFourHours($query)
     {
         return $query->where('published_at', '>=', now()->subHours(24));
