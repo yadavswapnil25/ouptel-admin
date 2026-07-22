@@ -513,9 +513,17 @@ Route::post('/invitations/send-email', [InvitationController::class, 'sendEmail'
 Route::prefix('news')->group(function () {
     // Public routes - accessible to everyone
     Route::get('/articles', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'index']);
+    Route::get('/articles/trending', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'trending']);
+    // Comments must be registered before /articles/{identifier}
+    Route::get('/articles/{article}/comments', [\App\Http\Controllers\Api\V1\News\NewsCommentController::class, 'index'])
+        ->whereNumber('article');
+    Route::post('/articles/{article}/comments', [\App\Http\Controllers\Api\V1\News\NewsCommentController::class, 'store'])
+        ->whereNumber('article');
+    Route::delete('/comments/{comment}', [\App\Http\Controllers\Api\V1\News\NewsCommentController::class, 'destroy'])
+        ->whereNumber('comment');
+
     Route::get('/articles/{identifier}', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'show']);
     Route::post('/articles/{article}/share', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'share']);
-    Route::get('/articles/trending', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'trending']);
     Route::get('/featured', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'featured']);
     Route::get('/breaking', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'breaking']);
 
@@ -534,4 +542,3 @@ Route::prefix('news')->group(function () {
         Route::delete('/categories/{category}', [\App\Http\Controllers\Api\V1\News\NewsCategoryController::class, 'destroy']);
     });
 });
-
