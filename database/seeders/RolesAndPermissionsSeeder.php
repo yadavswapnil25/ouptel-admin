@@ -43,6 +43,9 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'manage-news-articles', 'label' => 'News Articles', 'group' => 'News'],
             ['key' => 'manage-news-categories', 'label' => 'News Categories', 'group' => 'News'],
             ['key' => 'manage-news-ads', 'label' => 'News Ads', 'group' => 'News'],
+            ['key' => 'manage-news-editor-applications', 'label' => 'News Editor Applications', 'group' => 'News'],
+            ['key' => 'manage-news-content-review', 'label' => 'News Content Review', 'group' => 'News'],
+            ['key' => 'manage-news-editors', 'label' => 'News Editors', 'group' => 'News'],
 
             // Groups
             ['key' => 'manage-groups', 'label' => 'Groups', 'group' => 'Groups'],

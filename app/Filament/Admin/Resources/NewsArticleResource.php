@@ -67,7 +67,9 @@ class NewsArticleResource extends Resource
                         Forms\Components\Select::make('status')
                             ->options([
                                 'draft' => 'Draft',
+                                'pending_review' => 'Pending Review',
                                 'published' => 'Published',
+                                'rejected' => 'Rejected',
                                 'archived' => 'Archived',
                             ])
                             ->default('draft')
@@ -140,7 +142,9 @@ class NewsArticleResource extends Resource
                     ->badge()
                     ->color(fn (string $state): string => match ($state) {
                         'draft' => 'info',
+                        'pending_review' => 'warning',
                         'published' => 'success',
+                        'rejected' => 'danger',
                         'archived' => 'gray',
                         default => 'gray',
                     })
@@ -158,7 +162,9 @@ class NewsArticleResource extends Resource
                 Tables\Filters\SelectFilter::make('status')
                     ->options([
                         'draft' => 'Draft',
+                        'pending_review' => 'Pending Review',
                         'published' => 'Published',
+                        'rejected' => 'Rejected',
                         'archived' => 'Archived',
                     ]),
 

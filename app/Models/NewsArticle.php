@@ -22,6 +22,9 @@ class NewsArticle extends Model
         'excerpt',
         'content',
         'featured_image',
+        'tags',
+        'seo_meta_title',
+        'seo_meta_description',
         'author_id',
         'author_name',
         'views',
@@ -30,6 +33,10 @@ class NewsArticle extends Model
         'breaking',
         'published_at',
         'status',
+        'review_feedback',
+        'submitted_at',
+        'reviewed_by',
+        'reviewed_at',
     ];
 
     protected $casts = [
@@ -37,7 +44,10 @@ class NewsArticle extends Model
         'shares' => 'integer',
         'featured' => 'boolean',
         'breaking' => 'boolean',
+        'tags' => 'array',
         'published_at' => 'datetime',
+        'submitted_at' => 'datetime',
+        'reviewed_at' => 'datetime',
         'created_at' => 'datetime',
         'updated_at' => 'datetime',
     ];
@@ -87,6 +97,11 @@ class NewsArticle extends Model
         return $this->belongsTo(User::class, 'author_id');
     }
 
+    public function reviewer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'reviewed_by', 'user_id');
+    }
+
     public function comments(): HasMany
     {
         return $this->hasMany(NewsArticleComment::class, 'news_article_id');
@@ -96,6 +111,54 @@ class NewsArticle extends Model
     {
         return $query->where('status', 'published')
             ->where('published_at', '<=', now());
+    }
+
+    public function scopePendingReview($query)
+    {
+        return $query->where('status', 'pending_review');
+    }
+
+    public function publishFromReview(?int $adminUserId = null): bool
+    {
+        if ($this->status !== 'pending_review') {
+            return false;
+        }
+
+        return (bool) $this->update([
+            'status' => 'published',
+            'published_at' => $this->published_at ?? now(),
+            'review_feedback' => null,
+            'reviewed_by' => $adminUserId,
+            'reviewed_at' => now(),
+        ]);
+    }
+
+    public function sendBackFromReview(?string $feedback = null, ?int $adminUserId = null): bool
+    {
+        if ($this->status !== 'pending_review') {
+            return false;
+        }
+
+        return (bool) $this->update([
+            'status' => 'draft',
+            'review_feedback' => $feedback,
+            'reviewed_by' => $adminUserId,
+            'reviewed_at' => now(),
+        ]);
+    }
+
+    public function rejectFromReview(?string $feedback = null, ?int $adminUserId = null): bool
+    {
+        if ($this->status !== 'pending_review') {
+            return false;
+        }
+
+        return (bool) $this->update([
+            'status' => 'rejected',
+            'review_feedback' => $feedback,
+            'reviewed_by' => $adminUserId,
+            'reviewed_at' => now(),
+        ]);
     }
 
     public function scopeFeatured($query)

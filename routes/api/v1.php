@@ -536,6 +536,21 @@ Route::prefix('news')->group(function () {
     Route::post('/ads/{ad}/click', [\App\Http\Controllers\Api\V1\News\NewsAdController::class, 'click'])
         ->whereNumber('ad');
 
+    // Editor portal (auth via Bearer / Wo_AppsSessions)
+    Route::get('/me', [\App\Http\Controllers\Api\V1\News\NewsEditorPortalController::class, 'me']);
+    Route::get('/editor-application', [\App\Http\Controllers\Api\V1\News\NewsEditorPortalController::class, 'myApplication']);
+    Route::post('/editor-application', [\App\Http\Controllers\Api\V1\News\NewsEditorPortalController::class, 'submitApplication']);
+
+    Route::get('/editor/articles', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'index']);
+    Route::get('/editor/articles/stats', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'stats']);
+    Route::post('/editor/articles', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'store']);
+    Route::get('/editor/articles/{article}', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'show'])
+        ->whereNumber('article');
+    Route::put('/editor/articles/{article}', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'update'])
+        ->whereNumber('article');
+    Route::delete('/editor/articles/{article}', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'destroy'])
+        ->whereNumber('article');
+
     // Protected routes - admin only
     Route::middleware('auth:sanctum', 'admin')->group(function () {
         Route::post('/articles', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'store']);
