@@ -509,3 +509,29 @@ Route::post('/survey/submit', [SurveyController::class, 'submit']);
 // Invite colleague by email
 Route::post('/invitations/send-email', [InvitationController::class, 'sendEmail']);
 
+// News Portal routes
+Route::prefix('news')->group(function () {
+    // Public routes - accessible to everyone
+    Route::get('/articles', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'index']);
+    Route::get('/articles/{identifier}', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'show']);
+    Route::post('/articles/{article}/share', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'share']);
+    Route::get('/articles/trending', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'trending']);
+    Route::get('/featured', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'featured']);
+    Route::get('/breaking', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'breaking']);
+
+    // Categories
+    Route::get('/categories', [\App\Http\Controllers\Api\V1\News\NewsCategoryController::class, 'index']);
+    Route::get('/categories/{identifier}', [\App\Http\Controllers\Api\V1\News\NewsCategoryController::class, 'show']);
+
+    // Protected routes - admin only
+    Route::middleware('auth:sanctum', 'admin')->group(function () {
+        Route::post('/articles', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'store']);
+        Route::put('/articles/{article}', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'update']);
+        Route::delete('/articles/{article}', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'destroy']);
+
+        Route::post('/categories', [\App\Http\Controllers\Api\V1\News\NewsCategoryController::class, 'store']);
+        Route::put('/categories/{category}', [\App\Http\Controllers\Api\V1\News\NewsCategoryController::class, 'update']);
+        Route::delete('/categories/{category}', [\App\Http\Controllers\Api\V1\News\NewsCategoryController::class, 'destroy']);
+    });
+});
+
