@@ -39,6 +39,11 @@ class RolesAndPermissionsSeeder extends Seeder
             ['key' => 'manage-user-ads', 'label' => 'User Ads', 'group' => 'Marketing'],
             ['key' => 'manage-boost-campaigns', 'label' => 'Boost Campaigns', 'group' => 'Marketing'],
 
+            // News Portal
+            ['key' => 'manage-news-articles', 'label' => 'News Articles', 'group' => 'News'],
+            ['key' => 'manage-news-categories', 'label' => 'News Categories', 'group' => 'News'],
+            ['key' => 'manage-news-ads', 'label' => 'News Ads', 'group' => 'News'],
+
             // Groups
             ['key' => 'manage-groups', 'label' => 'Groups', 'group' => 'Groups'],
             ['key' => 'manage-group-categories', 'label' => 'Group Categories', 'group' => 'Groups'],

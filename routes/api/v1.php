@@ -531,6 +531,11 @@ Route::prefix('news')->group(function () {
     Route::get('/categories', [\App\Http\Controllers\Api\V1\News\NewsCategoryController::class, 'index']);
     Route::get('/categories/{identifier}', [\App\Http\Controllers\Api\V1\News\NewsCategoryController::class, 'show']);
 
+    // Ads
+    Route::get('/ads', [\App\Http\Controllers\Api\V1\News\NewsAdController::class, 'index']);
+    Route::post('/ads/{ad}/click', [\App\Http\Controllers\Api\V1\News\NewsAdController::class, 'click'])
+        ->whereNumber('ad');
+
     // Protected routes - admin only
     Route::middleware('auth:sanctum', 'admin')->group(function () {
         Route::post('/articles', [\App\Http\Controllers\Api\V1\News\NewsArticleController::class, 'store']);
