@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\News;
 
 use App\Models\NewsCategory;
 use App\Models\NewsEditor;
+use App\Models\NewsPressInvitation;
 use App\Models\NewsPressMember;
 use App\Models\NewsPressProfile;
 use App\Models\User;
@@ -327,6 +328,23 @@ class NewsEditorPressController extends Controller
             ->values()
             ->all();
 
+        $invitations = $press->invitations()
+            ->pending()
+            ->orderByDesc('created_at')
+            ->get()
+            ->map(function (NewsPressInvitation $invite) {
+                if ($invite->isExpired()) {
+                    $invite->update(['status' => NewsPressInvitation::STATUS_EXPIRED]);
+
+                    return null;
+                }
+
+                return $this->formatInvitation($invite);
+            })
+            ->filter()
+            ->values()
+            ->all();
+
         return response()->json([
             'status' => 'success',
             'data' => [
@@ -335,12 +353,13 @@ class NewsEditorPressController extends Controller
                     $userId
                 ),
                 'members' => $members,
+                'invitations' => $invitations,
             ],
         ]);
     }
 
     /**
-     * Add an existing approved editor to this press (owner only).
+     * Add an existing approved editor, or email-invite someone not registered yet.
      */
     public function addMember(Request $request): JsonResponse
     {
@@ -359,87 +378,234 @@ class NewsEditorPressController extends Controller
         ]);
 
         $identifier = trim($validated['identifier']);
+        $isEmail = (bool) filter_var($identifier, FILTER_VALIDATE_EMAIL);
+
         $invitee = User::query()
             ->where(function ($q) use ($identifier) {
-                $q->where('email', $identifier)
-                    ->orWhere('username', $identifier);
+                $q->whereRaw('LOWER(email) = ?', [strtolower($identifier)])
+                    ->orWhereRaw('LOWER(username) = ?', [strtolower($identifier)]);
             })
             ->first();
 
-        if (!$invitee) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'No user found with that email or username.',
-            ], 404);
-        }
-
-        if ((int) $invitee->user_id === (int) $userId) {
+        if ($invitee && (int) $invitee->user_id === (int) $userId) {
             return response()->json([
                 'status' => 'error',
                 'message' => 'You are already the owner of this press.',
             ], 422);
         }
 
+        $editor = $invitee
+            ? NewsEditor::query()
+                ->where('user_id', $invitee->user_id)
+                ->where('status', 'active')
+                ->first()
+            : null;
+
+        if ($invitee && $editor) {
+            $conflict = $this->membershipConflictMessage($invitee->user_id, $press->id);
+            if ($conflict) {
+                return response()->json(['status' => 'error', 'message' => $conflict], 422);
+            }
+
+            $member = NewsPressMember::query()->updateOrCreate(
+                [
+                    'press_id' => $press->id,
+                    'user_id' => $invitee->user_id,
+                ],
+                [
+                    'editor_id' => $editor->id,
+                    'role' => NewsPressMember::ROLE_MEMBER,
+                    'status' => NewsPressMember::STATUS_ACTIVE,
+                    'invited_by' => (int) $userId,
+                    'joined_at' => now(),
+                    'removed_at' => null,
+                ]
+            );
+
+            $member->load(['user', 'editor']);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Editor added to your press team.',
+                'data' => [
+                    'type' => 'member',
+                    'member' => $this->formatMember($member),
+                ],
+            ], 201);
+        }
+
+        $email = $isEmail
+            ? strtolower($identifier)
+            : strtolower(trim((string) ($invitee?->email ?? '')));
+
+        if ($email === '' || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Enter a valid email address to invite someone who is not an editor yet.',
+            ], 422);
+        }
+
+        if ($invitee) {
+            $conflict = $this->membershipConflictMessage($invitee->user_id, $press->id);
+            if ($conflict) {
+                return response()->json(['status' => 'error', 'message' => $conflict], 422);
+            }
+        }
+
+        $pendingSame = NewsPressInvitation::query()
+            ->pending()
+            ->where('press_id', $press->id)
+            ->whereRaw('LOWER(email) = ?', [$email])
+            ->exists();
+
+        $invitation = NewsPressInvitation::issue($press, $email, $userId);
+        $sent = $invitation->sendInviteEmail();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $sent
+                ? ($pendingSame
+                    ? 'Invite email resent.'
+                    : 'Invite email sent. They can apply and will join this press after approval.')
+                : 'Invite created, but the email could not be sent. Check mail settings and resend.',
+            'data' => [
+                'type' => 'invitation',
+                'invitation' => $this->formatInvitation($invitation),
+                'emailSent' => $sent,
+            ],
+        ], 201);
+    }
+
+    /**
+     * Cancel a pending email invite (owner only).
+     */
+    public function cancelInvitation(Request $request, int $invitationId): JsonResponse
+    {
+        $userId = $this->requireEditor($request);
+        if ($userId instanceof JsonResponse) {
+            return $userId;
+        }
+
+        $press = $this->requireOwnedPress($userId);
+        if ($press instanceof JsonResponse) {
+            return $press;
+        }
+
+        $invitation = $press->invitations()->whereKey($invitationId)->first();
+        if (!$invitation || $invitation->status !== NewsPressInvitation::STATUS_PENDING) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pending invite not found.',
+            ], 404);
+        }
+
+        $invitation->cancel();
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Invite cancelled.',
+        ]);
+    }
+
+    /**
+     * Public invite details for Become Editor page.
+     */
+    public function showInvite(string $token): JsonResponse
+    {
+        $invitation = NewsPressInvitation::findValidByToken($token);
+        if (!$invitation) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This invite is invalid or has expired.',
+            ], 404);
+        }
+
+        $press = $invitation->press;
+        if (!$press || !$press->isActive()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This press page is not available.',
+            ], 404);
+        }
+
+        $existingUser = User::query()
+            ->whereRaw('LOWER(email) = ?', [strtolower($invitation->email)])
+            ->first();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'token' => $invitation->token,
+                'email' => $invitation->email,
+                'pressName' => $press->name,
+                'pressSlug' => $press->slug,
+                'pressLogo' => $press->logo,
+                'expiresAt' => optional($invitation->expires_at)?->toIso8601String(),
+                'alreadyEditor' => $existingUser
+                    ? NewsEditor::isActiveEditor($existingUser->user_id)
+                    : false,
+            ],
+        ]);
+    }
+
+    /**
+     * Existing approved editor accepts a press invite (auth required).
+     */
+    public function acceptInvite(Request $request, string $token): JsonResponse
+    {
+        $userId = $this->requireEditor($request);
+        if ($userId instanceof JsonResponse) {
+            return $userId;
+        }
+
+        $invitation = NewsPressInvitation::findValidByToken($token);
+        if (!$invitation) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This invite is invalid or has expired.',
+            ], 404);
+        }
+
+        $user = User::query()->where('user_id', $userId)->first();
+        if (!$user || strtolower((string) $user->email) !== strtolower($invitation->email)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Sign in with the invited email address to accept this invite.',
+            ], 403);
+        }
+
         $editor = NewsEditor::query()
-            ->where('user_id', $invitee->user_id)
+            ->where('user_id', $userId)
             ->where('status', 'active')
             ->first();
 
         if (!$editor) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'That user is not an approved news editor yet.',
-            ], 422);
+                'message' => 'Editor access required.',
+            ], 403);
         }
 
-        $existingMembership = NewsPressMember::query()
-            ->active()
-            ->where('user_id', $invitee->user_id)
-            ->first();
+        $conflict = $this->membershipConflictMessage($userId, $invitation->press_id);
+        if ($conflict) {
+            return response()->json(['status' => 'error', 'message' => $conflict], 422);
+        }
 
-        if ($existingMembership && (int) $existingMembership->press_id === (int) $press->id) {
+        if (!$invitation->fulfillForEditor($user, $editor)) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'This editor is already on your press team.',
+                'message' => 'Could not join this press.',
             ], 422);
         }
-
-        if ($existingMembership) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'This editor already belongs to another press page.',
-            ], 422);
-        }
-
-        if (NewsPressProfile::query()->where('user_id', $invitee->user_id)->exists()) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'This editor already owns a press page and cannot join another.',
-            ], 422);
-        }
-
-        $member = NewsPressMember::query()->updateOrCreate(
-            [
-                'press_id' => $press->id,
-                'user_id' => $invitee->user_id,
-            ],
-            [
-                'editor_id' => $editor->id,
-                'role' => NewsPressMember::ROLE_MEMBER,
-                'status' => NewsPressMember::STATUS_ACTIVE,
-                'invited_by' => (int) $userId,
-                'joined_at' => now(),
-                'removed_at' => null,
-            ]
-        );
-
-        $member->load(['user', 'editor']);
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Editor added to your press team.',
-            'data' => $this->formatMember($member),
-        ], 201);
+            'message' => 'You joined the press team.',
+            'data' => $this->formatEditorPress(
+                $invitation->press->fresh(['categories' => fn ($q) => $q->ordered()]),
+                $userId
+            ),
+        ]);
     }
 
     /**
@@ -637,6 +803,40 @@ class NewsEditorPressController extends Controller
             'email' => $user?->email,
             'joinedAt' => optional($member->joined_at)?->toIso8601String(),
         ];
+    }
+
+    protected function formatInvitation(NewsPressInvitation $invitation): array
+    {
+        return [
+            'id' => $invitation->id,
+            'email' => $invitation->email,
+            'status' => $invitation->status,
+            'expiresAt' => optional($invitation->expires_at)?->toIso8601String(),
+            'createdAt' => optional($invitation->created_at)?->toIso8601String(),
+            'invitePath' => '/news/become-editor?invite=' . urlencode($invitation->token),
+        ];
+    }
+
+    protected function membershipConflictMessage(int|string $targetUserId, int $pressId): ?string
+    {
+        $existingMembership = NewsPressMember::query()
+            ->active()
+            ->where('user_id', $targetUserId)
+            ->first();
+
+        if ($existingMembership && (int) $existingMembership->press_id === (int) $pressId) {
+            return 'This editor is already on your press team.';
+        }
+
+        if ($existingMembership) {
+            return 'This editor already belongs to another press page.';
+        }
+
+        if (NewsPressProfile::query()->where('user_id', $targetUserId)->where('id', '!=', $pressId)->exists()) {
+            return 'This editor already owns a press page and cannot join another.';
+        }
+
+        return null;
     }
 
     protected function findMyPress(string|int $userId): ?NewsPressProfile

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\News;
 
 use App\Models\NewsEditor;
 use App\Models\NewsEditorApplication;
+use App\Models\NewsPressInvitation;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -99,9 +100,29 @@ class NewsEditorPortalController extends Controller
             'portfolio_link' => ['nullable', 'url', 'max:512'],
             'reason' => ['required', 'string', 'min:20', 'max:2000'],
             'id_proof_name' => ['nullable', 'string', 'max:255'],
+            'invite_token' => ['nullable', 'string', 'max:64'],
         ]);
 
         $email = strtolower(trim($validated['email']));
+        $invitation = null;
+
+        if (!empty($validated['invite_token'])) {
+            $invitation = NewsPressInvitation::findValidByToken($validated['invite_token']);
+            if (!$invitation) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'This press invite is invalid or has expired.',
+                ], 422);
+            }
+
+            if (strtolower($invitation->email) !== $email) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Use the invited email address (' . $invitation->email . ') for this application.',
+                    'errors' => ['email' => ['Email must match the press invite.']],
+                ], 422);
+            }
+        }
 
         if ($userId && NewsEditor::isActiveEditor($userId)) {
             return response()->json([
@@ -151,13 +172,20 @@ class NewsEditorPortalController extends Controller
             'reason' => $validated['reason'],
             'id_proof_name' => $validated['id_proof_name'] ?? null,
             'status' => 'pending',
+            'press_invitation_id' => $invitation?->id,
         ]);
+
+        if ($invitation) {
+            $invitation->update(['application_id' => $application->id]);
+        }
 
         return response()->json([
             'status' => 'success',
-            'message' => $userId
-                ? 'Application submitted for review.'
-                : 'Application submitted. After approval you will receive login details by email.',
+            'message' => $invitation
+                ? 'Application submitted. After approval you will join ' . ($invitation->press?->name ?: 'the press') . ' and receive login details by email.'
+                : ($userId
+                    ? 'Application submitted for review.'
+                    : 'Application submitted. After approval you will receive login details by email.'),
             'data' => $this->formatApplication($application),
         ], 201);
     }

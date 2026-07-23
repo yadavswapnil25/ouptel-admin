@@ -548,6 +548,10 @@ Route::prefix('news')->group(function () {
     Route::post('/presses/me/members', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'addMember']);
     Route::delete('/presses/me/members/{memberId}', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'removeMember'])
         ->whereNumber('memberId');
+    Route::delete('/presses/me/invitations/{invitationId}', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'cancelInvitation'])
+        ->whereNumber('invitationId');
+    Route::get('/presses/invite/{token}', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'showInvite']);
+    Route::post('/presses/invite/{token}/accept', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'acceptInvite']);
 
     // Public press pages
     Route::get('/presses/{slug}', [\App\Http\Controllers\Api\V1\News\NewsPressController::class, 'show']);

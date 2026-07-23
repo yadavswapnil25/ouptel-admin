@@ -94,6 +94,11 @@ class NewsPressProfile extends Model
         return $this->hasMany(NewsPressMember::class, 'press_id');
     }
 
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(NewsPressInvitation::class, 'press_id');
+    }
+
     public function activeMembers(): HasMany
     {
         return $this->members()->active();

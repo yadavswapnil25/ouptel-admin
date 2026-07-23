@@ -33,6 +33,7 @@ class NewsEditorApplication extends Model
         'review_note',
         'reviewed_at',
         'credentials_sent_at',
+        'press_invitation_id',
     ];
 
     protected $casts = [
@@ -49,6 +50,11 @@ class NewsEditorApplication extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by', 'user_id');
+    }
+
+    public function pressInvitation(): BelongsTo
+    {
+        return $this->belongsTo(NewsPressInvitation::class, 'press_invitation_id');
     }
 
     public function isPending(): bool
@@ -86,6 +92,15 @@ class NewsEditorApplication extends Model
                 ]
             );
 
+            $editor = NewsEditor::query()
+                ->where('user_id', $user->user_id)
+                ->where('status', 'active')
+                ->first();
+
+            if ($editor) {
+                $this->fulfillLinkedPressInvitation($user, $editor);
+            }
+
             $this->sendCredentialsEmail($user, $plainPassword);
 
             return true;
@@ -104,6 +119,29 @@ class NewsEditorApplication extends Model
             'reviewed_at' => now(),
             'review_note' => $note,
         ]);
+    }
+
+    protected function fulfillLinkedPressInvitation(User $user, NewsEditor $editor): void
+    {
+        $invitation = null;
+
+        if ($this->press_invitation_id) {
+            $invitation = NewsPressInvitation::query()->find($this->press_invitation_id);
+        }
+
+        if (!$invitation) {
+            $invitation = NewsPressInvitation::query()
+                ->pending()
+                ->whereRaw('LOWER(email) = ?', [strtolower(trim((string) $this->email))])
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        if (!$invitation || $invitation->status !== NewsPressInvitation::STATUS_PENDING) {
+            return;
+        }
+
+        $invitation->fulfillForEditor($user, $editor, $this->id);
     }
 
     /**
