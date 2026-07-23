@@ -89,6 +89,66 @@ class NewsPressProfile extends Model
         return $this->hasMany(NewsArticle::class, 'press_id');
     }
 
+    public function members(): HasMany
+    {
+        return $this->hasMany(NewsPressMember::class, 'press_id');
+    }
+
+    public function activeMembers(): HasMany
+    {
+        return $this->members()->active();
+    }
+
+    /**
+     * Press accessible to this user as owner profile or active team member.
+     */
+    public static function forUser(int|string $userId): ?self
+    {
+        $press = static::query()->where('user_id', $userId)->first();
+        if ($press) {
+            return $press;
+        }
+
+        $member = NewsPressMember::query()
+            ->active()
+            ->where('user_id', $userId)
+            ->with('press')
+            ->first();
+
+        return $member?->press;
+    }
+
+    public function membershipFor(int|string $userId): ?NewsPressMember
+    {
+        return $this->members()
+            ->active()
+            ->where('user_id', $userId)
+            ->first();
+    }
+
+    public function isOwnedBy(int|string $userId): bool
+    {
+        return (int) $this->user_id === (int) $userId;
+    }
+
+    public function ensureOwnerMembership(): void
+    {
+        NewsPressMember::query()->updateOrCreate(
+            [
+                'press_id' => $this->id,
+                'user_id' => $this->user_id,
+            ],
+            [
+                'editor_id' => $this->editor_id,
+                'role' => NewsPressMember::ROLE_OWNER,
+                'status' => NewsPressMember::STATUS_ACTIVE,
+                'invited_by' => $this->user_id,
+                'joined_at' => $this->created_at ?? now(),
+                'removed_at' => null,
+            ]
+        );
+    }
+
     public function scopeActive($query)
     {
         return $query->where('status', self::STATUS_ACTIVE);

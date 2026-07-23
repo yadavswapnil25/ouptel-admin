@@ -380,9 +380,7 @@ class NewsEditorArticleController extends Controller
 
     protected function resolvePressId(string|int $userId): ?int
     {
-        return NewsPressProfile::query()
-            ->where('user_id', $userId)
-            ->value('id');
+        return NewsPressProfile::forUser($userId)?->id;
     }
 
     protected function requireEditor(Request $request): string|JsonResponse

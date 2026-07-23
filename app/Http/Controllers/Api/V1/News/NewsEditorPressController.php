@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\V1\News;
 
 use App\Models\NewsCategory;
 use App\Models\NewsEditor;
+use App\Models\NewsPressMember;
 use App\Models\NewsPressProfile;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
@@ -26,9 +28,9 @@ class NewsEditorPressController extends Controller
 
         $raw = (string) $request->query('slug', '');
         $slug = NewsPressProfile::normalizeSlug($raw);
-        $mine = $this->findMyPress($userId);
+        $owned = NewsPressProfile::query()->where('user_id', $userId)->first();
 
-        $available = NewsPressProfile::isSlugAvailable($slug, $mine?->id);
+        $available = NewsPressProfile::isSlugAvailable($slug, $owned?->id);
         $reason = null;
 
         if ($slug === '') {
@@ -67,7 +69,10 @@ class NewsEditorPressController extends Controller
         return response()->json([
             'status' => 'success',
             'data' => $press
-                ? $this->formatEditorPress($press->load(['categories' => fn ($q) => $q->ordered()]))
+                ? $this->formatEditorPress(
+                    $press->load(['categories' => fn ($q) => $q->ordered()]),
+                    $userId
+                )
                 : null,
         ]);
     }
@@ -85,7 +90,7 @@ class NewsEditorPressController extends Controller
         if ($this->findMyPress($userId)) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Press profile already exists. Use press settings to update it.',
+                'message' => 'You already belong to a press page. Leave or ask the owner before creating another.',
             ], 422);
         }
 
@@ -125,12 +130,16 @@ class NewsEditorPressController extends Controller
             'status' => NewsPressProfile::STATUS_ACTIVE,
         ]);
 
+        $press->ensureOwnerMembership();
         $this->syncCategories($press, $validated);
 
         return response()->json([
             'status' => 'success',
             'message' => 'Press page created.',
-            'data' => $this->formatEditorPress($press->fresh(['categories' => fn ($q) => $q->ordered()])),
+            'data' => $this->formatEditorPress(
+                $press->fresh(['categories' => fn ($q) => $q->ordered()]),
+                $userId
+            ),
         ], 201);
     }
 
@@ -144,12 +153,9 @@ class NewsEditorPressController extends Controller
             return $userId;
         }
 
-        $press = $this->findMyPress($userId);
-        if (!$press) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Press profile not found. Complete press setup first.',
-            ], 404);
+        $press = $this->requireOwnedPress($userId);
+        if ($press instanceof JsonResponse) {
+            return $press;
         }
 
         $validated = $this->validateProfilePayload($request, $press);
@@ -203,7 +209,10 @@ class NewsEditorPressController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Press settings updated.',
-            'data' => $this->formatEditorPress($press->fresh(['categories' => fn ($q) => $q->ordered()])),
+            'data' => $this->formatEditorPress(
+                $press->fresh(['categories' => fn ($q) => $q->ordered()]),
+                $userId
+            ),
         ]);
     }
 
@@ -217,12 +226,9 @@ class NewsEditorPressController extends Controller
             return $userId;
         }
 
-        $press = $this->findMyPress($userId);
-        if (!$press) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Press profile not found. Complete press setup first.',
-            ], 404);
+        $press = $this->requireOwnedPress($userId);
+        if ($press instanceof JsonResponse) {
+            return $press;
         }
 
         $validated = $request->validate([
@@ -263,7 +269,10 @@ class NewsEditorPressController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Category added to your press.',
-            'data' => $this->formatEditorPress($press->fresh(['categories' => fn ($q) => $q->ordered()])),
+            'data' => $this->formatEditorPress(
+                $press->fresh(['categories' => fn ($q) => $q->ordered()]),
+                $userId
+            ),
         ]);
     }
 
@@ -274,12 +283,9 @@ class NewsEditorPressController extends Controller
             return $userId;
         }
 
-        $press = $this->findMyPress($userId);
-        if (!$press) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Press profile not found. Complete press setup first.',
-            ], 404);
+        $press = $this->requireOwnedPress($userId);
+        if ($press instanceof JsonResponse) {
+            return $press;
         }
 
         $press->categories()->detach($categoryId);
@@ -287,7 +293,193 @@ class NewsEditorPressController extends Controller
         return response()->json([
             'status' => 'success',
             'message' => 'Category removed from your press.',
-            'data' => $this->formatEditorPress($press->fresh(['categories' => fn ($q) => $q->ordered()])),
+            'data' => $this->formatEditorPress(
+                $press->fresh(['categories' => fn ($q) => $q->ordered()]),
+                $userId
+            ),
+        ]);
+    }
+
+    /**
+     * List active editors on this press (owner only).
+     */
+    public function members(Request $request): JsonResponse
+    {
+        $userId = $this->requireEditor($request);
+        if ($userId instanceof JsonResponse) {
+            return $userId;
+        }
+
+        $press = $this->requireOwnedPress($userId);
+        if ($press instanceof JsonResponse) {
+            return $press;
+        }
+
+        $press->ensureOwnerMembership();
+
+        $members = $press->members()
+            ->active()
+            ->with(['user', 'editor'])
+            ->orderByRaw("CASE WHEN role = 'owner' THEN 0 ELSE 1 END")
+            ->orderBy('joined_at')
+            ->get()
+            ->map(fn (NewsPressMember $m) => $this->formatMember($m))
+            ->values()
+            ->all();
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'press' => $this->formatEditorPress(
+                    $press->load(['categories' => fn ($q) => $q->ordered()]),
+                    $userId
+                ),
+                'members' => $members,
+            ],
+        ]);
+    }
+
+    /**
+     * Add an existing approved editor to this press (owner only).
+     */
+    public function addMember(Request $request): JsonResponse
+    {
+        $userId = $this->requireEditor($request);
+        if ($userId instanceof JsonResponse) {
+            return $userId;
+        }
+
+        $press = $this->requireOwnedPress($userId);
+        if ($press instanceof JsonResponse) {
+            return $press;
+        }
+
+        $validated = $request->validate([
+            'identifier' => ['required', 'string', 'max:191'],
+        ]);
+
+        $identifier = trim($validated['identifier']);
+        $invitee = User::query()
+            ->where(function ($q) use ($identifier) {
+                $q->where('email', $identifier)
+                    ->orWhere('username', $identifier);
+            })
+            ->first();
+
+        if (!$invitee) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'No user found with that email or username.',
+            ], 404);
+        }
+
+        if ((int) $invitee->user_id === (int) $userId) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You are already the owner of this press.',
+            ], 422);
+        }
+
+        $editor = NewsEditor::query()
+            ->where('user_id', $invitee->user_id)
+            ->where('status', 'active')
+            ->first();
+
+        if (!$editor) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'That user is not an approved news editor yet.',
+            ], 422);
+        }
+
+        $existingMembership = NewsPressMember::query()
+            ->active()
+            ->where('user_id', $invitee->user_id)
+            ->first();
+
+        if ($existingMembership && (int) $existingMembership->press_id === (int) $press->id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This editor is already on your press team.',
+            ], 422);
+        }
+
+        if ($existingMembership) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This editor already belongs to another press page.',
+            ], 422);
+        }
+
+        if (NewsPressProfile::query()->where('user_id', $invitee->user_id)->exists()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'This editor already owns a press page and cannot join another.',
+            ], 422);
+        }
+
+        $member = NewsPressMember::query()->updateOrCreate(
+            [
+                'press_id' => $press->id,
+                'user_id' => $invitee->user_id,
+            ],
+            [
+                'editor_id' => $editor->id,
+                'role' => NewsPressMember::ROLE_MEMBER,
+                'status' => NewsPressMember::STATUS_ACTIVE,
+                'invited_by' => (int) $userId,
+                'joined_at' => now(),
+                'removed_at' => null,
+            ]
+        );
+
+        $member->load(['user', 'editor']);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Editor added to your press team.',
+            'data' => $this->formatMember($member),
+        ], 201);
+    }
+
+    /**
+     * Remove a team member (owner only). Cannot remove the owner.
+     */
+    public function removeMember(Request $request, int $memberId): JsonResponse
+    {
+        $userId = $this->requireEditor($request);
+        if ($userId instanceof JsonResponse) {
+            return $userId;
+        }
+
+        $press = $this->requireOwnedPress($userId);
+        if ($press instanceof JsonResponse) {
+            return $press;
+        }
+
+        $member = $press->members()->whereKey($memberId)->first();
+        if (!$member || $member->status !== NewsPressMember::STATUS_ACTIVE) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Team member not found.',
+            ], 404);
+        }
+
+        if ($member->role === NewsPressMember::ROLE_OWNER || (int) $member->user_id === (int) $press->user_id) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You cannot remove the press owner.',
+            ], 422);
+        }
+
+        $member->update([
+            'status' => NewsPressMember::STATUS_REMOVED,
+            'removed_at' => now(),
+        ]);
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Editor removed from your press team.',
         ]);
     }
 
@@ -384,11 +576,21 @@ class NewsEditorPressController extends Controller
         return $slug;
     }
 
-    protected function formatEditorPress(NewsPressProfile $press): array
+    protected function formatEditorPress(NewsPressProfile $press, string|int|null $viewerUserId = null): array
     {
         $categories = $press->relationLoaded('categories')
             ? $press->categories
             : $press->categories()->ordered()->get();
+
+        $isOwner = $viewerUserId !== null && $press->isOwnedBy($viewerUserId);
+        $membership = $viewerUserId !== null ? $press->membershipFor($viewerUserId) : null;
+        $myRole = $membership?->role;
+        if (!$myRole && $isOwner) {
+            $myRole = NewsPressMember::ROLE_OWNER;
+        }
+        if ($membership?->isOwner()) {
+            $isOwner = true;
+        }
 
         return [
             'id' => $press->id,
@@ -404,6 +606,9 @@ class NewsEditorPressController extends Controller
             'status' => $press->status,
             'publicPath' => $press->publicPath(),
             'publicUrlHint' => 'ouptel.in' . $press->publicPath(),
+            'myRole' => $myRole,
+            'isOwner' => $isOwner,
+            'memberCount' => $press->activeMembers()->count(),
             'categories' => $categories->map(fn ($c) => [
                 'id' => $c->id,
                 'name' => $c->name,
@@ -417,11 +622,50 @@ class NewsEditorPressController extends Controller
         ];
     }
 
+    protected function formatMember(NewsPressMember $member): array
+    {
+        $user = $member->user;
+
+        return [
+            'id' => $member->id,
+            'userId' => (string) $member->user_id,
+            'editorId' => $member->editor_id,
+            'role' => $member->role,
+            'status' => $member->status,
+            'name' => $user?->display_name ?? $user?->username ?? 'Editor',
+            'username' => $user?->username,
+            'email' => $user?->email,
+            'joinedAt' => optional($member->joined_at)?->toIso8601String(),
+        ];
+    }
+
     protected function findMyPress(string|int $userId): ?NewsPressProfile
     {
-        return NewsPressProfile::query()
-            ->where('user_id', $userId)
-            ->first();
+        return NewsPressProfile::forUser($userId);
+    }
+
+    /**
+     * Press owned by this user (settings / team / categories).
+     */
+    protected function requireOwnedPress(string|int $userId): NewsPressProfile|JsonResponse
+    {
+        $press = NewsPressProfile::query()->where('user_id', $userId)->first();
+        if ($press) {
+            return $press;
+        }
+
+        if (NewsPressProfile::forUser($userId)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Only the press owner can manage this.',
+                'code' => 'owner_required',
+            ], 403);
+        }
+
+        return response()->json([
+            'status' => 'error',
+            'message' => 'Press profile not found. Complete press setup first.',
+        ], 404);
     }
 
     protected function requireEditor(Request $request): string|JsonResponse
