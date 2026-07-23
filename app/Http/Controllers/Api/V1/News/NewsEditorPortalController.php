@@ -28,7 +28,13 @@ class NewsEditorPortalController extends Controller
             ->first();
 
         $application = NewsEditorApplication::query()
-            ->where('user_id', $userId)
+            ->where(function ($q) use ($userId, $request) {
+                $q->where('user_id', $userId);
+                $email = User::query()->where('user_id', $userId)->value('email');
+                if ($email) {
+                    $q->orWhereRaw('LOWER(email) = ?', [strtolower($email)]);
+                }
+            })
             ->orderByDesc('id')
             ->first();
 
@@ -55,8 +61,15 @@ class NewsEditorPortalController extends Controller
             return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 401);
         }
 
+        $email = User::query()->where('user_id', $userId)->value('email');
+
         $application = NewsEditorApplication::query()
-            ->where('user_id', $userId)
+            ->where(function ($q) use ($userId, $email) {
+                $q->where('user_id', $userId);
+                if ($email) {
+                    $q->orWhereRaw('LOWER(email) = ?', [strtolower($email)]);
+                }
+            })
             ->orderByDesc('id')
             ->first();
 
@@ -66,31 +79,13 @@ class NewsEditorPortalController extends Controller
         ]);
     }
 
+    /**
+     * Guest-friendly application submit (auth optional).
+     * Logged-in users are linked by user_id; guests submit with email only.
+     */
     public function submitApplication(Request $request): JsonResponse
     {
         $userId = $this->resolveTokenUserId($request);
-        if (!$userId) {
-            return response()->json(['status' => 'error', 'message' => 'Unauthorized'], 401);
-        }
-
-        if (NewsEditor::isActiveEditor($userId)) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'You are already an editor.',
-            ], 422);
-        }
-
-        $pending = NewsEditorApplication::query()
-            ->where('user_id', $userId)
-            ->where('status', 'pending')
-            ->exists();
-
-        if ($pending) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'You already have a pending application under review.',
-            ], 422);
-        }
 
         $validated = $request->validate([
             'full_name' => ['required', 'string', 'max:150'],
@@ -106,10 +101,47 @@ class NewsEditorPortalController extends Controller
             'id_proof_name' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $email = strtolower(trim($validated['email']));
+
+        if ($userId && NewsEditor::isActiveEditor($userId)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'You are already an editor.',
+            ], 422);
+        }
+
+        $existingUser = User::query()->whereRaw('LOWER(email) = ?', [$email])->first();
+        if ($existingUser && NewsEditor::isActiveEditor($existingUser->user_id)) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An editor account already exists for this email. Please log in.',
+            ], 422);
+        }
+
+        $pendingQuery = NewsEditorApplication::query()->where('status', 'pending');
+        $pendingQuery->where(function ($q) use ($email, $userId, $existingUser) {
+            $q->whereRaw('LOWER(email) = ?', [$email]);
+            if ($userId) {
+                $q->orWhere('user_id', $userId);
+            }
+            if ($existingUser) {
+                $q->orWhere('user_id', $existingUser->user_id);
+            }
+        });
+
+        if ($pendingQuery->exists()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'An application with this email is already under review.',
+            ], 422);
+        }
+
+        $linkedUserId = $userId ? (int) $userId : ($existingUser?->user_id);
+
         $application = NewsEditorApplication::create([
-            'user_id' => $userId,
+            'user_id' => $linkedUserId,
             'full_name' => $validated['full_name'],
-            'email' => $validated['email'],
+            'email' => $email,
             'phone' => $validated['phone'],
             'city' => $validated['city'],
             'state' => $validated['state'],
@@ -123,7 +155,9 @@ class NewsEditorPortalController extends Controller
 
         return response()->json([
             'status' => 'success',
-            'message' => 'Application submitted for review.',
+            'message' => $userId
+                ? 'Application submitted for review.'
+                : 'Application submitted. After approval you will receive login details by email.',
             'data' => $this->formatApplication($application),
         ], 201);
     }
@@ -132,7 +166,7 @@ class NewsEditorPortalController extends Controller
     {
         return [
             'id' => $app->id,
-            'userId' => (string) $app->user_id,
+            'userId' => $app->user_id !== null ? (string) $app->user_id : null,
             'fullName' => $app->full_name,
             'email' => $app->email,
             'phone' => $app->phone,
@@ -147,6 +181,7 @@ class NewsEditorPortalController extends Controller
             'reviewNote' => $app->review_note,
             'appliedAt' => optional($app->created_at)?->toIso8601String(),
             'reviewedAt' => optional($app->reviewed_at)?->toIso8601String(),
+            'credentialsSentAt' => optional($app->credentials_sent_at)?->toIso8601String(),
         ];
     }
 

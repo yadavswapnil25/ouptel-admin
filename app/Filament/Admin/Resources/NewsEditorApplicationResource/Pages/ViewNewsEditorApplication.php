@@ -25,8 +25,19 @@ class ViewNewsEditorApplication extends ViewRecord
                 ->action(function () {
                     $adminId = Auth::user()?->user_id ?? Auth::id();
                     if ($this->record->approve($adminId ? (int) $adminId : null)) {
-                        Notification::make()->title('Editor approved')->success()->send();
-                        $this->refreshFormData(['status', 'reviewed_at', 'reviewed_by', 'review_note']);
+                        Notification::make()
+                            ->title('Editor approved')
+                            ->body('Login details emailed to ' . $this->record->email)
+                            ->success()
+                            ->send();
+                        $this->refreshFormData([
+                            'status',
+                            'reviewed_at',
+                            'reviewed_by',
+                            'review_note',
+                            'user_id',
+                            'credentials_sent_at',
+                        ]);
                     }
                 }),
             Actions\Action::make('reject')

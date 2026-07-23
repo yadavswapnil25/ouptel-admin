@@ -128,7 +128,7 @@ class NewsEditorApplicationResource extends Resource
                         if ($record->approve($adminId ? (int) $adminId : null)) {
                             Notification::make()
                                 ->title('Editor approved')
-                                ->body("{$record->full_name} can now access the Editor Panel.")
+                                ->body("{$record->full_name} can access the Editor Panel. Login details emailed to {$record->email}.")
                                 ->success()
                                 ->send();
                         } else {
