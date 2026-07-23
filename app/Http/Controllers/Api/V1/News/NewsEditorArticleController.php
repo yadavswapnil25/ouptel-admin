@@ -11,6 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -104,12 +105,16 @@ class NewsEditorArticleController extends Controller
         $authorName = $user?->name
             ?? (trim(($user?->first_name ?? '') . ' ' . ($user?->last_name ?? '')) ?: ($user?->username ?? 'Editor'));
 
+        $gallery = array_values(array_filter($validated['gallery_images'] ?? []));
+        $featured = $validated['featured_image'] ?? ($gallery[0] ?? null);
+
         $article = NewsArticle::create([
             'title' => $validated['title'],
             'slug' => $this->uniqueSlug($validated['title']),
             'excerpt' => $validated['excerpt'],
             'content' => $validated['content'],
-            'featured_image' => $validated['featured_image'] ?? null,
+            'featured_image' => $featured,
+            'gallery_images' => $gallery,
             'tags' => $validated['tags'] ?? [],
             'seo_meta_title' => $validated['seo_meta_title'] ?? null,
             'seo_meta_description' => $validated['seo_meta_description'] ?? null,
@@ -172,6 +177,14 @@ class NewsEditorArticleController extends Controller
             'seo_meta_description' => $validated['seo_meta_description'] ?? null,
         ], fn ($v) => $v !== null);
 
+        if (array_key_exists('gallery_images', $validated)) {
+            $gallery = array_values(array_filter($validated['gallery_images'] ?? []));
+            $patch['gallery_images'] = $gallery;
+            if (!array_key_exists('featured_image', $validated) || empty($validated['featured_image'])) {
+                $patch['featured_image'] = $gallery[0] ?? null;
+            }
+        }
+
         if (isset($patch['title'])) {
             $patch['slug'] = $this->uniqueSlug($patch['title'], $model->id);
         }
@@ -229,6 +242,44 @@ class NewsEditorArticleController extends Controller
         ]);
     }
 
+    /**
+     * Upload one or more images for editor articles.
+     */
+    public function uploadImages(Request $request): JsonResponse
+    {
+        $userId = $this->requireEditor($request);
+        if ($userId instanceof JsonResponse) {
+            return $userId;
+        }
+
+        $request->validate([
+            'images' => ['required', 'array', 'min:1', 'max:12'],
+            'images.*' => ['required', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:5120'],
+        ]);
+
+        $files = $request->file('images', []);
+        if (!is_array($files)) {
+            $files = [$files];
+        }
+
+        $urls = [];
+        foreach ($files as $file) {
+            if (!$file) {
+                continue;
+            }
+            $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('news/articles/' . date('Y/m'), $filename, 'public');
+            $urls[] = asset('storage/' . ltrim($path, '/'));
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'urls' => $urls,
+            ],
+        ], 201);
+    }
+
     protected function validatePayload(Request $request, bool $partial = false): array
     {
         $required = $partial ? 'sometimes' : 'required';
@@ -242,7 +293,9 @@ class NewsEditorArticleController extends Controller
             'category_ids.*' => ['integer', Rule::exists('news_categories', 'id')],
             'tags' => ['sometimes', 'array'],
             'tags.*' => ['string', 'max:50'],
-            'featured_image' => ['nullable', 'string', 'max:512'],
+            'featured_image' => ['nullable', 'string', 'max:2048'],
+            'gallery_images' => ['sometimes', 'array', 'max:12'],
+            'gallery_images.*' => ['nullable', 'string', 'max:2048'],
             'seo_meta_title' => ['nullable', 'string', 'max:255'],
             'seo_meta_description' => ['nullable', 'string', 'max:500'],
             'submit_for_review' => ['sometimes', 'boolean'],
@@ -312,6 +365,7 @@ class NewsEditorArticleController extends Controller
             'excerpt' => $article->excerpt,
             'content' => $article->content,
             'featuredImage' => $article->featured_image,
+            'galleryImages' => array_values($article->gallery_images ?? []),
             'seoMetaTitle' => $article->seo_meta_title,
             'seoMetaDescription' => $article->seo_meta_description,
             'status' => $article->status,

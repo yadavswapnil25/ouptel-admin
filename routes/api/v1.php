@@ -557,6 +557,7 @@ Route::prefix('news')->group(function () {
 
     Route::get('/editor/articles', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'index']);
     Route::get('/editor/articles/stats', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'stats']);
+    Route::post('/editor/articles/upload-images', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'uploadImages']);
     Route::post('/editor/articles', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'store']);
     Route::get('/editor/articles/{article}', [\App\Http\Controllers\Api\V1\News\NewsEditorArticleController::class, 'show'])
         ->whereNumber('article');

@@ -234,6 +234,7 @@ class NewsPressController extends Controller
             'excerpt' => $article->excerpt,
             'content' => $article->content,
             'featuredImage' => $article->featured_image,
+            'galleryImages' => array_values($article->gallery_images ?? []),
             'authorName' => $article->author_name,
             'pressId' => $press->id,
             'pressName' => $press->name,
