@@ -56,6 +56,47 @@ class NewsEditorPressController extends Controller
     }
 
     /**
+     * Upload logo / banner images for press profile.
+     */
+    public function uploadImages(Request $request): JsonResponse
+    {
+        $userId = $this->requireEditor($request);
+        if ($userId instanceof JsonResponse) {
+            return $userId;
+        }
+
+        $request->validate([
+            'images' => ['required', 'array', 'min:1', 'max:4'],
+            'images.*' => ['required', 'image', 'mimes:jpeg,jpg,png,webp,gif', 'max:5120'],
+            'type' => ['nullable', 'string', Rule::in(['logo', 'banner'])],
+        ]);
+
+        $folder = $request->input('type') === 'banner' ? 'banners' : 'logos';
+        $files = $request->file('images', []);
+        if (!is_array($files)) {
+            $files = [$files];
+        }
+
+        $urls = [];
+        foreach ($files as $file) {
+            if (!$file) {
+                continue;
+            }
+            $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('news/press/' . $folder . '/' . date('Y/m'), $filename, 'public');
+            $urls[] = asset('storage/' . ltrim($path, '/'));
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'data' => [
+                'urls' => $urls,
+                'url' => $urls[0] ?? null,
+            ],
+        ], 201);
+    }
+
+    /**
      * Current editor's press profile (null if not set up yet).
      */
     public function me(Request $request): JsonResponse

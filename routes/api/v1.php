@@ -541,6 +541,7 @@ Route::prefix('news')->group(function () {
     Route::get('/presses/me', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'me']);
     Route::post('/presses', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'store']);
     Route::put('/presses/me', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'update']);
+    Route::post('/presses/me/upload-images', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'uploadImages']);
     Route::post('/presses/me/categories', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'addCategory']);
     Route::delete('/presses/me/categories/{categoryId}', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'removeCategory'])
         ->whereNumber('categoryId');
