@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class NewsEditorPortalController extends Controller
 {
@@ -94,14 +95,26 @@ class NewsEditorPortalController extends Controller
             'phone' => ['required', 'string', 'max:50'],
             'city' => ['required', 'string', 'max:100'],
             'state' => ['required', 'string', 'max:100'],
-            'preferred_categories' => ['required', 'array', 'min:1'],
+            'invite_token' => ['nullable', 'string', 'max:64'],
+            'preferred_categories' => [
+                Rule::requiredIf(fn () => blank($request->input('invite_token'))),
+                'nullable',
+                'array',
+            ],
             'preferred_categories.*' => ['string', 'max:100'],
             'bio' => ['required', 'string', 'min:20', 'max:2000'],
             'portfolio_link' => ['nullable', 'url', 'max:512'],
             'reason' => ['required', 'string', 'min:20', 'max:2000'],
             'id_proof_name' => ['nullable', 'string', 'max:255'],
-            'invite_token' => ['nullable', 'string', 'max:64'],
         ]);
+
+        if (blank($request->input('invite_token')) && count($validated['preferred_categories'] ?? []) < 1) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Select at least one preferred category.',
+                'errors' => ['preferred_categories' => ['Select at least one preferred category.']],
+            ], 422);
+        }
 
         $email = strtolower(trim($validated['email']));
         $invitation = null;
@@ -166,7 +179,9 @@ class NewsEditorPortalController extends Controller
             'phone' => $validated['phone'],
             'city' => $validated['city'],
             'state' => $validated['state'],
-            'preferred_categories' => $validated['preferred_categories'],
+            'preferred_categories' => $invitation
+                ? ($validated['preferred_categories'] ?? [])
+                : ($validated['preferred_categories'] ?? []),
             'bio' => $validated['bio'],
             'portfolio_link' => $validated['portfolio_link'] ?? null,
             'reason' => $validated['reason'],
