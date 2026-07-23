@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1\News;
 use App\Models\NewsArticle;
 use App\Models\NewsCategory;
 use App\Models\NewsEditor;
+use App\Models\NewsPressProfile;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -113,6 +114,7 @@ class NewsEditorArticleController extends Controller
             'seo_meta_title' => $validated['seo_meta_title'] ?? null,
             'seo_meta_description' => $validated['seo_meta_description'] ?? null,
             'author_id' => $userId,
+            'press_id' => $this->resolvePressId($userId),
             'author_name' => $authorName,
             'status' => $status,
             'submitted_at' => $submit ? now() : null,
@@ -172,6 +174,13 @@ class NewsEditorArticleController extends Controller
 
         if (isset($patch['title'])) {
             $patch['slug'] = $this->uniqueSlug($patch['title'], $model->id);
+        }
+
+        if (!$model->press_id) {
+            $pressId = $this->resolvePressId($userId);
+            if ($pressId) {
+                $patch['press_id'] = $pressId;
+            }
         }
 
         if ($submit) {
@@ -294,6 +303,7 @@ class NewsEditorArticleController extends Controller
             'id' => $article->id,
             'authorUserId' => (string) $article->author_id,
             'authorName' => $article->author_name,
+            'pressId' => $article->press_id,
             'title' => $article->title,
             'slug' => $article->slug,
             'category' => $primary?->name ?? '',
@@ -312,6 +322,13 @@ class NewsEditorArticleController extends Controller
             'createdAt' => optional($article->created_at)?->toIso8601String(),
             'updatedAt' => optional($article->updated_at)?->toIso8601String(),
         ];
+    }
+
+    protected function resolvePressId(string|int $userId): ?int
+    {
+        return NewsPressProfile::query()
+            ->where('user_id', $userId)
+            ->value('id');
     }
 
     protected function requireEditor(Request $request): string|JsonResponse

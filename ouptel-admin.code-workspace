@@ -4,12 +4,6 @@
 			"path": "."
 		},
 		{
-			"path": "../Ouptel Code Old/admin-panel"
-		},
-		{
-			"path": "../Ouptel Code Old/api"
-		},
-		{
 			"path": "../ouptel-web"
 		}
 	],

@@ -536,6 +536,20 @@ Route::prefix('news')->group(function () {
     Route::post('/ads/{ad}/click', [\App\Http\Controllers\Api\V1\News\NewsAdController::class, 'click'])
         ->whereNumber('ad');
 
+    // Editor press profile (auth via Bearer / Wo_AppsSessions) — before /presses/{slug}
+    Route::get('/presses/check-slug', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'checkSlug']);
+    Route::get('/presses/me', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'me']);
+    Route::post('/presses', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'store']);
+    Route::put('/presses/me', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'update']);
+    Route::post('/presses/me/categories', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'addCategory']);
+    Route::delete('/presses/me/categories/{categoryId}', [\App\Http\Controllers\Api\V1\News\NewsEditorPressController::class, 'removeCategory'])
+        ->whereNumber('categoryId');
+
+    // Public press pages
+    Route::get('/presses/{slug}', [\App\Http\Controllers\Api\V1\News\NewsPressController::class, 'show']);
+    Route::get('/presses/{slug}/articles', [\App\Http\Controllers\Api\V1\News\NewsPressController::class, 'articles']);
+    Route::get('/presses/{slug}/articles/{articleSlug}', [\App\Http\Controllers\Api\V1\News\NewsPressController::class, 'article']);
+
     // Editor portal (auth via Bearer / Wo_AppsSessions)
     Route::get('/me', [\App\Http\Controllers\Api\V1\News\NewsEditorPortalController::class, 'me']);
     Route::get('/editor-application', [\App\Http\Controllers\Api\V1\News\NewsEditorPortalController::class, 'myApplication']);

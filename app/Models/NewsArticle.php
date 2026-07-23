@@ -26,6 +26,7 @@ class NewsArticle extends Model
         'seo_meta_title',
         'seo_meta_description',
         'author_id',
+        'press_id',
         'author_name',
         'views',
         'shares',
@@ -95,6 +96,11 @@ class NewsArticle extends Model
     public function author(): BelongsTo
     {
         return $this->belongsTo(User::class, 'author_id');
+    }
+
+    public function press(): BelongsTo
+    {
+        return $this->belongsTo(NewsPressProfile::class, 'press_id');
     }
 
     public function reviewer(): BelongsTo

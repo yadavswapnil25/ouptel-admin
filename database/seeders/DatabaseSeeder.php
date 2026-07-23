@@ -27,6 +27,7 @@ class DatabaseSeeder extends Seeder
             SettingsSeeder::class,
             RolesAndPermissionsSeeder::class,
             NewsSeeder::class,
+            NewsPressSeeder::class,
         ]);
     }
 }
