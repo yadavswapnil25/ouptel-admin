@@ -45,6 +45,116 @@ class BlogChannelsController extends BaseController
         return "{$dir}/{$filename}";
     }
 
+    private function formatEngagementUser(object $user): array
+    {
+        $name = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
+        if ($name === '') {
+            $name = $user->username ?? 'User';
+        }
+
+        return [
+            'user_id' => $user->user_id,
+            'username' => $user->username ?? '',
+            'name' => $name,
+            'avatar_url' => \App\Helpers\ImageHelper::getImageUrl($user->avatar ?? null, 'user'),
+        ];
+    }
+
+    /**
+     * Batch likers + commenters for a list of blog IDs (owner dashboard).
+     *
+     * @param  array<int>  $blogIds
+     * @return array<int, array{likes_count:int,likers:array,comments_count:int,commenters:array}>
+     */
+    private function buildBlogEngagementMaps(array $blogIds, int $peopleLimit = 8): array
+    {
+        $maps = [];
+        foreach ($blogIds as $blogId) {
+            $id = (int) $blogId;
+            $maps[$id] = [
+                'likes_count' => 0,
+                'likers' => [],
+                'comments_count' => 0,
+                'commenters' => [],
+            ];
+        }
+
+        if (empty($blogIds)) {
+            return $maps;
+        }
+
+        // Blog-level likes (comment_id / reply_id null or 0)
+        if (Schema::hasTable('Wo_Blog_Reaction')) {
+            $reactions = DB::table('Wo_Blog_Reaction as r')
+                ->join('Wo_Users as u', 'u.user_id', '=', 'r.user_id')
+                ->whereIn('r.blog_id', $blogIds)
+                ->where(function ($q) {
+                    $q->whereNull('r.comment_id')->orWhere('r.comment_id', 0);
+                })
+                ->where(function ($q) {
+                    $q->whereNull('r.reply_id')->orWhere('r.reply_id', 0);
+                })
+                ->orderByDesc('r.id')
+                ->select(
+                    'r.blog_id',
+                    'r.user_id',
+                    'u.username',
+                    'u.first_name',
+                    'u.last_name',
+                    'u.avatar'
+                )
+                ->get();
+
+            $seenLikers = [];
+            foreach ($reactions as $row) {
+                $blogId = (int) $row->blog_id;
+                $userId = (string) $row->user_id;
+                $maps[$blogId]['likes_count'] += 1;
+                $key = $blogId . ':' . $userId;
+                if (isset($seenLikers[$key])) {
+                    continue;
+                }
+                $seenLikers[$key] = true;
+                if (count($maps[$blogId]['likers']) < $peopleLimit) {
+                    $maps[$blogId]['likers'][] = $this->formatEngagementUser($row);
+                }
+            }
+        }
+
+        if (Schema::hasTable('Wo_BlogComments')) {
+            $comments = DB::table('Wo_BlogComments as c')
+                ->join('Wo_Users as u', 'u.user_id', '=', 'c.user_id')
+                ->whereIn('c.blog_id', $blogIds)
+                ->orderByDesc('c.id')
+                ->select(
+                    'c.blog_id',
+                    'c.user_id',
+                    'u.username',
+                    'u.first_name',
+                    'u.last_name',
+                    'u.avatar'
+                )
+                ->get();
+
+            $seenCommenters = [];
+            foreach ($comments as $row) {
+                $blogId = (int) $row->blog_id;
+                $userId = (string) $row->user_id;
+                $maps[$blogId]['comments_count'] += 1;
+                $key = $blogId . ':' . $userId;
+                if (isset($seenCommenters[$key])) {
+                    continue;
+                }
+                $seenCommenters[$key] = true;
+                if (count($maps[$blogId]['commenters']) < $peopleLimit) {
+                    $maps[$blogId]['commenters'][] = $this->formatEngagementUser($row);
+                }
+            }
+        }
+
+        return $maps;
+    }
+
     /**
      * Discover public channels.
      */
@@ -187,23 +297,38 @@ class BlogChannelsController extends BaseController
                 ->count();
         }
 
-        $recentBlogs = Article::query()
+        $recentBlogsRaw = Article::query()
             ->where('channel_id', $channel->id)
             ->where('active', '1')
             ->orderByDesc('id')
             ->limit(10)
-            ->get()
-            ->map(function (Article $article) {
-                return [
-                    'id' => $article->id,
-                    'title' => $article->title,
-                    'thumbnail' => $article->thumbnail_url,
-                    'posted_at' => $article->posted_date,
-                    'views_count' => $article->views_count,
-                    'comments_count' => $article->comments_count,
-                    'url' => $article->url,
-                ];
-            });
+            ->get();
+
+        $recentEngagement = $this->buildBlogEngagementMaps(
+            $recentBlogsRaw->pluck('id')->map(fn ($id) => (int) $id)->all()
+        );
+
+        $recentBlogs = $recentBlogsRaw->map(function (Article $article) use ($recentEngagement) {
+            $engagement = $recentEngagement[(int) $article->id] ?? [
+                'likes_count' => 0,
+                'likers' => [],
+                'comments_count' => 0,
+                'commenters' => [],
+            ];
+
+            return [
+                'id' => $article->id,
+                'title' => $article->title,
+                'thumbnail' => $article->thumbnail_url,
+                'posted_at' => $article->posted_date,
+                'views_count' => $article->views_count,
+                'comments_count' => $engagement['comments_count'] ?: $article->comments_count,
+                'likes_count' => $engagement['likes_count'],
+                'likers' => $engagement['likers'],
+                'commenters' => $engagement['commenters'],
+                'url' => $article->url,
+            ];
+        });
 
         // Top blogs by views for performance chart
         $topBlogs = Article::query()
@@ -297,6 +422,7 @@ class BlogChannelsController extends BaseController
         }
 
         $viewerId = $this->authUserId($request);
+        $isOwner = $viewerId && (string) $channel->user_id === (string) $viewerId;
         $perPage = max(1, min(50, (int) $request->query('per_page', 10)));
         $paginator = Article::query()
             ->where('channel_id', $channel->id)
@@ -304,9 +430,23 @@ class BlogChannelsController extends BaseController
             ->orderByDesc('id')
             ->paginate($perPage);
 
-        $data = $paginator->getCollection()->map(function (Article $article) use ($viewerId, $channel) {
+        $pageArticles = $paginator->getCollection();
+        $engagementMaps = $isOwner
+            ? $this->buildBlogEngagementMaps(
+                $pageArticles->pluck('id')->map(fn ($id) => (int) $id)->all()
+            )
+            : [];
+
+        $data = $pageArticles->map(function (Article $article) use ($viewerId, $channel, $isOwner, $engagementMaps) {
             $ownerId = optional($article->user)->user_id ?? $article->user ?? null;
-            return [
+            $engagement = $engagementMaps[(int) $article->id] ?? [
+                'likes_count' => 0,
+                'likers' => [],
+                'comments_count' => 0,
+                'commenters' => [],
+            ];
+
+            $row = [
                 'id' => $article->id,
                 'title' => $article->title,
                 'description' => $article->description,
@@ -314,7 +454,10 @@ class BlogChannelsController extends BaseController
                 'thumbnail' => $article->thumbnail_url,
                 'posted_at' => $article->posted_date,
                 'views_count' => $article->views_count,
-                'comments_count' => $article->comments_count,
+                'comments_count' => $isOwner
+                    ? ($engagement['comments_count'] ?: $article->comments_count)
+                    : $article->comments_count,
+                'likes_count' => $isOwner ? $engagement['likes_count'] : null,
                 'url' => $article->url,
                 'is_owner' => $viewerId && (string) $ownerId === (string) $viewerId,
                 'channel' => [
@@ -329,6 +472,13 @@ class BlogChannelsController extends BaseController
                     'avatar_url' => optional($article->user)->avatar_url ?? null,
                 ],
             ];
+
+            if ($isOwner) {
+                $row['likers'] = $engagement['likers'];
+                $row['commenters'] = $engagement['commenters'];
+            }
+
+            return $row;
         });
 
         return response()->json([
