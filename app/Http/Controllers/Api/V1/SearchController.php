@@ -276,17 +276,26 @@ class SearchController extends Controller
                 });
             }
 
-            if ($verified === 'verified') {
+            if ($verified === 'verified' && Schema::hasTable('Wo_Verification_Requests')) {
+                // Match profile: only users with an approved blue/golden badge request
+                $usersQuery->whereIn('user_id', function ($q) {
+                    $q->select('user_id')
+                        ->from('Wo_Verification_Requests')
+                        ->where('status', 'approved')
+                        ->whereNotNull('badge_type')
+                        ->whereIn('badge_type', ['blue', 'golden']);
+                });
+            } elseif ($verified === 'unverified' && Schema::hasTable('Wo_Verification_Requests')) {
+                $usersQuery->whereNotIn('user_id', function ($q) {
+                    $q->select('user_id')
+                        ->from('Wo_Verification_Requests')
+                        ->where('status', 'approved')
+                        ->whereNotNull('badge_type')
+                        ->whereIn('badge_type', ['blue', 'golden']);
+                });
+            } elseif ($verified === 'verified') {
                 $usersQuery->where(function ($q) {
                     $q->where('verified', '1')->orWhere('verified', 1);
-                });
-            } elseif ($verified === 'unverified') {
-                $usersQuery->where(function ($q) {
-                    $q->whereNull('verified')
-                      ->orWhere(function ($inner) {
-                          $inner->where('verified', '!=', '1')
-                                ->where('verified', '!=', 1);
-                      });
                 });
             }
 
@@ -334,19 +343,42 @@ class SearchController extends Controller
                 ->orderBy('user_id', 'desc')
                 ->paginate($perPage);
 
-            $formattedUsers = $users->map(function ($u) {
+            $userIds = $users->getCollection()->pluck('user_id')->filter()->values()->all();
+            $badgeByUserId = [];
+            if (!empty($userIds) && Schema::hasTable('Wo_Verification_Requests')) {
+                try {
+                    $badgeRows = DB::table('Wo_Verification_Requests')
+                        ->whereIn('user_id', $userIds)
+                        ->where('status', 'approved')
+                        ->whereNotNull('badge_type')
+                        ->whereIn('badge_type', ['blue', 'golden'])
+                        ->orderByDesc('approved_at')
+                        ->get(['user_id', 'badge_type']);
+
+                    foreach ($badgeRows as $row) {
+                        $uid = (string) $row->user_id;
+                        if (!isset($badgeByUserId[$uid])) {
+                            $badgeByUserId[$uid] = $row->badge_type;
+                        }
+                    }
+                } catch (\Exception $e) {
+                    $badgeByUserId = [];
+                }
+            }
+
+            $formattedUsers = $users->map(function ($u) use ($badgeByUserId) {
                 $name = trim(($u->first_name ?? '') . ' ' . ($u->last_name ?? '')) ?: $u->username;
-                $verifiedRaw = $u->verified ?? null;
-                $isVerified = $verifiedRaw === true
-                    || $verifiedRaw === 1
-                    || $verifiedRaw === '1'
-                    || (is_string($verifiedRaw) && strtolower($verifiedRaw) === 'yes');
+                $badgeType = $badgeByUserId[(string) $u->user_id] ?? null;
+                $hasBadge = in_array($badgeType, ['blue', 'golden'], true);
                 return [
                     'user_id' => $u->user_id,
                     'username' => $u->username,
                     'name' => $name,
                     'avatar_url' => $u->avatar ? asset('storage/' . $u->avatar) : null,
-                    'verified' => $isVerified,
+                    // Align with profile header: tick only when approved badge exists
+                    'verified' => $hasBadge,
+                    'badge' => $hasBadge ? 1 : null,
+                    'badge_type' => $hasBadge ? $badgeType : null,
                     'is_online' => $u->lastseen && $u->lastseen > (time() - 60),
                     'profile_url' => url('/user/' . $u->username),
                 ];
