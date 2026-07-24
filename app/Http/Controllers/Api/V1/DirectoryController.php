@@ -8,6 +8,7 @@ use App\Models\Group;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
+use Illuminate\Support\Facades\Schema;
 
 class DirectoryController extends BaseController
 {
@@ -16,16 +17,22 @@ class DirectoryController extends BaseController
         $perPage = (int) ($request->query('per_page', 12));
         $perPage = max(1, min($perPage, 50));
         $type = $request->query('type', 'users'); // users, pages, groups
-        $term = $request->query('term', $request->query('q'));
+        $term = trim((string) ($request->query('term', $request->query('q', ''))));
+        if ($term === '') {
+            $term = null;
+        }
 
         if ($type === 'pages') {
-            $query = Page::query()->where('active', true);
+            // Wo_Pages.active is ENUM/string '0'|'1' — boolean true does not match reliably
+            $query = Page::query()->where('active', '1');
             if (!empty($term)) {
                 $like = '%' . str_replace('%', '\\%', $term) . '%';
                 $query->where(function ($q) use ($like) {
                     $q->where('page_title', 'like', $like)
-                      ->orWhere('page_name', 'like', $like)
-                      ->orWhere('page_description', 'like', $like);
+                      ->orWhere('page_name', 'like', $like);
+                    if (Schema::hasColumn('Wo_Pages', 'page_description')) {
+                        $q->orWhere('page_description', 'like', $like);
+                    }
                 });
             }
             $paginator = $query->orderByDesc('page_id')->paginate($perPage);
@@ -42,13 +49,15 @@ class DirectoryController extends BaseController
                 ];
             });
         } elseif ($type === 'groups') {
-            $query = Group::query()->where('active', 1);
+            $query = Group::query()->where('active', '1');
             if (!empty($term)) {
                 $like = '%' . str_replace('%', '\\%', $term) . '%';
                 $query->where(function ($q) use ($like) {
                     $q->where('group_title', 'like', $like)
-                      ->orWhere('group_name', 'like', $like)
-                      ->orWhere('about', 'like', $like);
+                      ->orWhere('group_name', 'like', $like);
+                    if (Schema::hasColumn('Wo_Groups', 'about')) {
+                        $q->orWhere('about', 'like', $like);
+                    }
                 });
             }
             $paginator = $query->orderByDesc('id')->paginate($perPage);
