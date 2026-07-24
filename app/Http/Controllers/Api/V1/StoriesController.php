@@ -1775,6 +1775,26 @@ class StoriesController extends Controller
             ->get()
             ->groupBy('user_id');
 
+        // Batch-load which stories the current viewer has already seen
+        $seenStoryIds = [];
+        if (Schema::hasTable('Wo_Story_Seen') && $storiesByUser->isNotEmpty()) {
+            $allStoryIds = [];
+            foreach ($storiesByUser as $userStories) {
+                foreach ($userStories as $story) {
+                    $allStoryIds[] = $story->id;
+                }
+            }
+            if (!empty($allStoryIds)) {
+                $seenStoryIds = DB::table('Wo_Story_Seen')
+                    ->where('user_id', $userId)
+                    ->whereIn('story_id', $allStoryIds)
+                    ->pluck('story_id')
+                    ->map(static fn ($id) => (int) $id)
+                    ->flip()
+                    ->all();
+            }
+        }
+
         $dataArray = [];
         foreach ($storiesByUser as $storyUserId => $userStories) {
             $user = DB::table('Wo_Users')->where('user_id', $storyUserId)->first();
@@ -1790,6 +1810,7 @@ class StoriesController extends Controller
                 'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                 'verified' => (bool) ($user->verified ?? false),
                 'stories' => [],
+                'has_unseen' => false,
             ];
 
             // Get media table name
@@ -1800,6 +1821,7 @@ class StoriesController extends Controller
                 }
             }
 
+            $hasUnseen = false;
             foreach ($userStories as $story) {
                 // Get story media
                 $media = null;
@@ -1838,6 +1860,12 @@ class StoriesController extends Controller
                         ->count();
                 }
 
+                $isOwnStory = (string) $story->user_id === (string) $userId;
+                $isViewed = $isOwnStory || isset($seenStoryIds[(int) $story->id]);
+                if (!$isViewed) {
+                    $hasUnseen = true;
+                }
+
                 $userData['stories'][] = array_merge([
                     'id' => $story->id,
                     'user_id' => $story->user_id,
@@ -1850,9 +1878,11 @@ class StoriesController extends Controller
                     'media_url' => $mediaUrl, // Full URL to the image or video file
                     'time_text' => $this->getTimeElapsedString($story->posted),
                     'view_count' => $viewCount,
+                    'is_viewed' => $isViewed,
                 ], $this->formatStoryMusic($story));
             }
 
+            $userData['has_unseen'] = $hasUnseen;
             $dataArray[] = $userData;
         }
 
