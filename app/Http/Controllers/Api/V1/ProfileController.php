@@ -1815,7 +1815,7 @@ class ProfileController extends Controller
                 'username' => $user->username ?? '',
                 'avatar' => $user->avatar ?? '',
                 'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                'verified' => (bool) ($user->verified ?? false),
+                'verified' => User::isVerifiedFlag($user->verified ?? null),
                 'badge' => $this->getUserBadge($post->user_id),
                 'badge_type' => $this->getUserBadgeType($post->user_id),
             ];
@@ -1833,7 +1833,7 @@ class ProfileController extends Controller
                         'name' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
                         'avatar' => $pageRow->avatar ?? '',
                         'avatar_url' => !empty($pageRow->avatar) ? asset('storage/' . $pageRow->avatar) : null,
-                        'verified' => (bool) ($pageRow->verified ?? false),
+                        'verified' => User::isVerifiedFlag($pageRow->verified ?? null),
                     ];
                 }
             }

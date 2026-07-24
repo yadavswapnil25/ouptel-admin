@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -775,7 +776,9 @@ class PeopleFollowController extends Controller
                     'username' => $user?->username ?? 'Unknown',
                     'name' => $this->getUserName($user),
                     'avatar_url' => ($user?->avatar) ? asset('storage/' . $user?->avatar) : null,
-                    'verified' => (bool) ($user?->verified ?? false),
+                    'verified' => User::isVerifiedFlag($user?->verified ?? null),
+                    'badge' => $this->getUserBadge($post->user_id),
+                    'badge_type' => $this->getUserBadgeType($post->user_id),
                 ],
                 
                 // Timestamps
@@ -858,7 +861,7 @@ class PeopleFollowController extends Controller
                     'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                     'cover' => $user->cover ?? '',
                     'cover_url' => $user->cover ? asset('storage/' . $user->cover) : null,
-                    'verified' => (bool) ($user->verified ?? false),
+                    'verified' => User::isVerifiedFlag($user->verified ?? null),
                 ];
             })->toArray();
         } catch (\Exception $e) {
@@ -1356,5 +1359,35 @@ class PeopleFollowController extends Controller
         if ($time < 2592000) return floor($time / 86400) . 'd';
         if ($time < 31536000) return floor($time / 2592000) . 'mo';
         return floor($time / 31536000) . 'y';
+    }
+
+    private function getUserBadge($userId): ?int
+    {
+        try {
+            $badge = DB::table('Wo_Verification_Requests')
+                ->where('user_id', $userId)
+                ->where('status', 'approved')
+                ->whereNotNull('badge_type')
+                ->latest('approved_at')
+                ->value('badge_type');
+
+            return $badge ? 1 : null;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    private function getUserBadgeType($userId): ?string
+    {
+        try {
+            return DB::table('Wo_Verification_Requests')
+                ->where('user_id', $userId)
+                ->where('status', 'approved')
+                ->whereNotNull('badge_type')
+                ->latest('approved_at')
+                ->value('badge_type');
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }

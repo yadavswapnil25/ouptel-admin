@@ -2002,7 +2002,7 @@ class PostController extends Controller
                 'username' => $authorUser->username ?? 'Unknown',
                 'name' => $authorName,
                 'avatar_url' => ($authorUser && $authorUser->avatar) ? asset('storage/' . $authorUser->avatar) : null,
-                'verified' => (bool) ($authorUser->verified ?? false),
+                'verified' => User::isVerifiedFlag($authorUser->verified ?? null),
                 'badge' => $this->getUserBadge($post->user_id),
                 'badge_type' => $this->getUserBadgeType($post->user_id),
             ],
@@ -2312,7 +2312,7 @@ class PostController extends Controller
                     'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                     'cover' => $user->cover ?? '',
                     'cover_url' => $user->cover ? asset('storage/' . $user->cover) : null,
-                    'verified' => (bool) ($user->verified ?? false),
+                    'verified' => User::isVerifiedFlag($user->verified ?? null),
                     'is_following' => $this->isFollowing($tokenUserId, $user->user_id),
                 ];
             }
@@ -2329,7 +2329,7 @@ class PostController extends Controller
                     'page_title' => $pageData->page_title ?? '',
                     'avatar' => $pageData->avatar ?? '',
                     'avatar_url' => $pageData->avatar ? asset('storage/' . $pageData->avatar) : null,
-                    'verified' => (bool) ($pageData->verified ?? false),
+                    'verified' => User::isVerifiedFlag($pageData->verified ?? null),
                 ];
             }
         }
@@ -2599,7 +2599,7 @@ class PostController extends Controller
                     'name' => $commentUser->name ?? $commentUser->username ?? 'Unknown User',
                     'avatar' => $commentUser->avatar ?? '',
                     'avatar_url' => $commentUser->avatar ? asset('storage/' . $commentUser->avatar) : null,
-                    'verified' => (bool) ($commentUser->verified ?? false),
+                    'verified' => User::isVerifiedFlag($commentUser->verified ?? null),
                 ] : null,
             ];
         }
@@ -2633,7 +2633,7 @@ class PostController extends Controller
                     'name' => $user->name ?? $user->username ?? 'Unknown User',
                     'avatar' => $user->avatar ?? '',
                     'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                    'verified' => (bool) ($user->verified ?? false),
+                    'verified' => User::isVerifiedFlag($user->verified ?? null),
                 ];
             }
         }
@@ -2667,7 +2667,7 @@ class PostController extends Controller
                     'name' => $user->name ?? $user->username ?? 'Unknown User',
                     'avatar' => $user->avatar ?? '',
                     'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                    'verified' => (bool) ($user->verified ?? false),
+                    'verified' => User::isVerifiedFlag($user->verified ?? null),
                 ];
             }
         }
@@ -3618,7 +3618,7 @@ class PostController extends Controller
                             'last_name' => $user->last_name ?? '',
                             'avatar' => $user->avatar ?? '',
                             'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                            'verified' => (bool) ($user->verified ?? false),
+                            'verified' => User::isVerifiedFlag($user->verified ?? null),
                             'is_following' => $isFollowing,
                             'liked_at' => $like->time ?? null ? date('c', $like->time) : null,
                             'liked_at_human' => $like->time ?? null ? $this->getHumanTime($like->time) : null,

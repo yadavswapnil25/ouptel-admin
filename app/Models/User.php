@@ -267,7 +267,16 @@ class User extends Authenticatable
      */
     public function isVerified(): bool
     {
-        return $this->verified === '1';
+        return self::isVerifiedFlag($this->verified);
+    }
+
+    /**
+     * Safely interpret Wo_Users.verified / page verified values.
+     * Note: (bool) '0' is true in PHP — never cast the raw column with (bool).
+     */
+    public static function isVerifiedFlag(mixed $value): bool
+    {
+        return $value === true || $value === 1 || $value === '1';
     }
 
     /**

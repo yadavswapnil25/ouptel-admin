@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Helpers\PostMediaHelper;
 use App\Http\Controllers\Controller;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -450,7 +451,7 @@ class NewFeedController extends Controller
                         'name' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
                         'avatar' => $pageRow->avatar ?? '',
                         'avatar_url' => !empty($pageRow->avatar) ? asset('storage/' . $pageRow->avatar) : null,
-                        'verified' => (bool) ($pageRow->verified ?? false),
+                        'verified' => User::isVerifiedFlag($pageRow->verified ?? null),
                     ];
                 }
             }
@@ -631,7 +632,7 @@ class NewFeedController extends Controller
                     'last_name' => $user?->last_name ?? '',
                     'name' => $user?->name ?? $user?->username ?? 'Unknown User',
                     'avatar_url' => ($user?->avatar) ? asset('storage/' . $user?->avatar) : null,
-                    'verified' => (bool) ($user?->verified ?? false),
+                    'verified' => User::isVerifiedFlag($user?->verified ?? null),
                     'is_admin' => (bool) ($user?->admin ?? false),
                     'badge' => $this->getUserBadge($post->user_id),
                     'badge_type' => $this->getUserBadgeType($post->user_id),
@@ -1569,7 +1570,7 @@ class NewFeedController extends Controller
                         'last_name' => $user->last_name ?? '',
                         'avatar' => $user->avatar ?? '',
                         'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
-                        'verified' => (bool) ($user->verified ?? false),
+                        'verified' => User::isVerifiedFlag($user->verified ?? null),
                         'is_following' => $isFollowing ? 1 : 0,
                         'reaction_type' => $reactionType,
                         'reaction_name' => $reactionNames[$reactionType] ?? 'Like',
@@ -1603,7 +1604,7 @@ class NewFeedController extends Controller
                         'last_name' => $currentUser->last_name ?? '',
                         'avatar' => $currentUser->avatar ?? '',
                         'avatar_url' => $currentUser->avatar ? asset('storage/' . $currentUser->avatar) : null,
-                        'verified' => (bool) ($currentUser->verified ?? false),
+                        'verified' => User::isVerifiedFlag($currentUser->verified ?? null),
                         'is_following' => 0,
                         'reaction_type' => $cuReactionType,
                         'reaction_name' => $reactionNames[$cuReactionType] ?? 'Like',
