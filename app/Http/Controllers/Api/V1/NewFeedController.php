@@ -89,7 +89,7 @@ class NewFeedController extends Controller
 
         // Get filter parameter (Image, File, Jobs, Audio, Video, Blogs, Articles, Feeling)
         $filter = $request->query('filter');
-        $validFilters = ['image', 'file', 'jobs', 'audio', 'video', 'blogs', 'articles', 'feeling'];
+        $validFilters = ['image', 'file', 'jobs', 'audio', 'video', 'blogs', 'articles', 'feeling', 'question'];
         if ($filter && !in_array(strtolower($filter), $validFilters)) {
             return response()->json([
                 'ok' => false,
@@ -211,7 +211,12 @@ class NewFeedController extends Controller
         // In a real implementation, you'd need to adjust based on your actual database schema
 
         $query = DB::table('Wo_Posts')
-            ->where('active', '1');
+            ->where('active', '1')
+            // Answers are nested under questions — never show as top-level feed items
+            ->where(function ($q) {
+                $q->whereNull('postType')
+                  ->orWhere('postType', '!=', 'answer');
+            });
             // Note: privacy column doesn't exist in Wo_Posts table
 
         // Filter by user's community preferences when column exists
@@ -381,6 +386,10 @@ class NewFeedController extends Controller
                     $query->whereNotNull('postFeeling')
                           ->where('postFeeling', '!=', '');
                     break;
+
+                case 'question':
+                    $query->where('postType', 'question');
+                    break;
             }
         }
 
@@ -535,6 +544,40 @@ class NewFeedController extends Controller
             }
 
             $postType = $this->getPostType($post);
+
+            // Q&A enrichment for question posts
+            $answerCount = 0;
+            $answerPreviews = [];
+            if ($postType === 'question') {
+                $answerCount = (int) DB::table('Wo_Posts')
+                    ->where('parent_id', $post->id)
+                    ->where('postType', 'answer')
+                    ->where('active', '1')
+                    ->count();
+                $previewRows = DB::table('Wo_Posts')
+                    ->where('parent_id', $post->id)
+                    ->where('postType', 'answer')
+                    ->where('active', '1')
+                    ->orderByDesc('time')
+                    ->limit(2)
+                    ->get();
+                foreach ($previewRows as $preview) {
+                    $answerAuthor = DB::table('Wo_Users')->where('user_id', $preview->user_id)->first();
+                    $answerPreviews[] = [
+                        'id' => $preview->id,
+                        'post_id' => $preview->post_id ?? $preview->id,
+                        'post_text' => $preview->postText ?? '',
+                        'post_type' => 'answer',
+                        'parent_id' => (int) ($preview->parent_id ?? 0),
+                        'author' => $answerAuthor ? [
+                            'user_id' => $answerAuthor->user_id,
+                            'username' => $answerAuthor->username ?? 'Unknown',
+                            'name' => $answerAuthor->name ?? $answerAuthor->username ?? 'Unknown User',
+                            'avatar_url' => $answerAuthor->avatar ? asset('storage/' . $answerAuthor->avatar) : null,
+                        ] : null,
+                    ];
+                }
+            }
             
             return [
                 'id' => $post->id,
@@ -546,6 +589,9 @@ class NewFeedController extends Controller
                 'tagged_friends_count' => count($taggedFriends),
                 'post_text' => $post->postText ?? '',
                 'post_type' => $postType,
+                'parent_id' => (int) ($post->parent_id ?? 0),
+                'answer_count' => $answerCount,
+                'answers' => $answerPreviews,
                 'post_privacy' => $post->postPrivacy ?? '0',
                 'post_privacy_text' => $this->getPostPrivacyText($post->postPrivacy ?? '0'),
                 

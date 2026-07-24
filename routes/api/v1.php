@@ -47,6 +47,7 @@ use App\Http\Controllers\Api\V1\MyInformationController;
 use App\Http\Controllers\Api\V1\DeleteAccountController;
 use App\Http\Controllers\Api\V1\SearchController;
 use App\Http\Controllers\Api\V1\PollController;
+use App\Http\Controllers\Api\V1\QuestionController;
 use App\Http\Controllers\Api\V1\StoriesController;
 use App\Http\Controllers\Api\V1\NotificationsController;
 use App\Http\Controllers\Api\V1\ShareController;
@@ -330,6 +331,11 @@ Route::get('/reports/reasons', [ReportController::class, 'getReportReasons']); /
 Route::post('/polls/create', [PollController::class, 'createPoll']); // Create poll post (like insert_new_post with answer array)
 Route::post('/polls/vote', [PollController::class, 'voteUp']); // Vote on poll (like vote_up.php)
 Route::get('/polls/{postId}', [PollController::class, 'getPollDetails']); // Get poll details with percentages
+
+// Quora-style Q&A (question/answer post types)
+Route::post('/questions/create', [QuestionController::class, 'createQuestion']);
+Route::post('/questions/{id}/answers', [QuestionController::class, 'createAnswer'])->whereNumber('id');
+Route::get('/questions/{id}/answers', [QuestionController::class, 'listAnswers'])->whereNumber('id');
 
 // Stories routes (matching old API structure: requests.php?f=view_all_stories)
 // IMPORTANT: Specific routes must come before routes with parameters to avoid route conflicts

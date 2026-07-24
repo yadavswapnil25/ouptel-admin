@@ -42,6 +42,7 @@ class PostSettings extends Page
             'post_audio' => Setting::get('post_audio', true),
             'post_files' => Setting::get('post_files', true),
             'post_polls' => Setting::get('post_polls', true),
+            'post_questions' => Setting::get('post_questions', true),
             'post_events' => Setting::get('post_events', true),
             'post_funding' => Setting::get('post_funding', true),
             'post_jobs' => Setting::get('post_jobs', true),
@@ -105,6 +106,9 @@ class PostSettings extends Page
                         Toggle::make('post_polls')
                             ->label('Polls')
                             ->helperText('Allow users to create polls in their posts.'),
+                        Toggle::make('post_questions')
+                            ->label('Questions & Answers')
+                            ->helperText('Allow users to ask questions and post answers in the feed.'),
                         Toggle::make('post_events')
                             ->label('Events')
                             ->helperText('Allow users to create events in their posts.'),

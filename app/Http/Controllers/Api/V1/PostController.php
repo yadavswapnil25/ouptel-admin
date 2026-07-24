@@ -54,7 +54,7 @@ class PostController extends Controller
         $validationRules = [
             'postText' => 'nullable|string|max:5000',
             'postPrivacy' => 'required|in:0,1,2,3,4', // 0=Public, 1=Friends, 2=Only Me, 3=Custom, 4=Group
-            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif,colored,traveling,listening,watching,playing,reaction,feeling,birthday',
+            'postType' => 'nullable|in:text,photo,video,file,link,location,audio,sticker,album,poll,blog,forum,product,job,offer,funding,gif,colored,traveling,listening,watching,playing,reaction,feeling,birthday,question,answer',
             'type' => 'nullable|in:regular,gif,feeling,colored,birthday', // Post creation type
             'feeling' => 'nullable|string|max:100', // Feeling parameter for type=feeling
             'wall_post' => 'nullable|in:0,1,true,false',
@@ -330,8 +330,12 @@ class PostController extends Controller
             // Determine post type
             $postType = $this->determinePostType($request, $postPhotoPath, $postFilePath, $postRecordPath, $isVideoFile);
             
+            // Honor explicit question/answer types (dedicated Q&A flow; do not overwrite with media heuristics)
+            if ($explicitPostType && in_array($explicitPostType, ['question', 'answer'], true)) {
+                $postType = $explicitPostType;
+            }
             // If postType was explicitly provided and it's a valid activity type, use it
-            if ($explicitPostType && in_array($explicitPostType, ['traveling', 'listening', 'watching', 'playing', 'reaction', 'feeling'])) {
+            elseif ($explicitPostType && in_array($explicitPostType, ['traveling', 'listening', 'watching', 'playing', 'reaction', 'feeling'])) {
                 // Ensure the corresponding activity field is set
                 $activityFieldMap = [
                     'traveling' => 'postTraveling',
@@ -669,6 +673,11 @@ class PostController extends Controller
      */
     private function determinePostType(Request $request, ?string $postPhotoPath, ?string $postFilePath, ?string $postRecordPath, bool $isVideoFile = false): string
     {
+        $explicitType = strtolower((string) $request->input('postType', ''));
+        if (in_array($explicitType, ['question', 'answer'], true)) {
+            return $explicitType;
+        }
+
         // Check for colored post first (if color_id is provided, it's a colored post)
         $colorId = $request->input('color_id', 0);
         if ($colorId > 0) {
@@ -2169,8 +2178,11 @@ class PostController extends Controller
         $fetch = $request->input('fetch');
         $addView = (int) ($request->input('add_view', 0));
 
-        // Get post
+        // Get post (accept internal id or public post_id)
         $post = DB::table('Wo_Posts')->where('id', $postId)->first();
+        if (!$post) {
+            $post = DB::table('Wo_Posts')->where('post_id', $postId)->first();
+        }
         if (!$post) {
             return response()->json([
                 'api_status' => 400,
@@ -2180,6 +2192,7 @@ class PostController extends Controller
                 ]
             ], 404);
         }
+        $postId = (int) $post->id;
 
         // Add view if requested
         if ($addView == 1) {
@@ -2348,9 +2361,10 @@ class PostController extends Controller
             }
         }
 
-        // Get shared post info if exists
+        // Get shared post info if exists (parent_id on answer posts points at the question, not a share)
         $sharedFrom = null;
-        if ($post->parent_id) {
+        $isAnswerPost = strtolower((string) ($post->postType ?? '')) === 'answer';
+        if ($post->parent_id && !$isAnswerPost) {
             $sharedPost = DB::table('Wo_Posts')->where('id', $post->parent_id)->first();
             if ($sharedPost) {
                 $sharedUser = DB::table('Wo_Users')->where('user_id', $sharedPost->user_id)->first();
@@ -2463,6 +2477,44 @@ class PostController extends Controller
         
         // Get activity data
         $activity = $this->getActivityData($post);
+
+        // Q&A: answers for question posts
+        $answers = [];
+        $answerCount = 0;
+        if (strtolower((string) $postType) === 'question') {
+            $answerRows = DB::table('Wo_Posts')
+                ->where('parent_id', $post->id)
+                ->where('postType', 'answer')
+                ->where('active', '1')
+                ->orderByDesc('time')
+                ->limit(50)
+                ->get();
+            $answerCount = DB::table('Wo_Posts')
+                ->where('parent_id', $post->id)
+                ->where('postType', 'answer')
+                ->where('active', '1')
+                ->count();
+            foreach ($answerRows as $answerRow) {
+                $answerUser = DB::table('Wo_Users')->where('user_id', $answerRow->user_id)->first();
+                $answers[] = [
+                    'id' => $answerRow->id,
+                    'post_id' => $answerRow->post_id ?? $answerRow->id,
+                    'user_id' => $answerRow->user_id,
+                    'post_text' => $answerRow->postText ?? '',
+                    'post_type' => 'answer',
+                    'parent_id' => (int) ($answerRow->parent_id ?? 0),
+                    'time' => $answerRow->time ?? null,
+                    'created_at' => !empty($answerRow->time) ? date('c', $answerRow->time) : null,
+                    'created_at_human' => !empty($answerRow->time) ? $this->getHumanTime($answerRow->time) : null,
+                    'author' => $answerUser ? [
+                        'user_id' => $answerUser->user_id,
+                        'username' => $answerUser->username ?? 'Unknown',
+                        'name' => $answerUser->name ?? $answerUser->username ?? 'Unknown User',
+                        'avatar_url' => $answerUser->avatar ? asset('storage/' . $answerUser->avatar) : null,
+                    ] : null,
+                ];
+            }
+        }
         
         return [
             'id' => $post->id,
@@ -2541,6 +2593,8 @@ class PostController extends Controller
             'group_id' => $post->group_id ?? 0,
             'event_id' => $post->event_id ?? 0,
             'parent_id' => $post->parent_id ?? null,
+            'answer_count' => $answerCount,
+            'answers' => $answers,
             
             // Timestamps
             'created_at' => $post->time ? date('c', $post->time) : null,
