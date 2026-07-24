@@ -66,7 +66,7 @@ class BlogChannelsController extends BaseController
      * @param  array<int>  $blogIds
      * @return array<int, array{likes_count:int,likers:array,comments_count:int,commenters:array}>
      */
-    private function buildBlogEngagementMaps(array $blogIds, int $peopleLimit = 8): array
+    private function buildBlogEngagementMaps(array $blogIds, int $peopleLimit = 50): array
     {
         $maps = [];
         foreach ($blogIds as $blogId) {
@@ -433,7 +433,8 @@ class BlogChannelsController extends BaseController
         $pageArticles = $paginator->getCollection();
         $engagementMaps = $isOwner
             ? $this->buildBlogEngagementMaps(
-                $pageArticles->pluck('id')->map(fn ($id) => (int) $id)->all()
+                $pageArticles->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                50
             )
             : [];
 
