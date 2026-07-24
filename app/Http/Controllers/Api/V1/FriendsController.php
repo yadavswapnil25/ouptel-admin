@@ -116,6 +116,11 @@ class FriendsController extends Controller
                         ->sortBy(fn ($f) => strtolower($this->getUserName($f)))
                         ->values();
 
+                    $friendStatsMap = $this->buildFriendCardStatsMap(
+                        $friendsData->all(),
+                        array_map('strval', $paginatedFriendIds)
+                    );
+
                     foreach ($friendsData as $friend) {
                         $mutualFriendsCount = 0;
                         $isFollowing = false;
@@ -165,6 +170,11 @@ class FriendsController extends Controller
                             'is_following_me' => $isFollowingMe,
                             'is_friend' => true,
                             'mutual_friends_count' => $mutualFriendsCount,
+                            'friends_count' => (int) ($friendStatsMap[(string) $friend->user_id]['friends_count'] ?? 0),
+                            'videos_count' => (int) ($friendStatsMap[(string) $friend->user_id]['videos_count'] ?? 0),
+                            'photos_count' => (int) ($friendStatsMap[(string) $friend->user_id]['photos_count'] ?? 0),
+                            'post_count' => (int) ($friendStatsMap[(string) $friend->user_id]['post_count'] ?? 0),
+                            'since' => $friendStatsMap[(string) $friend->user_id]['since'] ?? null,
                             'lastseen' => $friend->lastseen ?? time(),
                             'lastseen_time_text' => $this->getTimeElapsedString($friend->lastseen ?? time()),
                         ];
@@ -258,6 +268,142 @@ class FriendsController extends Controller
         }
 
         return [];
+    }
+
+    /**
+     * Batch card stats for friends list (friends/videos/photos/posts/since).
+     *
+     * @param  list<object>  $users
+     * @param  list<string>  $userIds
+     * @return array<string, array{friends_count:int,videos_count:int,photos_count:int,post_count:int,since:?string}>
+     */
+    private function buildFriendCardStatsMap(array $users, array $userIds): array
+    {
+        $map = [];
+        foreach ($userIds as $id) {
+            $map[$id] = [
+                'friends_count' => 0,
+                'videos_count' => 0,
+                'photos_count' => 0,
+                'post_count' => 0,
+                'since' => null,
+            ];
+        }
+
+        if ($userIds === []) {
+            return $map;
+        }
+
+        foreach ($users as $user) {
+            $uid = (string) ($user->user_id ?? '');
+            if ($uid === '' || ! isset($map[$uid])) {
+                continue;
+            }
+            $registeredAt = $this->resolveFriendRegistrationTimestamp($user);
+            $map[$uid]['since'] = $registeredAt ? date('F, Y', $registeredAt) : null;
+        }
+
+        foreach ($userIds as $id) {
+            $map[$id]['friends_count'] = count($this->getAcceptedWoFriendsPartnerIds($id));
+        }
+
+        if (Schema::hasTable('Wo_Posts')) {
+            $postCounts = DB::table('Wo_Posts')
+                ->select('user_id', DB::raw('COUNT(*) as total'))
+                ->whereIn('user_id', $userIds)
+                ->where(function ($q) {
+                    $q->where('active', 1)->orWhere('active', '1');
+                })
+                ->groupBy('user_id')
+                ->pluck('total', 'user_id');
+
+            foreach ($postCounts as $uid => $total) {
+                $key = (string) $uid;
+                if (isset($map[$key])) {
+                    $map[$key]['post_count'] = (int) $total;
+                }
+            }
+
+            $videoQuery = DB::table('Wo_Posts')
+                ->select('user_id', DB::raw('COUNT(*) as total'))
+                ->whereIn('user_id', $userIds)
+                ->where(function ($q) {
+                    $q->where('active', 1)->orWhere('active', '1');
+                })
+                ->where(function ($q) {
+                    $q->where('postType', 'video');
+                    if (Schema::hasColumn('Wo_Posts', 'postYoutube')) {
+                        $q->orWhere(function ($q2) {
+                            $q2->whereNotNull('postYoutube')->where('postYoutube', '!=', '');
+                        });
+                    }
+                    if (Schema::hasColumn('Wo_Posts', 'postVimeo')) {
+                        $q->orWhere(function ($q2) {
+                            $q2->whereNotNull('postVimeo')->where('postVimeo', '!=', '');
+                        });
+                    }
+                })
+                ->groupBy('user_id')
+                ->pluck('total', 'user_id');
+
+            foreach ($videoQuery as $uid => $total) {
+                $key = (string) $uid;
+                if (isset($map[$key])) {
+                    $map[$key]['videos_count'] = (int) $total;
+                }
+            }
+
+            $photoQuery = DB::table('Wo_Posts')
+                ->select('user_id', DB::raw('COUNT(*) as total'))
+                ->whereIn('user_id', $userIds)
+                ->where(function ($q) {
+                    $q->where('active', 1)->orWhere('active', '1');
+                })
+                ->where(function ($q) {
+                    $q->where(function ($q2) {
+                        $q2->whereNotNull('postPhoto')->where('postPhoto', '!=', '');
+                    })->orWhere(function ($q2) {
+                        $q2->whereNotNull('album_name')->where('album_name', '!=', '');
+                    })->orWhereIn('postType', ['photo', 'image', 'profile_picture', 'profile_cover_picture', 'album']);
+                })
+                ->groupBy('user_id')
+                ->pluck('total', 'user_id');
+
+            foreach ($photoQuery as $uid => $total) {
+                $key = (string) $uid;
+                if (isset($map[$key])) {
+                    $map[$key]['photos_count'] = (int) $total;
+                }
+            }
+        }
+
+        return $map;
+    }
+
+    private function resolveFriendRegistrationTimestamp(object $user): ?int
+    {
+        foreach (['joined', 'time'] as $field) {
+            $raw = $user->{$field} ?? null;
+            if ($raw !== null && $raw !== '' && $raw !== '0' && $raw !== 0 && is_numeric($raw)) {
+                $ts = (int) $raw;
+                if ($ts > 0) {
+                    return $ts < 10000000000 ? $ts : (int) floor($ts / 1000);
+                }
+            }
+        }
+
+        $registered = trim((string) ($user->registered ?? ''));
+        if ($registered !== '' && ! in_array($registered, ['0/0000', '0/0'], true)) {
+            if (preg_match('/^(\d{1,2})\/(\d{4})$/', $registered, $matches)) {
+                $month = (int) $matches[1];
+                $year = (int) $matches[2];
+                if ($month >= 1 && $month <= 12 && $year >= 1970 && $year <= 2100) {
+                    return mktime(0, 0, 0, $month, 1, $year);
+                }
+            }
+        }
+
+        return null;
     }
 
     public function search(Request $request): JsonResponse
