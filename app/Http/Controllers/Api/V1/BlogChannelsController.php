@@ -205,6 +205,61 @@ class BlogChannelsController extends BaseController
                 ];
             });
 
+        // Top blogs by views for performance chart
+        $topBlogs = Article::query()
+            ->where('channel_id', $channel->id)
+            ->where('active', '1')
+            ->orderByDesc('view')
+            ->limit(8)
+            ->get()
+            ->map(function (Article $article) {
+                $title = (string) ($article->title ?? 'Untitled');
+                if (mb_strlen($title) > 28) {
+                    $title = mb_substr($title, 0, 28) . '…';
+                }
+                return [
+                    'id' => $article->id,
+                    'title' => $title,
+                    'views' => (int) ($article->view ?? 0),
+                    'comments' => (int) ($article->comments_count ?? 0),
+                ];
+            })
+            ->values()
+            ->all();
+
+        // Monthly publish + views trend (last 6 months, based on posted timestamp)
+        $monthlyMap = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $monthStart = strtotime(date('Y-m-01', strtotime("-{$i} months")));
+            $key = date('Y-m', $monthStart);
+            $monthlyMap[$key] = [
+                'month' => date('M Y', $monthStart),
+                'key' => $key,
+                'blogs' => 0,
+                'views' => 0,
+            ];
+        }
+
+        $allChannelBlogs = Article::query()
+            ->where('channel_id', $channel->id)
+            ->where('active', '1')
+            ->get(['id', 'posted', 'view']);
+
+        foreach ($allChannelBlogs as $article) {
+            $posted = (int) ($article->posted ?? 0);
+            if ($posted <= 0) {
+                continue;
+            }
+            $key = date('Y-m', $posted);
+            if (!isset($monthlyMap[$key])) {
+                continue;
+            }
+            $monthlyMap[$key]['blogs'] += 1;
+            $monthlyMap[$key]['views'] += (int) ($article->view ?? 0);
+        }
+
+        $monthlyActivity = array_values($monthlyMap);
+
         return response()->json([
             'ok' => true,
             'data' => [
@@ -214,6 +269,16 @@ class BlogChannelsController extends BaseController
                     'blogs_count' => $channel->blogs_count,
                     'total_views' => $totalViews,
                     'total_comments' => $totalComments,
+                ],
+                'charts' => [
+                    'overview' => [
+                        ['name' => 'Followers', 'value' => (int) $channel->followers_count],
+                        ['name' => 'Blogs', 'value' => (int) $channel->blogs_count],
+                        ['name' => 'Views', 'value' => $totalViews],
+                        ['name' => 'Comments', 'value' => $totalComments],
+                    ],
+                    'blog_performance' => $topBlogs,
+                    'monthly_activity' => $monthlyActivity,
                 ],
                 'recent_blogs' => $recentBlogs,
             ],
