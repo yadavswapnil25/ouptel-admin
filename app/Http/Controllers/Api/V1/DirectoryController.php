@@ -36,7 +36,7 @@ class DirectoryController extends BaseController
                     'username' => $page->page_name,
                     'avatar_url' => $page->avatar,
                     'cover_url' => \App\Helpers\ImageHelper::getCoverUrl($page->cover ?? ''),
-                    'verified' => (bool) $page->verified,
+                    'verified' => $page->verified === true || $page->verified === 1 || $page->verified === '1',
                     'category' => $page->page_category,
                     'url' => $page->url,
                 ];

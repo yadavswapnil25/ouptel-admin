@@ -277,10 +277,16 @@ class SearchController extends Controller
             }
 
             if ($verified === 'verified') {
-                $usersQuery->where('verified', '1');
+                $usersQuery->where(function ($q) {
+                    $q->where('verified', '1')->orWhere('verified', 1);
+                });
             } elseif ($verified === 'unverified') {
                 $usersQuery->where(function ($q) {
-                    $q->whereNull('verified')->orWhere('verified', '!=', '1');
+                    $q->whereNull('verified')
+                      ->orWhere(function ($inner) {
+                          $inner->where('verified', '!=', '1')
+                                ->where('verified', '!=', 1);
+                      });
                 });
             }
 
@@ -330,12 +336,17 @@ class SearchController extends Controller
 
             $formattedUsers = $users->map(function ($u) {
                 $name = trim(($u->first_name ?? '') . ' ' . ($u->last_name ?? '')) ?: $u->username;
+                $verifiedRaw = $u->verified ?? null;
+                $isVerified = $verifiedRaw === true
+                    || $verifiedRaw === 1
+                    || $verifiedRaw === '1'
+                    || (is_string($verifiedRaw) && strtolower($verifiedRaw) === 'yes');
                 return [
                     'user_id' => $u->user_id,
                     'username' => $u->username,
                     'name' => $name,
                     'avatar_url' => $u->avatar ? asset('storage/' . $u->avatar) : null,
-                    'verified' => ($u->verified === '1'),
+                    'verified' => $isVerified,
                     'is_online' => $u->lastseen && $u->lastseen > (time() - 60),
                     'profile_url' => url('/user/' . $u->username),
                 ];
@@ -368,7 +379,7 @@ class SearchController extends Controller
                             'name' => $p->page_title ?? $p->page_name,
                             'slug' => $p->page_name,
                             'avatar_url' => $p->avatar ? asset('storage/' . $p->avatar) : null,
-                            'verified' => ($p->verified === '1'),
+                    'verified' => ($p->verified === true || $p->verified === 1 || $p->verified === '1'),
                         ];
                     })
                     ->toArray();
