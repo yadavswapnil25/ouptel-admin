@@ -12,13 +12,14 @@ return new class extends Migration
             return;
         }
 
+        if (Schema::hasColumn('Wo_Verification_Requests', 'video_challenge_code')) {
+            return;
+        }
+
         Schema::table('Wo_Verification_Requests', function (Blueprint $table) {
-            if (!Schema::hasColumn('Wo_Verification_Requests', 'video_challenge_code')) {
-                $table->string('video_challenge_code', 20)
-                    ->nullable()
-                    ->after('video_uploaded_at')
-                    ->comment('Random number user must speak during verification video');
-            }
+            $table->string('video_challenge_code', 20)
+                ->nullable()
+                ->comment('Random number user must speak during verification video');
         });
     }
 
