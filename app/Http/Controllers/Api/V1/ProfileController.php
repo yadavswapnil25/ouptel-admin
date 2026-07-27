@@ -1824,6 +1824,16 @@ class ProfileController extends Controller
                     ];
                 }
             }
+
+            $taggedFriends = $this->extractTaggedFriendsFromText((string) ($post->postText ?? ''));
+            $rawPostType = strtolower((string) ($post->postType ?? ''));
+            $rawPostFeeling = strtolower((string) ($post->postFeeling ?? ''));
+            $isBirthdayWish = $rawPostType === 'birthday' || $rawPostFeeling === 'birthday';
+            $isWallPost = !empty($post->recipient_id) && (int) $post->recipient_id > 0
+                && ($rawPostFeeling === 'wall_post' || $isBirthdayWish);
+            if (empty($taggedFriends) && $recipient && !$isWallPost) {
+                $taggedFriends = [$recipient];
+            }
             
             // Get album images if it's an album post (match new-feed format)
             $albumImages = [];
@@ -1883,6 +1893,8 @@ class ProfileController extends Controller
                 'user_id' => $post->user_id,
                 'recipient_id' => (int) ($post->recipient_id ?? 0),
                 'recipient' => $recipient,
+                'tagged_friends' => $taggedFriends,
+                'tagged_friends_count' => count($taggedFriends),
                 'postFeeling' => $post->postFeeling ?? '',
                 'post_feeling' => $post->postFeeling ?? '',
                 'user' => $authorPayload,
@@ -1943,6 +1955,62 @@ class ProfileController extends Controller
                 'blog_id' => !empty($post->blog_id) ? (int) $post->blog_id : null,
                 'blog' => $this->getBlogDataForPost($post),
             ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * Extract @username mentions from post text (same as home newsfeed).
+     *
+     * @param string $text
+     * @return array<int, array<string, mixed>>
+     */
+    private function extractTaggedFriendsFromText(string $text): array
+    {
+        if ($text === '') {
+            return [];
+        }
+        if (!preg_match_all('/@([A-Za-z0-9_.]+)/', $text, $matches)) {
+            return [];
+        }
+        $usernames = array_values(array_unique(array_filter($matches[1] ?? [])));
+        if (empty($usernames)) {
+            return [];
+        }
+
+        $selectColumns = ['user_id', 'username', 'first_name', 'last_name', 'avatar'];
+        $users = DB::table('Wo_Users')
+            ->whereIn('username', $usernames)
+            ->get($selectColumns);
+
+        if ($users->isEmpty()) {
+            return [];
+        }
+
+        $usersByUsername = [];
+        foreach ($users as $u) {
+            $usersByUsername[strtolower((string) $u->username)] = $u;
+        }
+
+        $result = [];
+        foreach ($usernames as $uname) {
+            $u = $usersByUsername[strtolower((string) $uname)] ?? null;
+            if (!$u) {
+                continue;
+            }
+            $displayName = trim(($u->first_name ?? '') . ' ' . ($u->last_name ?? ''));
+            $result[] = [
+                'user_id' => (int) $u->user_id,
+                'username' => $u->username ?? '',
+                'name' => $displayName !== '' ? $displayName : ($u->username ?? 'User'),
+                'first_name' => $u->first_name ?? '',
+                'last_name' => $u->last_name ?? '',
+                'avatar_url' => ($u->avatar ?? '') ? asset('storage/' . $u->avatar) : null,
+            ];
+            if (count($result) >= 8) {
+                break;
+            }
         }
 
         return $result;
