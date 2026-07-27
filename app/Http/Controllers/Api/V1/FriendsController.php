@@ -53,6 +53,26 @@ class FriendsController extends Controller
                 ], 404);
             }
 
+            $viewerId = (string) $tokenUserId;
+            $isOwnList = $viewerId === (string) $subjectUserId;
+            if (! $isOwnList && ! $this->canViewerSeeFriendList($viewerId, (string) $subjectUserId)) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'This user\'s friend list is private.',
+                    'can_view_friends' => false,
+                    'data' => [],
+                    'meta' => [
+                        'current_page' => $page,
+                        'per_page' => $perPage,
+                        'total' => 0,
+                        'last_page' => 1,
+                        'from' => 0,
+                        'to' => 0,
+                        'has_more' => false,
+                    ],
+                ], 403);
+            }
+
             $friendIds = [];
 
             if (Schema::hasTable('Wo_Followers')) {
@@ -2169,6 +2189,36 @@ class FriendsController extends Controller
         }
 
         return false;
+    }
+
+    /**
+     * Friend list privacy: 0 = Everyone, 1 = My Friends, 2 = Nobody.
+     */
+    private function canViewerSeeFriendList(string $viewerId, string $ownerId): bool
+    {
+        if ($viewerId === '' || $ownerId === '') {
+            return false;
+        }
+
+        if ($viewerId === $ownerId) {
+            return true;
+        }
+
+        if (! Schema::hasColumn('Wo_Users', 'friend_privacy')) {
+            return true;
+        }
+
+        $friendPrivacy = (string) (DB::table('Wo_Users')->where('user_id', $ownerId)->value('friend_privacy') ?? '0');
+
+        if ($friendPrivacy === '2') {
+            return false;
+        }
+
+        if ($friendPrivacy === '1') {
+            return $this->isFriend($viewerId, $ownerId);
+        }
+
+        return true;
     }
 
     /**

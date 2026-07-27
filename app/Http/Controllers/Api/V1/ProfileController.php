@@ -327,6 +327,17 @@ class ProfileController extends Controller
         // Check if users are friends
         $userData['is_friend'] = $this->isFriend($user->user_id, $loggedUserId) ? 1 : 0;
 
+        // Who can see friend list: 0 = Everyone, 1 = My Friends, 2 = Nobody
+        $isOwner = ((string) $user->user_id === (string) $loggedUserId);
+        $friendPrivacy = Schema::hasColumn('Wo_Users', 'friend_privacy')
+            ? (string) ($user->friend_privacy ?? '0')
+            : '0';
+        $canViewFriends = $isOwner
+            || $friendPrivacy === '0'
+            || ($friendPrivacy === '1' && (int) $userData['is_friend'] === 1);
+        $userData['friend_privacy'] = $friendPrivacy;
+        $userData['can_view_friends'] = $canViewFriends ? 1 : 0;
+
         // Friend request sent — Wo_Friends pending and/or friend_request notification
         if (
             $this->hasOutgoingFriendTablePending((string) $loggedUserId, (string) $user->user_id)
@@ -2019,6 +2030,18 @@ class ProfileController extends Controller
             'verified' => (bool) ($user->verified ?? false),
             'is_following' => $isFollowing ? 1 : 0,
             'is_owner' => $isOwner ? 1 : 0,
+            'friend_privacy' => Schema::hasColumn('Wo_Users', 'friend_privacy')
+                ? (string) ($user->friend_privacy ?? '0')
+                : '0',
+            'can_view_friends' => (
+                $isOwner
+                || !Schema::hasColumn('Wo_Users', 'friend_privacy')
+                || (string) ($user->friend_privacy ?? '0') === '0'
+                || (
+                    (string) ($user->friend_privacy ?? '0') === '1'
+                    && $this->isFriend($user->user_id, $loggedUserId)
+                )
+            ) ? 1 : 0,
             'post_count' => $postCount,
             'created_at' => $registeredAt ? date('c', $registeredAt) : null,
             'joined_at' => $registeredAt,

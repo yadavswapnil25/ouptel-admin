@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class PrivacyController extends Controller
@@ -62,21 +63,26 @@ class PrivacyController extends Controller
                 ], 404);
             }
 
+            $select = [
+                'message_privacy',
+                'follow_privacy',
+                'birth_privacy',
+                'status',
+                'visit_privacy',
+                'post_privacy',
+                'confirm_followers',
+                'show_activities_privacy',
+                'share_my_location',
+                'share_my_data',
+            ];
+            if (Schema::hasColumn('Wo_Users', 'friend_privacy')) {
+                $select[] = 'friend_privacy';
+            }
+
             // Get privacy settings from database
             $privacySettings = DB::table('Wo_Users')
                 ->where('user_id', $tokenUserId)
-                ->select(
-                    'message_privacy',
-                    'follow_privacy',
-                    'birth_privacy',
-                    'status',
-                    'visit_privacy',
-                    'post_privacy',
-                    'confirm_followers',
-                    'show_activities_privacy',
-                    'share_my_location',
-                    'share_my_data'
-                )
+                ->select($select)
                 ->first();
 
             if (!$privacySettings) {
@@ -95,6 +101,7 @@ class PrivacyController extends Controller
             $settings = [
                 'message_privacy' => (string) ($privacySettings->message_privacy ?? '0'),
                 'follow_privacy' => (string) ($privacySettings->follow_privacy ?? '0'),
+                'friend_privacy' => (string) ($privacySettings->friend_privacy ?? '0'),
                 'birth_privacy' => (string) ($privacySettings->birth_privacy ?? '0'),
                 'status' => (string) ($privacySettings->status ?? '0'),
                 'visit_privacy' => (string) ($privacySettings->visit_privacy ?? '0'),
@@ -108,6 +115,7 @@ class PrivacyController extends Controller
             // Add human-readable labels
             $settings['message_privacy_text'] = $this->getMessagePrivacyText($settings['message_privacy']);
             $settings['follow_privacy_text'] = $this->getFollowPrivacyText($settings['follow_privacy']);
+            $settings['friend_privacy_text'] = $this->getFriendPrivacyText($settings['friend_privacy']);
             $settings['birth_privacy_text'] = $this->getBirthPrivacyText($settings['birth_privacy']);
             $settings['status_text'] = $settings['status'] === '1' ? 'Online' : 'Offline';
             $settings['visit_privacy_text'] = $settings['visit_privacy'] === '1' ? 'Hidden' : 'Visible';
@@ -170,10 +178,11 @@ class PrivacyController extends Controller
 
         // Validate input
         $validator = Validator::make($request->all(), [
-            'message_privacy' => 'nullable|in:0,1',
-            'follow_privacy' => 'nullable|in:0,1',
+            'message_privacy' => 'nullable|in:0,1,2,3',
+            'follow_privacy' => 'nullable|in:0,1,2,3',
+            'friend_privacy' => 'nullable|in:0,1,2',
             'birth_privacy' => 'nullable|in:0,1,2',
-            'status' => 'nullable|in:0,1',
+            'status' => 'nullable|in:0,1,2,3',
             'visit_privacy' => 'nullable|in:0,1',
             'post_privacy' => 'nullable|string',
             'confirm_followers' => 'nullable|in:0,1',
@@ -215,6 +224,11 @@ class PrivacyController extends Controller
             // Follow Privacy: 0 = Everyone can follow, 1 = No one can follow
             if ($request->has('follow_privacy')) {
                 $updateData['follow_privacy'] = $request->input('follow_privacy');
+            }
+
+            // Friend list Privacy: 0 = Everyone, 1 = My Friends, 2 = Nobody
+            if ($request->has('friend_privacy') && Schema::hasColumn('Wo_Users', 'friend_privacy')) {
+                $updateData['friend_privacy'] = $request->input('friend_privacy');
             }
 
             // Birth Privacy: 0 = Everyone, 1 = Friends, 2 = Only Me
@@ -272,21 +286,26 @@ class PrivacyController extends Controller
             // Update privacy settings
             DB::table('Wo_Users')->where('user_id', $tokenUserId)->update($updateData);
 
+            $select = [
+                'message_privacy',
+                'follow_privacy',
+                'birth_privacy',
+                'status',
+                'visit_privacy',
+                'post_privacy',
+                'confirm_followers',
+                'show_activities_privacy',
+                'share_my_location',
+                'share_my_data',
+            ];
+            if (Schema::hasColumn('Wo_Users', 'friend_privacy')) {
+                $select[] = 'friend_privacy';
+            }
+
             // Get updated settings
             $updatedSettings = DB::table('Wo_Users')
                 ->where('user_id', $tokenUserId)
-                ->select(
-                    'message_privacy',
-                    'follow_privacy',
-                    'birth_privacy',
-                    'status',
-                    'visit_privacy',
-                    'post_privacy',
-                    'confirm_followers',
-                    'show_activities_privacy',
-                    'share_my_location',
-                    'share_my_data'
-                )
+                ->select($select)
                 ->first();
 
             return response()->json([
@@ -297,6 +316,7 @@ class PrivacyController extends Controller
                 'privacy_settings' => [
                     'message_privacy' => (string) ($updatedSettings->message_privacy ?? '0'),
                     'follow_privacy' => (string) ($updatedSettings->follow_privacy ?? '0'),
+                    'friend_privacy' => (string) ($updatedSettings->friend_privacy ?? '0'),
                     'birth_privacy' => (string) ($updatedSettings->birth_privacy ?? '0'),
                     'status' => (string) ($updatedSettings->status ?? '0'),
                     'visit_privacy' => (string) ($updatedSettings->visit_privacy ?? '0'),
@@ -354,6 +374,19 @@ class PrivacyController extends Controller
             '0' => 'Everyone',
             '1' => 'Friends Only',
             '2' => 'Only Me',
+            default => 'Everyone'
+        };
+    }
+
+    /**
+     * Get friend list privacy text
+     */
+    private function getFriendPrivacyText(string $value): string
+    {
+        return match($value) {
+            '0' => 'Everyone',
+            '1' => 'My Friends',
+            '2' => 'Nobody',
             default => 'Everyone'
         };
     }
