@@ -820,6 +820,18 @@ class FriendsController extends Controller
             ! $this->isFriend($fromId, $toId)
             && ! $this->hasPendingFriendRequestFrom($fromId, $toId)
         ) {
+            $ageGroupCheck = $this->validateFriendRequestAgeGroup($fromId, $toId);
+            if (! $ageGroupCheck['ok']) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 8,
+                        'error_text' => $ageGroupCheck['message'],
+                    ],
+                    'message' => $ageGroupCheck['message'],
+                ], 422);
+            }
+
             $preferenceCheck = $this->validateSharedCommunityPreferences($fromId, $toId);
             if (! $preferenceCheck['ok']) {
                 return response()->json([
@@ -1989,6 +2001,105 @@ class FriendsController extends Controller
             ->get();
 
         return $suggested;
+    }
+
+    /**
+     * @return array{ok: bool, message: string}
+     */
+    private function validateFriendRequestAgeGroup(string $senderId, string $recipientId): array
+    {
+        if (! Schema::hasColumn('Wo_Users', 'friend_request_age_group')) {
+            return ['ok' => true, 'message' => ''];
+        }
+
+        $setting = (string) (DB::table('Wo_Users')
+            ->where('user_id', $recipientId)
+            ->value('friend_request_age_group') ?? 'all');
+
+        $setting = trim($setting);
+        if ($setting === '' || $setting === 'all') {
+            return ['ok' => true, 'message' => ''];
+        }
+
+        if ($setting === 'nobody') {
+            return [
+                'ok' => false,
+                'message' => 'This user is not accepting friend requests.',
+            ];
+        }
+
+        $senderAge = $this->getUserAgeFromBirthday($senderId);
+        if ($senderAge === null) {
+            return [
+                'ok' => false,
+                'message' => 'Add your date of birth in profile settings before sending a friend request to this user.',
+            ];
+        }
+
+        if (! $this->ageMatchesFriendRequestGroup($senderAge, $setting)) {
+            $label = $this->friendRequestAgeGroupLabel($setting);
+
+            return [
+                'ok' => false,
+                'message' => "This user only accepts friend requests from the {$label} age group.",
+            ];
+        }
+
+        return ['ok' => true, 'message' => ''];
+    }
+
+    private function getUserAgeFromBirthday(string $userId): ?int
+    {
+        if (! Schema::hasColumn('Wo_Users', 'birthday')) {
+            return null;
+        }
+
+        $birthdayRaw = DB::table('Wo_Users')->where('user_id', $userId)->value('birthday');
+        $birthdayRaw = is_string($birthdayRaw) ? trim($birthdayRaw) : '';
+        if ($birthdayRaw === '' || $birthdayRaw === '0000-00-00') {
+            return null;
+        }
+
+        try {
+            $birthDate = \Carbon\Carbon::parse($birthdayRaw)->startOfDay();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        if ($birthDate->isFuture()) {
+            return null;
+        }
+
+        return max(0, $birthDate->age);
+    }
+
+    private function ageMatchesFriendRequestGroup(int $age, string $group): bool
+    {
+        return match ($group) {
+            '0_17' => $age >= 0 && $age <= 17,
+            '18_24' => $age >= 18 && $age <= 24,
+            '25_34' => $age >= 25 && $age <= 34,
+            '35_44' => $age >= 35 && $age <= 44,
+            '45_54' => $age >= 45 && $age <= 54,
+            '55_64' => $age >= 55 && $age <= 64,
+            '65_plus' => $age >= 65,
+            default => true,
+        };
+    }
+
+    private function friendRequestAgeGroupLabel(string $group): string
+    {
+        return match ($group) {
+            '0_17' => 'Under 18',
+            '18_24' => '18–24',
+            '25_34' => '25–34',
+            '35_44' => '35–44',
+            '45_54' => '45–54',
+            '55_64' => '55–64',
+            '65_plus' => '65+',
+            'nobody' => 'Nobody',
+            default => 'Everyone (all ages)',
+        };
     }
 
     /**

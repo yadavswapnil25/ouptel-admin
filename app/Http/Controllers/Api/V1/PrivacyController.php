@@ -78,6 +78,9 @@ class PrivacyController extends Controller
             if (Schema::hasColumn('Wo_Users', 'friend_privacy')) {
                 $select[] = 'friend_privacy';
             }
+            if (Schema::hasColumn('Wo_Users', 'friend_request_age_group')) {
+                $select[] = 'friend_request_age_group';
+            }
 
             // Get privacy settings from database
             $privacySettings = DB::table('Wo_Users')
@@ -102,6 +105,7 @@ class PrivacyController extends Controller
                 'message_privacy' => (string) ($privacySettings->message_privacy ?? '0'),
                 'follow_privacy' => (string) ($privacySettings->follow_privacy ?? '0'),
                 'friend_privacy' => (string) ($privacySettings->friend_privacy ?? '0'),
+                'friend_request_age_group' => (string) ($privacySettings->friend_request_age_group ?? 'all'),
                 'birth_privacy' => (string) ($privacySettings->birth_privacy ?? '0'),
                 'status' => (string) ($privacySettings->status ?? '0'),
                 'visit_privacy' => (string) ($privacySettings->visit_privacy ?? '0'),
@@ -116,6 +120,7 @@ class PrivacyController extends Controller
             $settings['message_privacy_text'] = $this->getMessagePrivacyText($settings['message_privacy']);
             $settings['follow_privacy_text'] = $this->getFollowPrivacyText($settings['follow_privacy']);
             $settings['friend_privacy_text'] = $this->getFriendPrivacyText($settings['friend_privacy']);
+            $settings['friend_request_age_group_text'] = $this->getFriendRequestAgeGroupText($settings['friend_request_age_group']);
             $settings['birth_privacy_text'] = $this->getBirthPrivacyText($settings['birth_privacy']);
             $settings['status_text'] = $settings['status'] === '1' ? 'Online' : 'Offline';
             $settings['visit_privacy_text'] = $settings['visit_privacy'] === '1' ? 'Hidden' : 'Visible';
@@ -181,6 +186,7 @@ class PrivacyController extends Controller
             'message_privacy' => 'nullable|in:0,1,2,3',
             'follow_privacy' => 'nullable|in:0,1,2,3',
             'friend_privacy' => 'nullable|in:0,1,2',
+            'friend_request_age_group' => 'nullable|in:all,0_17,18_24,25_34,35_44,45_54,55_64,65_plus,nobody',
             'birth_privacy' => 'nullable|in:0,1,2',
             'status' => 'nullable|in:0,1,2,3',
             'visit_privacy' => 'nullable|in:0,1',
@@ -229,6 +235,11 @@ class PrivacyController extends Controller
             // Friend list Privacy: 0 = Everyone, 1 = My Friends, 2 = Nobody
             if ($request->has('friend_privacy') && Schema::hasColumn('Wo_Users', 'friend_privacy')) {
                 $updateData['friend_privacy'] = $request->input('friend_privacy');
+            }
+
+            // Who can send friend requests by age group
+            if ($request->has('friend_request_age_group') && Schema::hasColumn('Wo_Users', 'friend_request_age_group')) {
+                $updateData['friend_request_age_group'] = $request->input('friend_request_age_group');
             }
 
             // Birth Privacy: 0 = Everyone, 1 = Friends, 2 = Only Me
@@ -301,6 +312,9 @@ class PrivacyController extends Controller
             if (Schema::hasColumn('Wo_Users', 'friend_privacy')) {
                 $select[] = 'friend_privacy';
             }
+            if (Schema::hasColumn('Wo_Users', 'friend_request_age_group')) {
+                $select[] = 'friend_request_age_group';
+            }
 
             // Get updated settings
             $updatedSettings = DB::table('Wo_Users')
@@ -317,6 +331,7 @@ class PrivacyController extends Controller
                     'message_privacy' => (string) ($updatedSettings->message_privacy ?? '0'),
                     'follow_privacy' => (string) ($updatedSettings->follow_privacy ?? '0'),
                     'friend_privacy' => (string) ($updatedSettings->friend_privacy ?? '0'),
+                    'friend_request_age_group' => (string) ($updatedSettings->friend_request_age_group ?? 'all'),
                     'birth_privacy' => (string) ($updatedSettings->birth_privacy ?? '0'),
                     'status' => (string) ($updatedSettings->status ?? '0'),
                     'visit_privacy' => (string) ($updatedSettings->visit_privacy ?? '0'),
@@ -388,6 +403,25 @@ class PrivacyController extends Controller
             '1' => 'My Friends',
             '2' => 'Nobody',
             default => 'Everyone'
+        };
+    }
+
+    /**
+     * Who can send friend requests by age group
+     */
+    private function getFriendRequestAgeGroupText(string $value): string
+    {
+        return match ($value) {
+            'all' => 'Everyone (all ages)',
+            '0_17' => 'Under 18',
+            '18_24' => '18–24',
+            '25_34' => '25–34',
+            '35_44' => '35–44',
+            '45_54' => '45–54',
+            '55_64' => '55–64',
+            '65_plus' => '65+',
+            'nobody' => 'Nobody',
+            default => 'Everyone (all ages)',
         };
     }
 }
