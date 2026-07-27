@@ -962,6 +962,95 @@ class GroupsController extends BaseController
     }
 
     /**
+     * Invite users to join a group (notification only; no auto-join).
+     */
+    public function inviteMembers(Request $request, $id): JsonResponse
+    {
+        $tokenUserId = $this->resolveUserId($request);
+        if (!$tokenUserId) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $validated = $request->validate([
+            'user_ids' => ['required', 'array', 'min:1', 'max:20'],
+            'user_ids.*' => ['integer', 'distinct'],
+        ]);
+
+        $group = Group::find($id);
+        if (!$group || !$this->isGroupActiveForUser($group, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'Group not found'], 404);
+        }
+
+        if (!$this->canInviteToGroup($group, $tokenUserId)) {
+            return response()->json(['ok' => false, 'message' => 'You must be an active member to invite people'], 403);
+        }
+
+        $groupId = (int) $group->id;
+        $ownerId = (string) $group->user_id;
+        $invited = [];
+        $skipped = [];
+
+        foreach ($validated['user_ids'] as $targetUserId) {
+            $targetId = (string) $targetUserId;
+
+            if ($targetId === $tokenUserId) {
+                $skipped[] = ['user_id' => $targetId, 'reason' => 'self'];
+                continue;
+            }
+
+            if ($targetId === $ownerId) {
+                $skipped[] = ['user_id' => $targetId, 'reason' => 'group_owner'];
+                continue;
+            }
+
+            $targetUser = DB::table('Wo_Users')
+                ->where('user_id', $targetId)
+                ->where('active', '1')
+                ->first();
+
+            if (!$targetUser) {
+                $skipped[] = ['user_id' => $targetId, 'reason' => 'invalid_user'];
+                continue;
+            }
+
+            if ($this->isUserBlocked($tokenUserId, $targetId)) {
+                $skipped[] = ['user_id' => $targetId, 'reason' => 'blocked'];
+                continue;
+            }
+
+            if ($this->isActiveMember($groupId, $targetId) || $this->isGroupOwner($group, $targetId)) {
+                $skipped[] = ['user_id' => $targetId, 'reason' => 'already_member'];
+                continue;
+            }
+
+            if ($this->hasPendingJoinRequest($groupId, $targetId)) {
+                $skipped[] = ['user_id' => $targetId, 'reason' => 'pending_request'];
+                continue;
+            }
+
+            if ($this->sendGroupInviteNotification($tokenUserId, $targetId, $groupId)) {
+                $invited[] = $targetId;
+            } else {
+                $skipped[] = ['user_id' => $targetId, 'reason' => 'already_invited'];
+            }
+        }
+
+        $count = count($invited);
+        $message = $count === 1
+            ? '1 invite sent'
+            : "{$count} invite(s) sent";
+
+        return response()->json([
+            'ok' => true,
+            'message' => $message,
+            'data' => [
+                'invited' => $invited,
+                'skipped' => $skipped,
+            ],
+        ]);
+    }
+
+    /**
      * Update group settings (owner or admin).
      */
     public function update(Request $request, $id): JsonResponse
@@ -1130,6 +1219,91 @@ class GroupsController extends BaseController
     {
         return $this->isGroupOwner($group, $userId)
             || $this->isGroupAdmin((int) $group->id, $userId);
+    }
+
+    private function canInviteToGroup(Group $group, ?string $userId): bool
+    {
+        return $this->isGroupOwner($group, $userId)
+            || $this->isActiveMember((int) $group->id, $userId);
+    }
+
+    private function hasPendingJoinRequest(int $groupId, string $userId): bool
+    {
+        if (!Schema::hasTable('Wo_Group_Members')) {
+            return false;
+        }
+
+        return DB::table('Wo_Group_Members')
+            ->where('group_id', $groupId)
+            ->where(function ($q) use ($userId) {
+                $q->where('user_id', $userId)->orWhere('user_id', (int) $userId);
+            })
+            ->where('active', '0')
+            ->exists();
+    }
+
+    private function isUserBlocked(string $viewerId, string $targetId): bool
+    {
+        if (!Schema::hasTable('Wo_Blocks')) {
+            return false;
+        }
+
+        return DB::table('Wo_Blocks')
+            ->where(function ($q) use ($viewerId, $targetId) {
+                $q->where(function ($inner) use ($viewerId, $targetId) {
+                    $inner->where('blocker', $viewerId)->where('blocked', $targetId);
+                })->orWhere(function ($inner) use ($viewerId, $targetId) {
+                    $inner->where('blocker', $targetId)->where('blocked', $viewerId);
+                });
+            })
+            ->exists();
+    }
+
+    private function sendGroupInviteNotification(string $inviterId, string $recipientId, int $groupId): bool
+    {
+        if (!Schema::hasTable('Wo_Notifications')) {
+            return false;
+        }
+
+        try {
+            $existing = DB::table('Wo_Notifications')
+                ->where('notifier_id', $inviterId)
+                ->where('recipient_id', $recipientId)
+                ->where('type', 'invited_group')
+                ->where('seen', 0)
+                ->where(function ($q) use ($groupId) {
+                    if (Schema::hasColumn('Wo_Notifications', 'group_id')) {
+                        $q->where('group_id', $groupId);
+                    }
+                })
+                ->first();
+
+            if ($existing) {
+                return false;
+            }
+
+            $notificationData = [
+                'notifier_id' => $inviterId,
+                'recipient_id' => $recipientId,
+                'type' => 'invited_group',
+                'text' => '',
+                'url' => 'index.php?link1=timeline&group_id=' . $groupId,
+                'seen' => 0,
+            ];
+
+            if (Schema::hasColumn('Wo_Notifications', 'group_id')) {
+                $notificationData['group_id'] = $groupId;
+            }
+            if (Schema::hasColumn('Wo_Notifications', 'time')) {
+                $notificationData['time'] = time();
+            }
+
+            DB::table('Wo_Notifications')->insert($notificationData);
+
+            return true;
+        } catch (\Throwable $e) {
+            return false;
+        }
     }
 
     private function canViewGroup(Group $group, ?string $userId): bool

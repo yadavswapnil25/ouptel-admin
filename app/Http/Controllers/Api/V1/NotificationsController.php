@@ -733,6 +733,16 @@ class NotificationsController extends Controller
                 $notification['type_text'] = 'invited you to a page';
                 $notification['icon'] = 'user-plus';
                 break;
+            case 'invited_group':
+                if ($notification['group_id']) {
+                    $group = DB::table('Wo_Groups')->where('id', $notification['group_id'])->first();
+                    $groupName = $group->group_title ?? $group->group_name ?? 'group';
+                    $notification['type_text'] = 'invited you to join ' . $groupName;
+                } else {
+                    $notification['type_text'] = 'invited you to join a group';
+                }
+                $notification['icon'] = 'user-plus';
+                break;
             case 'accepted_join_request':
             case 'added_you_to_group':
                 $notification['type_text'] = 'added you to a group';
