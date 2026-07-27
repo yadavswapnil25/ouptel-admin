@@ -2308,6 +2308,13 @@ class ProfileController extends Controller
     private function getUserBadge($userId): ?int
     {
         try {
+            $verifiedBadgeAt = DB::table('Wo_Users')
+                ->where('user_id', $userId)
+                ->value('verified_badge_at');
+            if (empty($verifiedBadgeAt)) {
+                return null;
+            }
+
             $badge = DB::table('Wo_Verification_Requests')
                 ->where('user_id', $userId)
                 ->where('status', 'approved')
@@ -2324,6 +2331,13 @@ class ProfileController extends Controller
     private function getUserBadgeType($userId): ?string
     {
         try {
+            $verifiedBadgeAt = DB::table('Wo_Users')
+                ->where('user_id', $userId)
+                ->value('verified_badge_at');
+            if (empty($verifiedBadgeAt)) {
+                return null;
+            }
+
             return DB::table('Wo_Verification_Requests')
                 ->where('user_id', $userId)
                 ->where('status', 'approved')

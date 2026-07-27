@@ -1686,6 +1686,13 @@ class NewFeedController extends Controller
     private function getUserBadge($userId)
     {
         try {
+            $verifiedBadgeAt = DB::table('Wo_Users')
+                ->where('user_id', $userId)
+                ->value('verified_badge_at');
+            if (empty($verifiedBadgeAt)) {
+                return null;
+            }
+
             $badge = DB::table('Wo_Verification_Requests')
                 ->where('user_id', $userId)
                 ->where('status', 'approved')
@@ -1708,6 +1715,13 @@ class NewFeedController extends Controller
     private function getUserBadgeType($userId)
     {
         try {
+            $verifiedBadgeAt = DB::table('Wo_Users')
+                ->where('user_id', $userId)
+                ->value('verified_badge_at');
+            if (empty($verifiedBadgeAt)) {
+                return null;
+            }
+
             return DB::table('Wo_Verification_Requests')
                 ->where('user_id', $userId)
                 ->where('status', 'approved')
