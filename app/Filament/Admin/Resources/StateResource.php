@@ -11,7 +11,6 @@ use Filament\Forms;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Section;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\TextInput;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
@@ -90,10 +89,15 @@ class StateResource extends Resource
                             ->nullable()
                             ->placeholder('Select country'),
 
-                        TextInput::make('name')
+                        Select::make('name')
                             ->label('State')
+                            ->options(fn (Forms\Get $get): array => (string) $get('country_id') === '99'
+                                ? static::getIndianStateOptions()
+                                : [])
+                            ->searchable()
+                            ->native(false)
                             ->required()
-                            ->maxLength(191),
+                            ->placeholder('Select state'),
 
                         FileUpload::make('photo')
                             ->label('State Photo')
@@ -158,6 +162,50 @@ class StateResource extends Resource
     public static function getRelations(): array
     {
         return [];
+    }
+
+    public static function getIndianStateOptions(): array
+    {
+        $states = [
+            'Andhra Pradesh',
+            'Arunachal Pradesh',
+            'Assam',
+            'Bihar',
+            'Chhattisgarh',
+            'Goa',
+            'Gujarat',
+            'Haryana',
+            'Himachal Pradesh',
+            'Jharkhand',
+            'Karnataka',
+            'Kerala',
+            'Madhya Pradesh',
+            'Maharashtra',
+            'Manipur',
+            'Meghalaya',
+            'Mizoram',
+            'Nagaland',
+            'Odisha',
+            'Punjab',
+            'Rajasthan',
+            'Sikkim',
+            'Tamil Nadu',
+            'Telangana',
+            'Tripura',
+            'Uttar Pradesh',
+            'Uttarakhand',
+            'West Bengal',
+            'Andaman and Nicobar Islands',
+            'Chandigarh',
+            'Dadra and Nagar Haveli and Daman and Diu',
+            'Delhi',
+            'Jammu and Kashmir',
+            'Ladakh',
+            'Lakshadweep',
+            'Puducherry',
+        ];
+
+        return array_combine($states, $states);
     }
 
     public static function getPages(): array
