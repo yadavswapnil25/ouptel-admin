@@ -80,12 +80,18 @@ class StateResource extends Resource
                         Select::make('country_id')
                             ->label('Country')
                             ->options(fn (): array => CountriesController::getCountrySelectOptions())
+                            ->default('99')
+                            ->afterStateHydrated(function (Select $component, $state): void {
+                                if (blank($state)) {
+                                    $component->state('99');
+                                }
+                            })
                             ->searchable()
                             ->nullable()
                             ->placeholder('Select country'),
 
                         TextInput::make('name')
-                            ->label('State Name')
+                            ->label('State')
                             ->required()
                             ->maxLength(191),
 
@@ -116,7 +122,7 @@ class StateResource extends Resource
                     ->searchable(),
 
                 TextColumn::make('name')
-                    ->label('State Name')
+                    ->label('State')
                     ->searchable()
                     ->sortable()
                     ->weight('bold'),
