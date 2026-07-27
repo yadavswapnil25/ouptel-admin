@@ -39,17 +39,21 @@ class PagesController extends BaseController
             if (!$tokenUserId) {
                 return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
             }
-            $likedPageIds = DB::table('Wo_Pages_Likes')
-                ->where('user_id', (string) $tokenUserId)
-                ->pluck('page_id');
+            $likesTable = $this->pageLikesTable();
+            $likedPageIds = $likesTable
+                ? DB::table($likesTable)->where('user_id', (string) $tokenUserId)->pluck('page_id')
+                : collect();
             $query->whereIn('page_id', $likedPageIds);
         } elseif ($type === 'suggested') {
             // Suggested pages: not owned by user and not liked by user
             if ($tokenUserId) {
-                $likedPageIds = DB::table('Wo_Pages_Likes')
-                    ->where('user_id', (string) $tokenUserId)
-                    ->pluck('page_id')
-                    ->toArray();
+                $likesTable = $this->pageLikesTable();
+                $likedPageIds = $likesTable
+                    ? DB::table($likesTable)
+                        ->where('user_id', (string) $tokenUserId)
+                        ->pluck('page_id')
+                        ->toArray()
+                    : [];
                 $query->where('user_id', '!=', (string) $tokenUserId)
                       ->whereNotIn('page_id', $likedPageIds);
             }
@@ -130,12 +134,7 @@ class PagesController extends BaseController
             $pageData['posts_count'] = $postsCount;
 
             // Get likes count (total page likes)
-            $likesCount = 0;
-            if (DB::getSchemaBuilder()->hasTable('Wo_Pages_Likes')) {
-                $likesCount = DB::table('Wo_Pages_Likes')
-                    ->where('page_id', $page->page_id)
-                    ->count();
-            }
+            $likesCount = $this->pageLikesCount($page->page_id);
             $pageData['likes_count'] = $likesCount;
 
             // Get comments count (total comments on page posts)
@@ -159,12 +158,7 @@ class PagesController extends BaseController
             $isLiked = false;
             $isOwner = false;
             if ($tokenUserId) {
-                if (DB::getSchemaBuilder()->hasTable('Wo_Pages_Likes')) {
-                    $isLiked = DB::table('Wo_Pages_Likes')
-                        ->where('page_id', $page->page_id)
-                        ->where('user_id', $tokenUserId)
-                        ->exists();
-                }
+                $isLiked = $this->userLikedPage($page->page_id, (string) $tokenUserId);
                 $isOwner = (string) ($page->user_id ?? '') === (string) $tokenUserId;
             }
             $pageData['is_liked'] = $isLiked;
@@ -972,7 +966,15 @@ class PagesController extends BaseController
         }
 
         // Check if user already liked the page
-        $isLiked = DB::table('Wo_Pages_Likes')
+        $likesTable = $this->pageLikesTable();
+        if (!$likesTable) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Page likes are not available on this server',
+            ], 500);
+        }
+
+        $isLiked = DB::table($likesTable)
             ->where('page_id', $pageId)
             ->where('user_id', $userId)
             ->exists();
@@ -980,27 +982,32 @@ class PagesController extends BaseController
         $likeStatus = 'invalid';
 
         if ($isLiked) {
-            // Unlike the page - delete the like
-            DB::table('Wo_Pages_Likes')
+            DB::table($likesTable)
                 ->where('page_id', $pageId)
                 ->where('user_id', $userId)
                 ->delete();
             $likeStatus = 'unliked';
         } else {
-            // Like the page - register the like
-            DB::table('Wo_Pages_Likes')->insert([
+            DB::table($likesTable)->insert([
                 'page_id' => $pageId,
                 'user_id' => $userId,
                 'time' => time(),
             ]);
             $likeStatus = 'liked';
+
+            if ($page->user_id && (string) $page->user_id !== (string) $userId) {
+                $this->sendPageLikeNotification((string) $userId, (string) $page->user_id, (int) $pageId);
+            }
         }
 
         return response()->json([
             'ok' => true,
+            'api_status' => 200,
             'like_status' => $likeStatus,
             'data' => [
                 'like' => $likeStatus === 'unliked' ? 'unliked' : 'liked',
+                'is_liked' => $likeStatus === 'liked',
+                'likes_count' => $this->pageLikesCount($pageId),
             ],
         ]);
     }
@@ -1187,20 +1194,8 @@ class PagesController extends BaseController
             }
 
             // Get page likes count
-            $likesCount = 0;
-            $isLiked = false;
-            if (DB::getSchemaBuilder()->hasTable('Wo_Pages_Likes')) {
-                $likesCount = DB::table('Wo_Pages_Likes')
-                    ->where('page_id', $id)
-                    ->count();
-                
-                if ($tokenUserId) {
-                    $isLiked = DB::table('Wo_Pages_Likes')
-                        ->where('page_id', $id)
-                        ->where('user_id', $tokenUserId)
-                        ->exists();
-                }
-            }
+            $likesCount = $this->pageLikesCount($id);
+            $isLiked = $tokenUserId ? $this->userLikedPage($id, (string) $tokenUserId) : false;
 
             // Get page category name if available
             $categoryName = '';
@@ -3017,6 +3012,84 @@ class PagesController extends BaseController
 
         // For any other path, return URL anyway (might be a valid file)
         return asset('storage/' . $normalizedPath);
+    }
+
+    private function pageLikesTable(): ?string
+    {
+        if (Schema::hasTable('Wo_Pages_Likes')) {
+            return 'Wo_Pages_Likes';
+        }
+        if (Schema::hasTable('Wo_PageLikes')) {
+            return 'Wo_PageLikes';
+        }
+
+        return null;
+    }
+
+    private function userLikedPage(int|string $pageId, string $userId): bool
+    {
+        $table = $this->pageLikesTable();
+        if (!$table) {
+            return false;
+        }
+
+        return DB::table($table)
+            ->where('page_id', $pageId)
+            ->where('user_id', $userId)
+            ->exists();
+    }
+
+    private function pageLikesCount(int|string $pageId): int
+    {
+        $table = $this->pageLikesTable();
+        if (!$table) {
+            return 0;
+        }
+
+        return (int) DB::table($table)->where('page_id', $pageId)->count();
+    }
+
+    private function sendPageLikeNotification(string $likerId, string $pageOwnerId, int $pageId): void
+    {
+        if ($likerId === $pageOwnerId || !Schema::hasTable('Wo_Notifications')) {
+            return;
+        }
+
+        try {
+            $query = DB::table('Wo_Notifications')
+                ->where('notifier_id', $likerId)
+                ->where('recipient_id', $pageOwnerId)
+                ->where('type', 'liked_page')
+                ->where('seen', 0);
+
+            if (Schema::hasColumn('Wo_Notifications', 'page_id')) {
+                $query->where('page_id', $pageId);
+            }
+
+            if ($query->exists()) {
+                return;
+            }
+
+            $notificationData = [
+                'notifier_id' => $likerId,
+                'recipient_id' => $pageOwnerId,
+                'type' => 'liked_page',
+                'text' => '',
+                'url' => 'index.php?link1=timeline&page_id=' . $pageId,
+                'seen' => 0,
+            ];
+
+            if (Schema::hasColumn('Wo_Notifications', 'page_id')) {
+                $notificationData['page_id'] = $pageId;
+            }
+            if (Schema::hasColumn('Wo_Notifications', 'time')) {
+                $notificationData['time'] = time();
+            }
+
+            DB::table('Wo_Notifications')->insert($notificationData);
+        } catch (\Throwable $e) {
+            // ignore
+        }
     }
 }
 
