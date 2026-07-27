@@ -205,6 +205,7 @@ class AccountVerificationController extends Controller
             'id_proof_back_image' => 'required_unless:id_proof_type,pan_card|nullable|image|mimes:jpeg,png,jpg|max:5120',
             'badge_type' => 'required|string|in:blue,golden',
             'verification_video' => 'required|file|mimes:mp4,webm,mov,avi|max:52428800', // 50MB max
+            'video_challenge_code' => 'nullable|string|max:20',
         ]);
 
         if ($validator->fails()) {
@@ -301,6 +302,9 @@ class AccountVerificationController extends Controller
                 'video_size' => $videoSize,
                 'video_duration' => $videoDuration,
                 'video_uploaded_at' => now(),
+                'video_challenge_code' => $request->filled('video_challenge_code')
+                    ? $request->input('video_challenge_code')
+                    : null,
             ]);
 
             return response()->json([
@@ -313,6 +317,7 @@ class AccountVerificationController extends Controller
                     'status' => $verification->status,
                     'submitted_at' => $verification->submitted_at?->toIso8601String(),
                     'has_video' => !empty($verification->verification_video),
+                    'video_challenge_code' => $verification->video_challenge_code,
                 ]
             ]);
 

@@ -70,6 +70,11 @@ class VerificationRequest extends Model
         'submitted_at',
         'reviewed_at',
         'reviewed_by',
+        'verification_video',
+        'video_size',
+        'video_duration',
+        'video_uploaded_at',
+        'video_challenge_code',
     ];
 
     protected $casts = [
