@@ -71,6 +71,7 @@ class AccountVerificationController extends Controller
             'id_proof_front_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
             'id_proof_back_image' => 'required_unless:id_proof_type,pan_card|nullable|image|mimes:jpeg,png,jpg|max:5120',
             'badge_type' => 'required|string|in:blue,golden',
+            'message' => 'required|string|min:20|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -151,6 +152,7 @@ class AccountVerificationController extends Controller
                 'id_proof_front_image' => $frontPath,
                 'id_proof_back_image' => $backPath,
                 'badge_type' => $request->input('badge_type'),
+                'message' => $request->input('message'),
                 'status' => VerificationRequest::STATUS_PENDING,
                 'submitted_at' => now(),
                 'seen' => 0,
@@ -204,6 +206,7 @@ class AccountVerificationController extends Controller
             'id_proof_front_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
             'id_proof_back_image' => 'required_unless:id_proof_type,pan_card|nullable|image|mimes:jpeg,png,jpg|max:5120',
             'badge_type' => 'required|string|in:blue,golden',
+            'message' => 'required|string|min:20|max:1000',
             'verification_video' => 'required|file|mimes:mp4,webm,mov,avi|max:52428800', // 50MB max
             'video_challenge_code' => 'nullable|string|max:20',
         ]);
@@ -295,6 +298,7 @@ class AccountVerificationController extends Controller
                 'id_proof_front_image' => $frontPath,
                 'id_proof_back_image' => $backPath,
                 'badge_type' => $request->input('badge_type'),
+                'message' => $request->input('message'),
                 'status' => VerificationRequest::STATUS_PENDING,
                 'submitted_at' => now(),
                 'seen' => 0,
@@ -396,6 +400,7 @@ class AccountVerificationController extends Controller
                 'id_proof_type_name' => $verification->id_proof_type_name,
                 'badge_type' => $verification->badge_type,
                 'badge_type_name' => $verification->badge_type_name,
+                'message' => $verification->message,
                 'status' => $verification->status,
                 'status_name' => $verification->status_name,
                 'rejection_reason' => $verification->rejection_reason,
@@ -438,6 +443,7 @@ class AccountVerificationController extends Controller
                 'id_proof_type_name' => $verification->id_proof_type_name,
                 'badge_type' => $verification->badge_type,
                 'badge_type_name' => $verification->badge_type_name,
+                'message' => $verification->message,
                 'status' => $verification->status,
                 'status_name' => $verification->status_name,
                 'rejection_reason' => $verification->rejection_reason,
