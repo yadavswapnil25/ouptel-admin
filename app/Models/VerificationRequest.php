@@ -301,7 +301,9 @@ class VerificationRequest extends Model
             } elseif ($this->badge_type) {
                 \Illuminate\Support\Facades\DB::table('Wo_Users')
                     ->where('user_id', $this->user_id)
-                    ->update(['verified' => '1']);
+                    ->update([
+                        'verified_badge_at' => now(),
+                    ]);
             }
             
             $this->sendVerificationNotification(true);

@@ -39,6 +39,7 @@ class User extends Authenticatable
         'avatar',
         'cover',
         'verified',
+        'verified_badge_at',
         'active',
     ];
 
@@ -59,6 +60,7 @@ class User extends Authenticatable
      */
     protected $casts = [
         'email_verified_at' => 'datetime',
+        'verified_badge_at' => 'datetime',
         'password' => 'hashed',
     ];
 
@@ -263,11 +265,19 @@ class User extends Authenticatable
     }
 
     /**
-     * Check if user is verified
+     * Check if user is verified (email / account verified flag)
      */
     public function isVerified(): bool
     {
         return self::isVerifiedFlag($this->verified);
+    }
+
+    /**
+     * Whether the user has an approved verification badge.
+     */
+    public function hasVerifiedBadge(): bool
+    {
+        return $this->verified_badge_at !== null;
     }
 
     /**

@@ -138,8 +138,21 @@ class UserManagementResource extends Resource
                             ->helperText('Assign one or more panel roles (e.g. Developer, Editor, Moderator).'),
 
                         Toggle::make('verified')
-                            ->label('Verified User')
+                            ->label('Verified Email')
+                            ->helperText('Email / account verification status.')
                             ->dehydrated(fn ($state) => filled($state)),
+
+                        Toggle::make('verified_badge')
+                            ->label('Verified Badge')
+                            ->helperText(function (?User $record): string {
+                                if (!$record?->verified_badge_at) {
+                                    return 'Set automatically when an admin approves a badge request.';
+                                }
+
+                                return 'Approved on ' . $record->verified_badge_at->format('M d, Y H:i');
+                            })
+                            ->disabled()
+                            ->dehydrated(false),
                     ])
                     ->columns(2),
             ]);
@@ -170,8 +183,12 @@ class UserManagementResource extends Resource
                         TextEntry::make('type_text')
                             ->label('Account Type'),
                         TextEntry::make('verified')
-                            ->label('Verified')
+                            ->label('Verified Email')
                             ->formatStateUsing(fn ($state): string => ($state === '1' || $state === true) ? 'Yes' : 'No'),
+                        TextEntry::make('verified_badge_at')
+                            ->label('Verified Badge')
+                            ->formatStateUsing(fn ($state): string => $state ? 'Yes — ' . \Illuminate\Support\Carbon::parse($state)->format('M d, Y H:i') : 'No')
+                            ->placeholder('No'),
                         TextEntry::make('joined_date')
                             ->label('Joined')
                             ->dateTime('M d, Y'),
@@ -307,8 +324,14 @@ class UserManagementResource extends Resource
                     }),
 
                 BooleanColumn::make('verified')
-                    ->label('Verified')
+                    ->label('Verified Email')
                     ->trueIcon('heroicon-o-check-circle')
+                    ->falseIcon('heroicon-o-x-circle'),
+
+                BooleanColumn::make('verified_badge_at')
+                    ->label('Verified Badge')
+                    ->getStateUsing(fn (User $record): bool => $record->verified_badge_at !== null)
+                    ->trueIcon('heroicon-o-shield-check')
                     ->falseIcon('heroicon-o-x-circle'),
 
                 BooleanColumn::make('is_online')
@@ -413,10 +436,21 @@ class UserManagementResource extends Resource
                     }),
 
                 TernaryFilter::make('verified')
-                    ->label('Verified')
+                    ->label('Verified Email')
                     ->placeholder('All users')
-                    ->trueLabel('Verified only')
-                    ->falseLabel('Not verified'),
+                    ->trueLabel('Verified email only')
+                    ->falseLabel('Not verified email'),
+
+                TernaryFilter::make('verified_badge_at')
+                    ->label('Verified Badge')
+                    ->placeholder('All users')
+                    ->trueLabel('Has verified badge')
+                    ->falseLabel('No verified badge')
+                    ->queries(
+                        true: fn (Builder $query) => $query->whereNotNull('verified_badge_at'),
+                        false: fn (Builder $query) => $query->whereNull('verified_badge_at'),
+                        blank: fn (Builder $query) => $query,
+                    ),
 
                 TernaryFilter::make('is_online')
                     ->label('Online Status')

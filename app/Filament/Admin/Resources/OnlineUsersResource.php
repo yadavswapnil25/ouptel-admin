@@ -97,7 +97,7 @@ class OnlineUsersResource extends Resource
                             ->required(),
 
                         Toggle::make('verified')
-                            ->label('Verified User'),
+                            ->label('Verified Email'),
                     ])
                     ->columns(2),
             ]);
