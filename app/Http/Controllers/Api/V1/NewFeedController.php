@@ -479,6 +479,14 @@ class NewFeedController extends Controller
                 }
             }
             $taggedFriends = $this->extractTaggedFriendsFromText((string) ($post->postText ?? ''));
+            $rawPostType = strtolower((string) ($post->postType ?? ''));
+            $rawPostFeeling = strtolower((string) ($post->postFeeling ?? ''));
+            $isBirthdayWish = $rawPostType === 'birthday' || $rawPostFeeling === 'birthday';
+            $isWallPost = !empty($post->recipient_id) && (int) $post->recipient_id > 0
+                && ($rawPostFeeling === 'wall_post' || $isBirthdayWish);
+            if (empty($taggedFriends) && $recipient && !$isWallPost) {
+                $taggedFriends = [$recipient];
+            }
 
             // Group context for "shared to group" posts
             $group = null;

@@ -677,6 +677,14 @@ class PeopleFollowController extends Controller
                 }
             }
             $taggedFriends = $this->extractTaggedFriendsFromText((string) ($post->postText ?? ''));
+            $rawPostType = strtolower((string) ($post->postType ?? ''));
+            $rawPostFeeling = strtolower((string) ($post->postFeeling ?? ''));
+            $isBirthdayWish = $rawPostType === 'birthday' || $rawPostFeeling === 'birthday';
+            $isWallPost = !empty($post->recipient_id) && (int) $post->recipient_id > 0
+                && ($rawPostFeeling === 'wall_post' || $isBirthdayWish);
+            if (empty($taggedFriends) && $recipient && !$isWallPost) {
+                $taggedFriends = [$recipient];
+            }
 
             // Get post reactions count
             $postIdForReactions = $post->post_id ?? $post->id;
