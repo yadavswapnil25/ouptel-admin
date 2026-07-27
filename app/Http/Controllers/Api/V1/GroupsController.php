@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use App\Models\GroupCategory;
 use App\Models\GroupSubCategory;
+use App\Models\CommunityPreference;
 
 class GroupsController extends BaseController
 {
@@ -98,6 +99,12 @@ class GroupsController extends BaseController
                 'about' => $group->about,
                 'category' => $group->category,
                 'privacy' => $group->privacy,
+                'allowed_gender' => Schema::hasColumn('Wo_Groups', 'allowed_gender')
+                    ? ($group->allowed_gender ?: 'all')
+                    : 'all',
+                'community_preferences' => Schema::hasColumn('Wo_Groups', 'community_preferences')
+                    ? $this->parseCommunityPreferences($group->community_preferences ?? '')
+                    : [],
                 'avatar_url' => $group->avatar_url,
                 'cover_url' => $group->cover_url,
                 'members_count' => $membersCount,
@@ -154,6 +161,9 @@ class GroupsController extends BaseController
             'sub_category' => ['nullable', 'integer'],
             'privacy' => ['required', 'in:public,private'],
             'join_privacy' => ['required', 'in:public,private'],
+            'allowed_gender' => ['nullable', 'in:all,male,female,other'],
+            'community_preferences' => ['nullable', 'array'],
+            'community_preferences.*' => ['integer', 'exists:community_preferences,id'],
             'avatar' => ['sometimes', 'image', 'max:10240'],
             'cover' => ['sometimes', 'image', 'max:10240'],
         ]);
@@ -173,6 +183,14 @@ class GroupsController extends BaseController
         $group->sub_category = $validated['sub_category'] ?? 0;
         $group->privacy = $validated['privacy'];
         $group->join_privacy = $validated['join_privacy'];
+        if (Schema::hasColumn('Wo_Groups', 'allowed_gender')) {
+            $group->allowed_gender = $validated['allowed_gender'] ?? 'all';
+        }
+        if (Schema::hasColumn('Wo_Groups', 'community_preferences')) {
+            $group->community_preferences = $this->normalizeCommunityPreferences(
+                $validated['community_preferences'] ?? []
+            );
+        }
         $group->user_id = (string) $userId;
         $group->active = '1';
         $group->time = (string) time();
@@ -215,6 +233,12 @@ class GroupsController extends BaseController
                 'category' => $group->category,
                 'privacy' => $group->privacy,
                 'join_privacy' => $group->join_privacy,
+                'allowed_gender' => Schema::hasColumn('Wo_Groups', 'allowed_gender')
+                    ? ($group->allowed_gender ?: 'all')
+                    : 'all',
+                'community_preferences' => Schema::hasColumn('Wo_Groups', 'community_preferences')
+                    ? $this->parseCommunityPreferences($group->community_preferences ?? '')
+                    : [],
                 'avatar_url' => $group->avatar_url,
                 'cover_url' => $group->cover_url,
                 'members_count' => 1,
@@ -385,6 +409,12 @@ class GroupsController extends BaseController
                 'privacy_text' => ucfirst($group->privacy),
                 'join_privacy' => $group->join_privacy,
                 'join_privacy_text' => ucfirst($group->join_privacy),
+                'allowed_gender' => Schema::hasColumn('Wo_Groups', 'allowed_gender')
+                    ? ($group->allowed_gender ?: 'all')
+                    : 'all',
+                'community_preferences' => Schema::hasColumn('Wo_Groups', 'community_preferences')
+                    ? $this->parseCommunityPreferences($group->community_preferences ?? '')
+                    : [],
                 'avatar' => $group->avatar ?? '',
                 'avatar_url' => $group->avatar_url,
                 'cover' => $group->cover ?? '',
@@ -435,7 +465,14 @@ class GroupsController extends BaseController
                 'types' => [
                     'privacy' => ['public', 'private'],
                     'join_privacy' => ['public', 'private'],
+                    'allowed_gender' => ['all', 'male', 'female', 'other'],
                 ],
+                'community_preferences' => Schema::hasTable('community_preferences')
+                    ? CommunityPreference::query()
+                        ->orderBy('sort_order')
+                        ->orderBy('name')
+                        ->get(['id', 'name', 'slug', 'description'])
+                    : [],
                 'categories' => $categories,
                 'sub_categories' => $subCategories,
             ],
@@ -553,6 +590,22 @@ class GroupsController extends BaseController
                 return response()->json([
                     'ok' => false,
                     'message' => $ageCheck,
+                ], 403);
+            }
+
+            $genderCheck = $this->assertUserMeetsAllowedGenderRequirement($group, $userIdStr);
+            if ($genderCheck !== true) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $genderCheck,
+                ], 403);
+            }
+
+            $communityPreferenceCheck = $this->assertUserMeetsCommunityPreferenceRequirement($group, $userIdStr);
+            if ($communityPreferenceCheck !== true) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $communityPreferenceCheck,
                 ], 403);
             }
 
@@ -937,6 +990,9 @@ class GroupsController extends BaseController
             'about' => ['sometimes', 'nullable', 'string', 'max:500'],
             'privacy' => ['sometimes', 'in:public,private'],
             'join_privacy' => ['sometimes', 'in:public,private'],
+            'allowed_gender' => ['sometimes', 'nullable', 'in:all,male,female,other'],
+            'community_preferences' => ['sometimes', 'nullable', 'array'],
+            'community_preferences.*' => ['integer', 'exists:community_preferences,id'],
             'category' => ['sometimes', 'integer'],
             'sub_category' => ['sometimes', 'nullable', 'integer'],
             'avatar' => ['sometimes', 'image', 'max:10240'],
@@ -954,6 +1010,14 @@ class GroupsController extends BaseController
         }
         if (isset($validated['join_privacy'])) {
             $group->join_privacy = $validated['join_privacy'];
+        }
+        if (array_key_exists('allowed_gender', $validated) && Schema::hasColumn('Wo_Groups', 'allowed_gender')) {
+            $group->allowed_gender = $validated['allowed_gender'] ?? 'all';
+        }
+        if (array_key_exists('community_preferences', $validated) && Schema::hasColumn('Wo_Groups', 'community_preferences')) {
+            $group->community_preferences = $this->normalizeCommunityPreferences(
+                $validated['community_preferences'] ?? []
+            );
         }
         if (isset($validated['category'])) {
             $group->category = $validated['category'];
@@ -982,6 +1046,12 @@ class GroupsController extends BaseController
                 'about' => $group->about,
                 'privacy' => $group->privacy,
                 'join_privacy' => $group->join_privacy,
+                'allowed_gender' => Schema::hasColumn('Wo_Groups', 'allowed_gender')
+                    ? ($group->allowed_gender ?: 'all')
+                    : 'all',
+                'community_preferences' => Schema::hasColumn('Wo_Groups', 'community_preferences')
+                    ? $this->parseCommunityPreferences($group->community_preferences ?? '')
+                    : [],
                 'avatar_url' => $group->avatar_url,
                 'cover_url' => $group->cover_url,
             ],
@@ -1119,5 +1189,86 @@ class GroupsController extends BaseController
             '65_plus' => [65, null, '65+'],
             default => null,
         };
+    }
+
+    private function assertUserMeetsAllowedGenderRequirement(Group $group, string $userId)
+    {
+        if (!Schema::hasColumn('Wo_Groups', 'allowed_gender')) {
+            return true;
+        }
+
+        $allowedGender = strtolower(trim((string) ($group->allowed_gender ?? '')));
+        if ($allowedGender === '' || $allowedGender === 'all') {
+            return true;
+        }
+
+        $userGender = strtolower(trim((string) DB::table('Wo_Users')->where('user_id', $userId)->value('gender')));
+        if ($userGender === '') {
+            return 'Please add your gender in profile settings before joining this group.';
+        }
+
+        if ($userGender !== $allowedGender) {
+            return 'You cannot join this group. This group is restricted to ' . ucfirst($allowedGender) . ' users.';
+        }
+
+        return true;
+    }
+
+    private function assertUserMeetsCommunityPreferenceRequirement(Group $group, string $userId)
+    {
+        if (!Schema::hasColumn('Wo_Groups', 'community_preferences')) {
+            return true;
+        }
+
+        $requiredPreferenceIds = $this->parseCommunityPreferences($group->community_preferences ?? '');
+        if ($requiredPreferenceIds === []) {
+            return true;
+        }
+
+        if (!Schema::hasTable('user_community_preferences')) {
+            return true;
+        }
+
+        $userPreferenceIds = DB::table('user_community_preferences')
+            ->where('user_id', $userId)
+            ->pluck('preference_id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($userPreferenceIds === []) {
+            return 'Please select your community preferences in profile settings before joining this group.';
+        }
+
+        if (array_intersect($requiredPreferenceIds, $userPreferenceIds) === []) {
+            return 'You cannot join this group because your community preferences do not match this group requirement.';
+        }
+
+        return true;
+    }
+
+    private function normalizeCommunityPreferences(mixed $preferences): string
+    {
+        if (!is_array($preferences)) {
+            return '';
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $preferences))));
+
+        return implode(',', $ids);
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function parseCommunityPreferences(?string $preferences): array
+    {
+        $value = trim((string) $preferences);
+        if ($value === '') {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(array_map('intval', explode(',', $value)))));
     }
 }
