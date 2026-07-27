@@ -338,8 +338,13 @@ class SearchController extends Controller
                 }
             }
 
+            $userSelectColumns = ['user_id', 'username', 'first_name', 'last_name', 'avatar', 'verified', 'lastseen'];
+            if (Schema::hasColumn('Wo_Users', 'verified_badge_at')) {
+                $userSelectColumns[] = 'verified_badge_at';
+            }
+
             $users = $usersQuery
-                ->select('user_id', 'username', 'first_name', 'last_name', 'avatar', 'verified', 'lastseen')
+                ->select($userSelectColumns)
                 ->orderBy('user_id', 'desc')
                 ->paginate($perPage);
 
@@ -369,7 +374,8 @@ class SearchController extends Controller
             $formattedUsers = $users->map(function ($u) use ($badgeByUserId) {
                 $name = trim(($u->first_name ?? '') . ' ' . ($u->last_name ?? '')) ?: $u->username;
                 $badgeType = $badgeByUserId[(string) $u->user_id] ?? null;
-                $hasBadge = in_array($badgeType, ['blue', 'golden'], true);
+                $verifiedBadgeAt = $u->verified_badge_at ?? null;
+                $hasBadge = !empty($verifiedBadgeAt) && in_array($badgeType, ['blue', 'golden'], true);
                 return [
                     'user_id' => $u->user_id,
                     'username' => $u->username,
@@ -379,6 +385,7 @@ class SearchController extends Controller
                     'verified' => $hasBadge,
                     'badge' => $hasBadge ? 1 : null,
                     'badge_type' => $hasBadge ? $badgeType : null,
+                    'verified_badge_at' => $verifiedBadgeAt,
                     'is_online' => $u->lastseen && $u->lastseen > (time() - 60),
                     'profile_url' => url('/user/' . $u->username),
                 ];
