@@ -80,11 +80,8 @@ class GroupsController extends BaseController
         $paginator = $query->paginate($perPage);
 
         $data = $paginator->getCollection()->map(function (Group $group) use ($userId) {
-            // Get member count and join status
-            $membersCount = DB::table('Wo_Group_Members')
-                ->where('group_id', $group->id)
-                ->where('active', '1')
-                ->count();
+            // Member count excludes the group owner
+            $membersCount = $this->countGroupMembersExcludingOwner($group);
             
             $isJoined = DB::table('Wo_Group_Members')
                 ->where('group_id', $group->id)
@@ -241,7 +238,7 @@ class GroupsController extends BaseController
                     : [],
                 'avatar_url' => $group->avatar_url,
                 'cover_url' => $group->cover_url,
-                'members_count' => 1,
+                'members_count' => 0,
                 'is_joined' => true,
                 'is_owner' => true,
                 'created_at' => $group->time ? date('c', $group->time_as_timestamp) : null,
@@ -300,10 +297,8 @@ class GroupsController extends BaseController
         
         if (Schema::hasTable('Wo_Group_Members')) {
             try {
-                $membersCount = DB::table('Wo_Group_Members')
-                    ->where('group_id', $id)
-                    ->where('active', '1')
-                    ->count();
+                // Member count excludes the group owner
+                $membersCount = $this->countGroupMembersExcludingOwner($group);
                 
                 if ($tokenUserId) {
                     // Convert tokenUserId to string to match database type
@@ -1092,6 +1087,24 @@ class GroupsController extends BaseController
             })
             ->where('active', '1')
             ->exists();
+    }
+
+    /**
+     * Active members excluding the group owner (owner is not counted as a "member").
+     */
+    private function countGroupMembersExcludingOwner(Group $group): int
+    {
+        if (!Schema::hasTable('Wo_Group_Members')) {
+            return 0;
+        }
+
+        $ownerId = (string) $group->user_id;
+
+        return (int) DB::table('Wo_Group_Members')
+            ->where('group_id', $group->id)
+            ->where('active', '1')
+            ->whereNotIn('user_id', array_values(array_unique([(string) $ownerId, (int) $ownerId])))
+            ->count();
     }
 
     private function isGroupOwner(Group $group, ?string $userId): bool
