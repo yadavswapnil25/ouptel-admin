@@ -1697,10 +1697,11 @@ class NewFeedController extends Controller
                 ->where('user_id', $userId)
                 ->where('status', 'approved')
                 ->whereNotNull('badge_type')
+                ->whereIn('badge_type', ['blue', 'golden'])
                 ->latest('approved_at')
                 ->value('badge_type');
             
-            return $badge ? 1 : null;
+            return in_array($badge, ['blue', 'golden'], true) ? 1 : null;
         } catch (\Exception $e) {
             return null;
         }
@@ -1726,6 +1727,7 @@ class NewFeedController extends Controller
                 ->where('user_id', $userId)
                 ->where('status', 'approved')
                 ->whereNotNull('badge_type')
+                ->whereIn('badge_type', ['blue', 'golden'])
                 ->latest('approved_at')
                 ->value('badge_type');
         } catch (\Exception $e) {

@@ -350,20 +350,31 @@ class ProfileController extends Controller
         $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/placeholders/user-avatar.svg');
         $userData['cover_url'] = $user->cover ? asset('storage/' . $user->cover) : asset('images/default-cover.jpg');
 
-        // Add badge information if user is verified
+        // Badge only when approved verification exists and verified_badge_at is set on user
+        $verifiedBadgeAt = Schema::hasColumn('Wo_Users', 'verified_badge_at')
+            ? ($user->verified_badge_at ?? null)
+            : null;
+        $userData['verified_badge_at'] = $verifiedBadgeAt;
+
         try {
-            $approvedVerification = DB::table('Wo_Verification_Requests')
-                ->where('user_id', $user->user_id)
-                ->where('status', 'approved')
-                ->whereNotNull('badge_type')
-                ->orderByDesc('approved_at')
-                ->first();
-            
-            $userData['badge'] = $approvedVerification ? 1 : null;
-            $userData['badge_type'] = $approvedVerification?->badge_type ?? null;
-            $userData['is_verified'] = $approvedVerification ? 1 : null;
+            $approvedVerification = null;
+            if (!empty($verifiedBadgeAt)) {
+                $approvedVerification = DB::table('Wo_Verification_Requests')
+                    ->where('user_id', $user->user_id)
+                    ->where('status', 'approved')
+                    ->whereNotNull('badge_type')
+                    ->whereIn('badge_type', ['blue', 'golden'])
+                    ->orderByDesc('approved_at')
+                    ->first();
+            }
+
+            $badgeType = $approvedVerification?->badge_type ?? null;
+            $hasBadge = !empty($verifiedBadgeAt) && in_array($badgeType, ['blue', 'golden'], true);
+
+            $userData['badge'] = $hasBadge ? 1 : null;
+            $userData['badge_type'] = $hasBadge ? $badgeType : null;
+            $userData['is_verified'] = $hasBadge ? 1 : null;
         } catch (\Exception $e) {
-            // If table doesn't exist yet, set null values
             $userData['badge'] = null;
             $userData['badge_type'] = null;
             $userData['is_verified'] = null;
@@ -2319,10 +2330,11 @@ class ProfileController extends Controller
                 ->where('user_id', $userId)
                 ->where('status', 'approved')
                 ->whereNotNull('badge_type')
+                ->whereIn('badge_type', ['blue', 'golden'])
                 ->latest('approved_at')
                 ->value('badge_type');
 
-            return $badge ? 1 : null;
+            return in_array($badge, ['blue', 'golden'], true) ? 1 : null;
         } catch (\Exception $e) {
             return null;
         }
@@ -2338,12 +2350,15 @@ class ProfileController extends Controller
                 return null;
             }
 
-            return DB::table('Wo_Verification_Requests')
+            $badge = DB::table('Wo_Verification_Requests')
                 ->where('user_id', $userId)
                 ->where('status', 'approved')
                 ->whereNotNull('badge_type')
+                ->whereIn('badge_type', ['blue', 'golden'])
                 ->latest('approved_at')
                 ->value('badge_type');
+
+            return in_array($badge, ['blue', 'golden'], true) ? $badge : null;
         } catch (\Exception $e) {
             return null;
         }
