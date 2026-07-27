@@ -99,8 +99,8 @@ class AccountVerificationController extends Controller
             ], 404);
         }
 
-        // Check if user already has a verified badge
-        if ($user->verified === '1') {
+        // Check if user already has an approved verification badge
+        if ($user->hasVerifiedBadge()) {
             return response()->json([
                 'api_status' => 400,
                 'api_text' => 'failed',
@@ -236,8 +236,8 @@ class AccountVerificationController extends Controller
             ], 404);
         }
 
-        // Check if user already has a verified badge
-        if ($user->verified === '1') {
+        // Check if user already has an approved verification badge
+        if ($user->hasVerifiedBadge()) {
             return response()->json([
                 'api_status' => 400,
                 'api_text' => 'failed',
@@ -373,8 +373,8 @@ class AccountVerificationController extends Controller
             ->orderBy('id', 'desc')
             ->first();
 
-        // Get user's current verification status
-        $isVerified = $user->verified === '1';
+        // Get user's current verification badge status
+        $isVerified = $user->hasVerifiedBadge();
         
         // Determine badge type from user table (if verified)
         // Note: You may need to add a 'badge_type' column to Wo_Users table
@@ -388,6 +388,7 @@ class AccountVerificationController extends Controller
             'api_text' => 'success',
             'data' => [
                 'is_verified' => $isVerified,
+                'verified_badge_at' => $user->verified_badge_at?->toIso8601String(),
                 'current_badge_type' => $currentBadgeType,
                 'verification_request' => null,
             ]
@@ -607,7 +608,7 @@ class AccountVerificationController extends Controller
             ], 404);
         }
 
-        $isVerified = $user->verified === '1';
+        $isVerified = $user->hasVerifiedBadge();
         $badgeType = null;
 
         if ($isVerified) {
@@ -628,6 +629,7 @@ class AccountVerificationController extends Controller
                 'user_id' => $user->user_id,
                 'username' => $user->username,
                 'is_verified' => $isVerified,
+                'verified_badge_at' => $user->verified_badge_at?->toIso8601String(),
                 'badge_type' => $badgeType,
                 'badge_info' => $badgeType ? [
                     'type' => $badgeType,
