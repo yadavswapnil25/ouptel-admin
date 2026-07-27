@@ -67,7 +67,7 @@ class AccountVerificationController extends Controller
         // Validate request (PAN Card: front image only)
         $validator = Validator::make($request->all(), [
             'id_proof_type' => 'required|string|in:' . implode(',', array_keys(VerificationRequest::ID_PROOF_TYPES)),
-            'id_proof_number' => 'required|string|max:100',
+            'id_proof_number' => 'nullable|string|max:100',
             'id_proof_front_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
             'id_proof_back_image' => 'required_unless:id_proof_type,pan_card|nullable|image|mimes:jpeg,png,jpg|max:5120',
             'badge_type' => 'required|string|in:blue,golden',
@@ -147,7 +147,7 @@ class AccountVerificationController extends Controller
                 'user_name' => $user->first_name . ' ' . $user->last_name,
                 'type' => 'User',
                 'id_proof_type' => $request->input('id_proof_type'),
-                'id_proof_number' => $request->input('id_proof_number'),
+                'id_proof_number' => $request->filled('id_proof_number') ? $request->input('id_proof_number') : null,
                 'id_proof_front_image' => $frontPath,
                 'id_proof_back_image' => $backPath,
                 'badge_type' => $request->input('badge_type'),
@@ -200,7 +200,7 @@ class AccountVerificationController extends Controller
         // Validate request (PAN Card: front image only)
         $validator = Validator::make($request->all(), [
             'id_proof_type' => 'required|string|in:' . implode(',', array_keys(VerificationRequest::ID_PROOF_TYPES)),
-            'id_proof_number' => 'required|string|max:100',
+            'id_proof_number' => 'nullable|string|max:100',
             'id_proof_front_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
             'id_proof_back_image' => 'required_unless:id_proof_type,pan_card|nullable|image|mimes:jpeg,png,jpg|max:5120',
             'badge_type' => 'required|string|in:blue,golden',
@@ -290,7 +290,7 @@ class AccountVerificationController extends Controller
                 'user_name' => $user->first_name . ' ' . $user->last_name,
                 'type' => 'User',
                 'id_proof_type' => $request->input('id_proof_type'),
-                'id_proof_number' => $request->input('id_proof_number'),
+                'id_proof_number' => $request->filled('id_proof_number') ? $request->input('id_proof_number') : null,
                 'id_proof_front_image' => $frontPath,
                 'id_proof_back_image' => $backPath,
                 'badge_type' => $request->input('badge_type'),
