@@ -126,13 +126,14 @@ class PrivacyController extends Controller
             $settings['friend_privacy_text'] = $this->getFriendPrivacyText($settings['friend_privacy']);
             $settings['friend_request_age_group_text'] = $this->getFriendRequestAgeGroupText($settings['friend_request_age_group']);
             $settings['birth_privacy_text'] = $this->getBirthPrivacyText($settings['birth_privacy']);
-            $settings['status_text'] = match ($settings['status']) {
-                '1' => 'Online',
-                '2' => 'Away',
-                '3' => 'Busy',
-                '4' => $settings['custom_status_text'] !== '' ? $settings['custom_status_text'] : 'Custom',
-                default => 'Offline',
-            };
+            $settings['status_text'] = $settings['custom_status_text'] !== ''
+                ? $settings['custom_status_text']
+                : match ($settings['status']) {
+                    '1' => 'Online',
+                    '2' => 'Away',
+                    '3' => 'Busy',
+                    default => 'Offline',
+                };
             $settings['visit_privacy_text'] = $settings['visit_privacy'] === '1' ? 'Hidden' : 'Visible';
 
             return response()->json([
@@ -198,7 +199,7 @@ class PrivacyController extends Controller
             'friend_privacy' => 'nullable|in:0,1,2',
             'friend_request_age_group' => 'nullable|in:all,0_17,18_24,25_34,35_44,45_54,55_64,65_plus,nobody',
             'birth_privacy' => 'nullable|in:0,1,2',
-            'status' => 'nullable|in:0,1,2,3,4',
+            'status' => 'nullable|in:0,1,2,3',
             'custom_status_text' => 'nullable|string|max:120',
             'visit_privacy' => 'nullable|in:0,1',
             'post_privacy' => 'nullable|string',
@@ -260,12 +261,14 @@ class PrivacyController extends Controller
 
             // Online Status: 0 = Offline, 1 = Online
             if ($request->has('status')) {
-                $updateData['status'] = $request->input('status');
+                $incomingStatus = (string) $request->input('status');
+                $customStatusText = trim((string) $request->input('custom_status_text', ''));
+                $updateData['status'] = $customStatusText !== '' && $incomingStatus === '1'
+                    ? '1'
+                    : $incomingStatus;
             }
             if (Schema::hasColumn('Wo_Users', 'custom_status_text')) {
-                $updateData['custom_status_text'] = $request->input('status') === '4'
-                    ? trim((string) $request->input('custom_status_text', ''))
-                    : '';
+                $updateData['custom_status_text'] = trim((string) $request->input('custom_status_text', ''));
             }
 
             // Visit Privacy: 0 = Visible, 1 = Hidden
