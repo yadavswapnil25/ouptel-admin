@@ -12,7 +12,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
-        //
+        $middleware->alias([
+            'apps.session.user' => \App\Http\Middleware\EnsureAppsSessionUserExists::class,
+        ]);
+        $middleware->api(append: [
+            \App\Http\Middleware\EnsureAppsSessionUserExists::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

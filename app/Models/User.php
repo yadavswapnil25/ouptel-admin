@@ -20,6 +20,23 @@ class User extends Authenticatable
     public $timestamps = false;
 
     /**
+     * Invalidate website sessions when a user is deleted or deactivated from admin.
+     */
+    protected static function booted(): void
+    {
+        static::deleting(function (User $user) {
+            DB::table('Wo_AppsSessions')->where('user_id', $user->user_id)->delete();
+        });
+
+        static::updated(function (User $user) {
+            $active = (string) ($user->active ?? '');
+            if (in_array($active, ['0', '2'], true)) {
+                DB::table('Wo_AppsSessions')->where('user_id', $user->user_id)->delete();
+            }
+        });
+    }
+
+    /**
      * The attributes that are mass assignable.
      *
      * @var array<int, string>
