@@ -167,9 +167,10 @@ class AuthController extends BaseController
             if ($request->has('birthday')) {
                 $userData['birthday'] = $request->birthday;
             }
-            if ($request->has('country_id')) {
-                $userData['country_id'] = $request->country_id;
-            }
+            // Default country to India (WoWonder country_id 99) for all new accounts
+            $userData['country_id'] = $request->filled('country_id')
+                ? (int) $request->country_id
+                : 99;
             if ($request->has('timezone')) {
                 $userData['timezone'] = $request->timezone;
             }

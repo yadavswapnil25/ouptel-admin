@@ -450,7 +450,7 @@ class User extends Authenticatable
             'gender_text' => $this->gender_text,
             'birthday' => $this->birthday ?? '',
             'age' => $this->age,
-            'country_id' => $this->country_id ?? 0,
+            'country_id' => ((int) ($this->country_id ?? 0) > 0) ? (int) $this->country_id : 99,
             'timezone' => $this->timezone ?? 'UTC',
             'language' => $this->language ?? 'english',
             'verified' => $this->isVerified(),
