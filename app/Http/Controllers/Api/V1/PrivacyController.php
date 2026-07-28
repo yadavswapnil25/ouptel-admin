@@ -81,6 +81,9 @@ class PrivacyController extends Controller
             if (Schema::hasColumn('Wo_Users', 'friend_request_age_group')) {
                 $select[] = 'friend_request_age_group';
             }
+            if (Schema::hasColumn('Wo_Users', 'custom_status_text')) {
+                $select[] = 'custom_status_text';
+            }
 
             // Get privacy settings from database
             $privacySettings = DB::table('Wo_Users')
@@ -108,6 +111,7 @@ class PrivacyController extends Controller
                 'friend_request_age_group' => (string) ($privacySettings->friend_request_age_group ?? 'all'),
                 'birth_privacy' => (string) ($privacySettings->birth_privacy ?? '0'),
                 'status' => (string) ($privacySettings->status ?? '0'),
+                'custom_status_text' => (string) ($privacySettings->custom_status_text ?? ''),
                 'visit_privacy' => (string) ($privacySettings->visit_privacy ?? '0'),
                 'post_privacy' => (string) ($privacySettings->post_privacy ?? '0'),
                 'confirm_followers' => (string) ($privacySettings->confirm_followers ?? '0'),
@@ -126,6 +130,7 @@ class PrivacyController extends Controller
                 '1' => 'Online',
                 '2' => 'Away',
                 '3' => 'Busy',
+                '4' => $settings['custom_status_text'] !== '' ? $settings['custom_status_text'] : 'Custom',
                 default => 'Offline',
             };
             $settings['visit_privacy_text'] = $settings['visit_privacy'] === '1' ? 'Hidden' : 'Visible';
@@ -193,7 +198,8 @@ class PrivacyController extends Controller
             'friend_privacy' => 'nullable|in:0,1,2',
             'friend_request_age_group' => 'nullable|in:all,0_17,18_24,25_34,35_44,45_54,55_64,65_plus,nobody',
             'birth_privacy' => 'nullable|in:0,1,2',
-            'status' => 'nullable|in:0,1,2,3',
+            'status' => 'nullable|in:0,1,2,3,4',
+            'custom_status_text' => 'nullable|string|max:120',
             'visit_privacy' => 'nullable|in:0,1',
             'post_privacy' => 'nullable|string',
             'confirm_followers' => 'nullable|in:0,1',
@@ -255,6 +261,11 @@ class PrivacyController extends Controller
             // Online Status: 0 = Offline, 1 = Online
             if ($request->has('status')) {
                 $updateData['status'] = $request->input('status');
+            }
+            if (Schema::hasColumn('Wo_Users', 'custom_status_text')) {
+                $updateData['custom_status_text'] = $request->input('status') === '4'
+                    ? trim((string) $request->input('custom_status_text', ''))
+                    : '';
             }
 
             // Visit Privacy: 0 = Visible, 1 = Hidden
@@ -320,6 +331,9 @@ class PrivacyController extends Controller
             if (Schema::hasColumn('Wo_Users', 'friend_request_age_group')) {
                 $select[] = 'friend_request_age_group';
             }
+            if (Schema::hasColumn('Wo_Users', 'custom_status_text')) {
+                $select[] = 'custom_status_text';
+            }
 
             // Get updated settings
             $updatedSettings = DB::table('Wo_Users')
@@ -339,6 +353,7 @@ class PrivacyController extends Controller
                     'friend_request_age_group' => (string) ($updatedSettings->friend_request_age_group ?? 'all'),
                     'birth_privacy' => (string) ($updatedSettings->birth_privacy ?? '0'),
                     'status' => (string) ($updatedSettings->status ?? '0'),
+                    'custom_status_text' => (string) ($updatedSettings->custom_status_text ?? ''),
                     'visit_privacy' => (string) ($updatedSettings->visit_privacy ?? '0'),
                     'post_privacy' => (string) ($updatedSettings->post_privacy ?? '0'),
                     'confirm_followers' => (string) ($updatedSettings->confirm_followers ?? '0'),
