@@ -71,7 +71,9 @@ class AccountVerificationController extends Controller
             'id_proof_front_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
             'id_proof_back_image' => 'required_unless:id_proof_type,pan_card|nullable|image|mimes:jpeg,png,jpg|max:5120',
             'badge_type' => 'required|string|in:blue,golden',
-            'message' => 'required|string|min:20|max:1000',
+            'message' => $request->input('badge_type') === 'golden'
+                ? 'required|string|min:20|max:1000'
+                : 'nullable|string|max:1000',
         ]);
 
         if ($validator->fails()) {
@@ -206,7 +208,9 @@ class AccountVerificationController extends Controller
             'id_proof_front_image' => 'required|image|mimes:jpeg,png,jpg|max:5120', // 5MB max
             'id_proof_back_image' => 'required_unless:id_proof_type,pan_card|nullable|image|mimes:jpeg,png,jpg|max:5120',
             'badge_type' => 'required|string|in:blue,golden',
-            'message' => 'required|string|min:20|max:1000',
+            'message' => $request->input('badge_type') === 'golden'
+                ? 'required|string|min:20|max:1000'
+                : 'nullable|string|max:1000',
             'verification_video' => 'required|file|mimes:mp4,webm,mov,avi|max:52428800', // 50MB max
             'video_challenge_code' => 'nullable|string|max:20',
         ]);

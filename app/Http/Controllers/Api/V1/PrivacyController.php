@@ -122,7 +122,12 @@ class PrivacyController extends Controller
             $settings['friend_privacy_text'] = $this->getFriendPrivacyText($settings['friend_privacy']);
             $settings['friend_request_age_group_text'] = $this->getFriendRequestAgeGroupText($settings['friend_request_age_group']);
             $settings['birth_privacy_text'] = $this->getBirthPrivacyText($settings['birth_privacy']);
-            $settings['status_text'] = $settings['status'] === '1' ? 'Online' : 'Offline';
+            $settings['status_text'] = match ($settings['status']) {
+                '1' => 'Online',
+                '2' => 'Away',
+                '3' => 'Busy',
+                default => 'Offline',
+            };
             $settings['visit_privacy_text'] = $settings['visit_privacy'] === '1' ? 'Hidden' : 'Visible';
 
             return response()->json([
