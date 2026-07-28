@@ -99,6 +99,9 @@ class GroupsController extends BaseController
                 'allowed_gender' => Schema::hasColumn('Wo_Groups', 'allowed_gender')
                     ? ($group->allowed_gender ?: 'all')
                     : 'all',
+                'age_group' => Schema::hasColumn('Wo_Groups', 'age_group')
+                    ? ($group->age_group ?: '')
+                    : '',
                 'community_preferences' => Schema::hasColumn('Wo_Groups', 'community_preferences')
                     ? $this->parseCommunityPreferences($group->community_preferences ?? '')
                     : [],
@@ -159,6 +162,7 @@ class GroupsController extends BaseController
             'privacy' => ['required', 'in:public,private'],
             'join_privacy' => ['required', 'in:public,private'],
             'allowed_gender' => ['nullable', 'in:all,male,female,other'],
+            'age_group' => ['nullable', 'in:,0_17,18_24,25_34,35_44,45_54,55_64,65_plus'],
             'community_preferences' => ['nullable', 'array'],
             'community_preferences.*' => ['integer', 'exists:community_preferences,id'],
             'avatar' => ['sometimes', 'image', 'max:10240'],
@@ -182,6 +186,9 @@ class GroupsController extends BaseController
         $group->join_privacy = $validated['join_privacy'];
         if (Schema::hasColumn('Wo_Groups', 'allowed_gender')) {
             $group->allowed_gender = $validated['allowed_gender'] ?? 'all';
+        }
+        if (Schema::hasColumn('Wo_Groups', 'age_group')) {
+            $group->age_group = $validated['age_group'] ?? null;
         }
         if (Schema::hasColumn('Wo_Groups', 'community_preferences')) {
             $group->community_preferences = $this->normalizeCommunityPreferences(
@@ -233,6 +240,9 @@ class GroupsController extends BaseController
                 'allowed_gender' => Schema::hasColumn('Wo_Groups', 'allowed_gender')
                     ? ($group->allowed_gender ?: 'all')
                     : 'all',
+                'age_group' => Schema::hasColumn('Wo_Groups', 'age_group')
+                    ? ($group->age_group ?: '')
+                    : '',
                 'community_preferences' => Schema::hasColumn('Wo_Groups', 'community_preferences')
                     ? $this->parseCommunityPreferences($group->community_preferences ?? '')
                     : [],
@@ -407,6 +417,9 @@ class GroupsController extends BaseController
                 'allowed_gender' => Schema::hasColumn('Wo_Groups', 'allowed_gender')
                     ? ($group->allowed_gender ?: 'all')
                     : 'all',
+                'age_group' => Schema::hasColumn('Wo_Groups', 'age_group')
+                    ? ($group->age_group ?: '')
+                    : '',
                 'community_preferences' => Schema::hasColumn('Wo_Groups', 'community_preferences')
                     ? $this->parseCommunityPreferences($group->community_preferences ?? '')
                     : [],
@@ -461,6 +474,7 @@ class GroupsController extends BaseController
                     'privacy' => ['public', 'private'],
                     'join_privacy' => ['public', 'private'],
                     'allowed_gender' => ['all', 'male', 'female', 'other'],
+                    'age_group' => ['', '0_17', '18_24', '25_34', '35_44', '45_54', '55_64', '65_plus'],
                 ],
                 'community_preferences' => Schema::hasTable('community_preferences')
                     ? CommunityPreference::query()
@@ -1075,6 +1089,7 @@ class GroupsController extends BaseController
             'privacy' => ['sometimes', 'in:public,private'],
             'join_privacy' => ['sometimes', 'in:public,private'],
             'allowed_gender' => ['sometimes', 'nullable', 'in:all,male,female,other'],
+            'age_group' => ['sometimes', 'nullable', 'in:,0_17,18_24,25_34,35_44,45_54,55_64,65_plus'],
             'community_preferences' => ['sometimes', 'nullable', 'array'],
             'community_preferences.*' => ['integer', 'exists:community_preferences,id'],
             'category' => ['sometimes', 'integer'],
@@ -1097,6 +1112,9 @@ class GroupsController extends BaseController
         }
         if (array_key_exists('allowed_gender', $validated) && Schema::hasColumn('Wo_Groups', 'allowed_gender')) {
             $group->allowed_gender = $validated['allowed_gender'] ?? 'all';
+        }
+        if (array_key_exists('age_group', $validated) && Schema::hasColumn('Wo_Groups', 'age_group')) {
+            $group->age_group = $validated['age_group'] ?: null;
         }
         if (array_key_exists('community_preferences', $validated) && Schema::hasColumn('Wo_Groups', 'community_preferences')) {
             $group->community_preferences = $this->normalizeCommunityPreferences(
@@ -1133,6 +1151,9 @@ class GroupsController extends BaseController
                 'allowed_gender' => Schema::hasColumn('Wo_Groups', 'allowed_gender')
                     ? ($group->allowed_gender ?: 'all')
                     : 'all',
+                'age_group' => Schema::hasColumn('Wo_Groups', 'age_group')
+                    ? ($group->age_group ?: '')
+                    : '',
                 'community_preferences' => Schema::hasColumn('Wo_Groups', 'community_preferences')
                     ? $this->parseCommunityPreferences($group->community_preferences ?? '')
                     : [],
