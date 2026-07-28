@@ -270,17 +270,69 @@ class FollowController extends Controller
                 ->orderBy('f.time', 'desc')
                 ->paginate($perPage);
 
-            $formattedFollowers = $followers->map(function ($follower) use ($tokenUserId) {
+            $followerIds = $followers->getCollection()->pluck('user_id')->map(fn ($id) => (string) $id)->all();
+            $iFollowSet = [];
+            $iPendingSet = [];
+            $followsMeSet = [];
+            $viewingOwnList = (string) $userId === (string) $tokenUserId;
+
+            if (!empty($followerIds)) {
+                $iFollowIds = DB::table('Wo_Followers')
+                    ->where('follower_id', $tokenUserId)
+                    ->whereIn('following_id', $followerIds)
+                    ->where('active', '1')
+                    ->pluck('following_id')
+                    ->map(fn ($id) => (string) $id)
+                    ->all();
+                $iFollowSet = array_fill_keys($iFollowIds, true);
+
+                $iPendingIds = DB::table('Wo_Followers')
+                    ->where('follower_id', $tokenUserId)
+                    ->whereIn('following_id', $followerIds)
+                    ->where('active', '0')
+                    ->pluck('following_id')
+                    ->map(fn ($id) => (string) $id)
+                    ->all();
+                $iPendingSet = array_fill_keys($iPendingIds, true);
+
+                if ($viewingOwnList) {
+                    // Everyone on your followers list follows you by definition.
+                    $followsMeSet = array_fill_keys($followerIds, true);
+                } else {
+                    $followsMeIds = DB::table('Wo_Followers')
+                        ->where('following_id', $tokenUserId)
+                        ->whereIn('follower_id', $followerIds)
+                        ->where('active', '1')
+                        ->pluck('follower_id')
+                        ->map(fn ($id) => (string) $id)
+                        ->all();
+                    $followsMeSet = array_fill_keys($followsMeIds, true);
+                }
+            }
+
+            $formattedFollowers = $followers->map(function ($follower) use ($tokenUserId, $iFollowSet, $iPendingSet, $followsMeSet) {
                 $fullName = trim(($follower->first_name ?? '') . ' ' . ($follower->last_name ?? '')) ?: $follower->username;
+                $fid = (string) $follower->user_id;
+                $isMe = $fid === (string) $tokenUserId;
+                $isFollowing = !$isMe && isset($iFollowSet[$fid]);
+                $isPending = !$isMe && isset($iPendingSet[$fid]);
+                $isFollowingMe = !$isMe && isset($followsMeSet[$fid]);
+
                 return [
                     'user_id' => $follower->user_id,
                     'username' => $follower->username,
                     'name' => $fullName,
+                    'first_name' => $follower->first_name ?? '',
+                    'last_name' => $follower->last_name ?? '',
                     'avatar_url' => $follower->avatar ? asset('storage/' . $follower->avatar) : null,
                     'verified' => $follower->verified === '1',
                     'followed_at' => date('c', $follower->followed_at),
-                    'is_following_me' => $this->isFollowing($follower->user_id, $tokenUserId),
-                    'is_me' => $follower->user_id == $tokenUserId,
+                    // 0 = not following, 1 = following, 2 = pending (auth → this user)
+                    'is_following' => $isFollowing ? 1 : ($isPending ? 2 : 0),
+                    'is_following_me' => $isFollowingMe,
+                    'mutual_follow' => $isFollowing && $isFollowingMe,
+                    'can_follow_back' => $isFollowingMe && !$isFollowing && !$isPending && !$isMe,
+                    'is_me' => $isMe,
                 ];
             });
 
@@ -352,15 +404,26 @@ class FollowController extends Controller
 
             $formattedFollowing = $following->map(function ($followed) use ($tokenUserId) {
                 $fullName = trim(($followed->first_name ?? '') . ' ' . ($followed->last_name ?? '')) ?: $followed->username;
+                $fid = (string) $followed->user_id;
+                $isMe = $fid === (string) $tokenUserId;
+                $isFollowing = !$isMe && $this->isFollowing((string) $tokenUserId, $fid);
+                $isPending = !$isMe && $this->isFollowPending((string) $tokenUserId, $fid);
+                $isFollowingMe = !$isMe && $this->isFollowing($fid, (string) $tokenUserId);
+
                 return [
                     'user_id' => $followed->user_id,
                     'username' => $followed->username,
                     'name' => $fullName,
+                    'first_name' => $followed->first_name ?? '',
+                    'last_name' => $followed->last_name ?? '',
                     'avatar_url' => $followed->avatar ? asset('storage/' . $followed->avatar) : null,
                     'verified' => $followed->verified === '1',
                     'followed_at' => date('c', $followed->followed_at),
-                    'is_following_me' => $this->isFollowing($followed->user_id, $tokenUserId),
-                    'is_me' => $followed->user_id == $tokenUserId,
+                    'is_following' => $isFollowing ? 1 : ($isPending ? 2 : 0),
+                    'is_following_me' => $isFollowingMe,
+                    'mutual_follow' => $isFollowing && $isFollowingMe,
+                    'can_follow_back' => $isFollowingMe && !$isFollowing && !$isPending && !$isMe,
+                    'is_me' => $isMe,
                 ];
             });
 
