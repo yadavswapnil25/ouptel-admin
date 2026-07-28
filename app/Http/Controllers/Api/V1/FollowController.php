@@ -109,7 +109,14 @@ class FollowController extends Controller
 
             DB::commit();
 
-            $message = $requiresApproval ? 'Follow request sent successfully' : 'User followed successfully';
+            $displayName = trim(($targetUser->first_name ?? '') . ' ' . ($targetUser->last_name ?? ''));
+            if ($displayName === '') {
+                $displayName = $targetUser->full_name ?: ($targetUser->username ?: 'User');
+            }
+
+            $message = $requiresApproval
+                ? "Follow request sent to {$displayName}"
+                : "{$displayName} followed successfully";
             $status = $requiresApproval ? 'pending' : 'following';
 
             return response()->json([
@@ -121,6 +128,7 @@ class FollowController extends Controller
                     'status' => $status,
                     'requires_approval' => $requiresApproval,
                     'followed_at' => date('c'),
+                    'display_name' => $displayName,
                 ]
             ]);
 
@@ -186,14 +194,27 @@ class FollowController extends Controller
 
             DB::commit();
 
+            $targetUser = User::where('user_id', $followingId)->first();
+            $displayName = '';
+            if ($targetUser) {
+                $displayName = trim(($targetUser->first_name ?? '') . ' ' . ($targetUser->last_name ?? ''));
+                if ($displayName === '') {
+                    $displayName = $targetUser->full_name ?: ($targetUser->username ?: 'User');
+                }
+            }
+            if ($displayName === '') {
+                $displayName = 'User';
+            }
+
             return response()->json([
                 'ok' => true,
-                'message' => 'User unfollowed successfully',
+                'message' => "{$displayName} unfollowed successfully",
                 'data' => [
                     'follower_id' => $tokenUserId,
                     'following_id' => $followingId,
                     'status' => 'unfollowed',
                     'unfollowed_at' => date('c'),
+                    'display_name' => $displayName,
                 ]
             ]);
 

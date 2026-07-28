@@ -849,7 +849,10 @@ class GroupsController extends BaseController
             return [
                 'user_id' => $userIdStr,
                 'username' => $user->username ?? 'Unknown',
-                'name' => $user->name ?? $user->username ?? 'Unknown User',
+                'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''))
+                    ?: ($user->username ?? 'Unknown User'),
+                'first_name' => $user->first_name ?? '',
+                'last_name' => $user->last_name ?? '',
                 'avatar_url' => !empty($user->avatar) ? asset('storage/' . $user->avatar) : null,
                 'joined_at' => is_numeric($row->time) ? (int) $row->time : null,
                 'is_owner' => $userIdStr === $ownerId,
