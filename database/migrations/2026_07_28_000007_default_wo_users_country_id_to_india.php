@@ -18,9 +18,7 @@ return new class extends Migration
         DB::table('Wo_Users')
             ->where(function ($query) {
                 $query->whereNull('country_id')
-                    ->orWhere('country_id', 0)
-                    ->orWhere('country_id', '0')
-                    ->orWhere('country_id', '');
+                    ->orWhere('country_id', 0);
             })
             ->update(['country_id' => 99]);
     }
