@@ -212,6 +212,13 @@ class NewFeedController extends Controller
 
         $query = DB::table('Wo_Posts')
             ->where('active', '1')
+            // Hide posts from deleted / deactivated / banned authors
+            ->whereExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('Wo_Users')
+                    ->whereColumn('Wo_Users.user_id', 'Wo_Posts.user_id')
+                    ->where('Wo_Users.active', '1');
+            })
             // Answers are nested under questions — never show as top-level feed items
             ->where(function ($q) {
                 $q->whereNull('postType')

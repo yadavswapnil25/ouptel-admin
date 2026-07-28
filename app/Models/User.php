@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
+use App\Services\UserContentPurger;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use App\Models\AdminRole;
 use App\Models\CommunityPreference;
@@ -25,13 +26,15 @@ class User extends Authenticatable
     protected static function booted(): void
     {
         static::deleting(function (User $user) {
-            DB::table('Wo_AppsSessions')->where('user_id', $user->user_id)->delete();
+            // Remove posts, social graph, and sessions so the user vanishes from the site.
+            UserContentPurger::purge($user->user_id);
         });
 
         static::updated(function (User $user) {
             $active = (string) ($user->active ?? '');
             if (in_array($active, ['0', '2'], true)) {
-                DB::table('Wo_AppsSessions')->where('user_id', $user->user_id)->delete();
+                // Soft-ban / pending deletion: hide content + kill sessions.
+                UserContentPurger::deactivate($user->user_id);
             }
         });
     }
