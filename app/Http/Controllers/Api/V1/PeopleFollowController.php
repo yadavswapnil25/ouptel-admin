@@ -485,6 +485,11 @@ class PeopleFollowController extends Controller
 
             $query = DB::table('Wo_Posts')
                 ->whereIn('active', ['1', 1]) // Handle both string and integer
+                ->where(function ($q) {
+                    $q->whereNull('postType')
+                      ->orWhere('postType', '')
+                      ->orWhere('postType', '!=', 'answer');
+                })
                 ->where(function ($q) use ($followingUserIds, $userId) {
                     $q->whereIn('user_id', $followingUserIds)
                       // Include posts where current user is explicitly tagged/recipient.

@@ -1287,6 +1287,8 @@ class ProfileController extends Controller
             ->orderBy('time', 'desc')
             ->limit($limit);
 
+        $this->excludeQaAnswerPosts($query);
+
         $posts = $query->get();
 
         $result = [];
@@ -1547,8 +1549,23 @@ class ProfileController extends Controller
      * @param string|null $filter
      * @return void
      */
+    /**
+     * Q&A answers are nested under questions — never show as top-level feed/timeline items.
+     */
+    private function excludeQaAnswerPosts($query): void
+    {
+        $query->where(function ($q) {
+            $q->whereNull('postType')
+                ->orWhere('postType', '')
+                ->orWhere('postType', '!=', 'answer');
+        });
+    }
+
     private function applyTimelineFilter($query, ?string $filter = null): void
     {
+        // Answers belong under questions — never as top-level timeline items
+        $this->excludeQaAnswerPosts($query);
+
         if (!$filter) {
             return;
         }
@@ -2072,6 +2089,11 @@ class ProfileController extends Controller
                         $q2->where('recipient_id', $user->user_id)
                             ->where('user_id', '!=', $user->user_id);
                     });
+            })
+            ->where(function ($q) {
+                $q->whereNull('postType')
+                    ->orWhere('postType', '')
+                    ->orWhere('postType', '!=', 'answer');
             })
             ->count();
 

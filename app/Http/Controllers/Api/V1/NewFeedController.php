@@ -215,6 +215,7 @@ class NewFeedController extends Controller
             // Answers are nested under questions — never show as top-level feed items
             ->where(function ($q) {
                 $q->whereNull('postType')
+                  ->orWhere('postType', '')
                   ->orWhere('postType', '!=', 'answer');
             });
             // Note: privacy column doesn't exist in Wo_Posts table
