@@ -359,6 +359,30 @@ class NotificationsController extends Controller
         foreach ($notifications as $notification) {
             // Get notifier data
             $notifier = DB::table('Wo_Users')->where('user_id', $notification->notifier_id)->first();
+            $isSystemNotifier = (int) ($notification->notifier_id ?? 0) === 0;
+            $notifierPayload = $notifier ? [
+                'user_id' => $notifier->user_id,
+                'username' => $notifier->username ?? 'Unknown',
+                'first_name' => $notifier->first_name ?? '',
+                'last_name' => $notifier->last_name ?? '',
+                'name' => $notifier->name ?? $notifier->username ?? 'Unknown User',
+                'avatar' => $notifier->avatar ?? '',
+                'avatar_url' => $notifier->avatar ? asset('storage/' . $notifier->avatar) : null,
+                'verified' => (bool) ($notifier->verified ?? false),
+            ] : null;
+
+            if (!$notifierPayload && $isSystemNotifier) {
+                $notifierPayload = [
+                    'user_id' => 0,
+                    'username' => 'ouptel',
+                    'first_name' => 'Ouptel',
+                    'last_name' => '',
+                    'name' => 'Ouptel',
+                    'avatar' => 'user.png',
+                    'avatar_url' => asset('user.png'),
+                    'verified' => false,
+                ];
+            }
             
             $formatted[] = [
                 'id' => $notification->id,
@@ -374,16 +398,7 @@ class NotificationsController extends Controller
                 'page_id' => $notification->page_id ?? null,
                 'group_id' => $notification->group_id ?? null,
                 'event_id' => $notification->event_id ?? null,
-                'notifier' => $notifier ? [
-                    'user_id' => $notifier->user_id,
-                    'username' => $notifier->username ?? 'Unknown',
-                    'first_name' => $notifier->first_name ?? '',
-                    'last_name' => $notifier->last_name ?? '',
-                    'name' => $notifier->name ?? $notifier->username ?? 'Unknown User',
-                    'avatar' => $notifier->avatar ?? '',
-                    'avatar_url' => $notifier->avatar ? asset('storage/' . $notifier->avatar) : null,
-                    'verified' => (bool) ($notifier->verified ?? false),
-                ] : null,
+                'notifier' => $notifierPayload,
             ];
         }
 
