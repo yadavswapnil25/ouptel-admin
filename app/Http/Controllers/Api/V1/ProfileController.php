@@ -458,6 +458,12 @@ class ProfileController extends Controller
         $userData['birth_month'] = $birthdayMeta['birth_month'];
         $userData['birth_month_name'] = $birthdayMeta['birth_month_name'];
 
+        // Email + phone are owner-only; never expose to other viewers.
+        if (!$isOwner) {
+            $userData['email'] = '';
+            $userData['phone_number'] = '';
+        }
+
         return $userData;
     }
 
