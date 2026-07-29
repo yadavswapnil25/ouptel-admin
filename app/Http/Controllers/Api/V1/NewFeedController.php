@@ -579,12 +579,16 @@ class NewFeedController extends Controller
                     ->get();
                 foreach ($previewRows as $preview) {
                     $answerAuthor = DB::table('Wo_Users')->where('user_id', $preview->user_id)->first();
+                    $publicAnswerPostId = $preview->post_id ?? $preview->id;
+                    $replyCount = (int) DB::table('Wo_Comments')->where('post_id', $publicAnswerPostId)->count();
                     $answerPreviews[] = [
                         'id' => $preview->id,
-                        'post_id' => $preview->post_id ?? $preview->id,
+                        'post_id' => $publicAnswerPostId,
                         'post_text' => $preview->postText ?? '',
                         'post_type' => 'answer',
                         'parent_id' => (int) ($preview->parent_id ?? 0),
+                        'reply_count' => $replyCount,
+                        'comments_count' => $replyCount,
                         'author' => $answerAuthor ? [
                             'user_id' => $answerAuthor->user_id,
                             'username' => $answerAuthor->username ?? 'Unknown',
