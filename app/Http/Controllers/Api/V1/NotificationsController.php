@@ -359,6 +359,28 @@ class NotificationsController extends Controller
         foreach ($notifications as $notification) {
             // Get notifier data
             $notifier = DB::table('Wo_Users')->where('user_id', $notification->notifier_id)->first();
+            $pageId = $notification->page_id ?? null;
+            $notificationUrl = $notification->url ?? '';
+
+            if (
+                empty($pageId)
+                && ($notification->type ?? '') === 'verification_result'
+                && preg_match('/page verification request/i', (string) ($notification->text ?? ''))
+            ) {
+                $latestPageVerification = DB::table('Wo_Verification_Requests')
+                    ->where('user_id', $userId)
+                    ->where('type', 'Page')
+                    ->orderByDesc('reviewed_at')
+                    ->orderByDesc('updated_at')
+                    ->orderByDesc('id')
+                    ->first(['page_id']);
+
+                if (!empty($latestPageVerification?->page_id)) {
+                    $pageId = (int) $latestPageVerification->page_id;
+                    $notificationUrl = '/page/' . $pageId . '/settings';
+                }
+            }
+
             $isSystemNotifier = (int) ($notification->notifier_id ?? 0) === 0;
             $notifierPayload = $notifier ? [
                 'user_id' => $notifier->user_id,
@@ -391,11 +413,11 @@ class NotificationsController extends Controller
                 'type' => $notification->type,
                 'type2' => $notification->type2 ?? '',
                 'text' => $notification->text ?? '',
-                'url' => $notification->url ?? '',
+                'url' => $notificationUrl,
                 'seen' => $notification->seen ?? 0,
                 'time' => $notification->time ?? time(),
                 'post_id' => $notification->post_id ?? null,
-                'page_id' => $notification->page_id ?? null,
+                'page_id' => $pageId,
                 'group_id' => $notification->group_id ?? null,
                 'event_id' => $notification->event_id ?? null,
                 'notifier' => $notifierPayload,
