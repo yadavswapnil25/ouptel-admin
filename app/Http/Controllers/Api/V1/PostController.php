@@ -2496,13 +2496,19 @@ class PostController extends Controller
                 ->count();
             foreach ($answerRows as $answerRow) {
                 $answerUser = DB::table('Wo_Users')->where('user_id', $answerRow->user_id)->first();
+                $publicAnswerPostId = $answerRow->post_id ?? $answerRow->id;
+                $replyCount = DB::table('Wo_Comments')
+                    ->where('post_id', $publicAnswerPostId)
+                    ->count();
                 $answers[] = [
                     'id' => $answerRow->id,
-                    'post_id' => $answerRow->post_id ?? $answerRow->id,
+                    'post_id' => $publicAnswerPostId,
                     'user_id' => $answerRow->user_id,
                     'post_text' => $answerRow->postText ?? '',
                     'post_type' => 'answer',
                     'parent_id' => (int) ($answerRow->parent_id ?? 0),
+                    'reply_count' => (int) $replyCount,
+                    'comments_count' => (int) $replyCount,
                     'time' => $answerRow->time ?? null,
                     'created_at' => !empty($answerRow->time) ? date('c', $answerRow->time) : null,
                     'created_at_human' => !empty($answerRow->time) ? $this->getHumanTime($answerRow->time) : null,

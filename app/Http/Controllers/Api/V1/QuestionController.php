@@ -373,9 +373,15 @@ class QuestionController extends Controller
 
     private function formatAnswerOrQuestion($post, $user, int $answerCount = 0, array $answerPreviews = []): array
     {
+        $publicPostId = $post->post_id ?? $post->id;
+        $replyCount = 0;
+        if (($post->postType ?? '') === 'answer' && $publicPostId) {
+            $replyCount = (int) DB::table('Wo_Comments')->where('post_id', $publicPostId)->count();
+        }
+
         return [
             'id' => $post->id,
-            'post_id' => $post->post_id ?? $post->id,
+            'post_id' => $publicPostId,
             'user_id' => $post->user_id,
             'post_text' => $post->postText ?? '',
             'postText' => $post->postText ?? '',
@@ -384,6 +390,8 @@ class QuestionController extends Controller
             'post_privacy' => $post->postPrivacy ?? '0',
             'parent_id' => (int) ($post->parent_id ?? 0),
             'answer_count' => $answerCount,
+            'reply_count' => $replyCount,
+            'comments_count' => $replyCount,
             'answers' => $answerPreviews,
             'time' => $post->time ?? null,
             'created_at' => !empty($post->time) ? date('c', $post->time) : null,
