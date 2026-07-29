@@ -2676,8 +2676,7 @@ class PagesController extends BaseController
             'id_proof_number'      => ['nullable', 'string', 'max:50'],
             'id_proof_front_image' => ['required', 'file', 'mimes:jpeg,jpg,png,gif,webp', 'max:5120'],
             'id_proof_back_image'  => [$backRequired ? 'required' : 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp', 'max:5120'],
-            'verification_video'   => ['required', 'file', 'mimes:mp4,webm,mov,avi', 'max:51200'],
-            'video_challenge_code' => ['nullable', 'string', 'max:20'],
+            'live_photo'           => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
             'message'              => ['nullable', 'string', 'max:500'],
         ];
 
@@ -2711,13 +2710,10 @@ class PagesController extends BaseController
             $backPath = $file->storeAs($storagePath, $prefix . '_back.' . $file->getClientOriginalExtension(), 'public') ?: '';
         }
 
-        $videoPath = '';
-        $videoSize = 0;
-        $videoDuration = 0;
-        if ($request->hasFile('verification_video') && $request->file('verification_video')->isValid()) {
-            $file = $request->file('verification_video');
-            $videoPath = $file->storeAs($storagePath, $prefix . '_video.' . $file->getClientOriginalExtension(), 'public') ?: '';
-            $videoSize = $file->getSize();
+        $livePhotoPath = '';
+        if ($request->hasFile('live_photo') && $request->file('live_photo')->isValid()) {
+            $file = $request->file('live_photo');
+            $livePhotoPath = $file->storeAs($storagePath, $prefix . '_live_photo.' . $file->getClientOriginalExtension(), 'public') ?: '';
         }
 
         DB::table('Wo_Verification_Requests')->insert([
@@ -2731,14 +2727,14 @@ class PagesController extends BaseController
             'id_proof_number'      => $validated['id_proof_number'] ?? '',
             'id_proof_front_image' => $frontPath,
             'id_proof_back_image'  => $backPath,
-            'verification_video'   => $videoPath,
-            'video_size'           => $videoSize,
-            'video_duration'       => $videoDuration,
-            'video_uploaded_at'    => $videoPath ? now() : null,
-            'video_challenge_code' => $validated['video_challenge_code'] ?? '',
+            'verification_video'   => '',
+            'video_size'           => 0,
+            'video_duration'       => 0,
+            'video_uploaded_at'    => null,
+            'video_challenge_code' => '',
             'message'              => $validated['message'] ?? '',
             'passport'             => '',
-            'photo'                => '',
+            'photo'                => $livePhotoPath,
             'submitted_at'         => now(),
             'created_at'           => now(),
             'updated_at'           => now(),
