@@ -109,7 +109,34 @@ class VerificationRequest extends Model
 
     public function getNameAttribute(): string
     {
-        return $this->user_name;
+        return (string) ($this->attributes['user_name'] ?? '');
+    }
+
+    /**
+     * Safe display label for admin UI (never assumes related models exist).
+     */
+    public function displayName(): string
+    {
+        $stored = trim((string) ($this->attributes['user_name'] ?? ''));
+        if ($stored !== '') {
+            return $stored;
+        }
+
+        if ($this->isPageVerification()) {
+            $pageTitle = trim((string) ($this->page?->page_title ?? $this->page?->page_name ?? ''));
+            if ($pageTitle !== '') {
+                return $pageTitle;
+            }
+
+            return 'Page #' . (int) $this->page_id;
+        }
+
+        $username = trim((string) ($this->user?->username ?? ''));
+        if ($username !== '') {
+            return $username;
+        }
+
+        return 'User #' . (int) $this->user_id;
     }
 
     public function getTimeAttribute(): ?string
@@ -311,7 +338,14 @@ class VerificationRequest extends Model
                     ]);
             }
             
-            $this->sendVerificationNotification(true);
+            try {
+                $this->sendVerificationNotification(true);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Failed to send verification approval notification', [
+                    'verification_id' => $this->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
             
             return true;
         }
@@ -335,8 +369,14 @@ class VerificationRequest extends Model
         $this->seen = 1;
         
         if ($this->save()) {
-            // Send notification to user
-            $this->sendVerificationNotification(false);
+            try {
+                $this->sendVerificationNotification(false);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Failed to send verification rejection notification', [
+                    'verification_id' => $this->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
             
             return true;
         }
@@ -352,6 +392,11 @@ class VerificationRequest extends Model
      */
     protected function sendVerificationNotification(bool $approved): void
     {
+        $recipientId = (int) ($this->user_id ?? 0);
+        if ($recipientId <= 0) {
+            return;
+        }
+
         if ($this->isPageVerification()) {
             if ($approved) {
                 $text = 'Your page verification request has been approved. Your page is now verified.';
@@ -370,10 +415,9 @@ class VerificationRequest extends Model
             }
         }
 
-        // Insert notification into Wo_Notifications table
-        \Illuminate\Support\Facades\DB::table('Wo_Notifications')->insert([
+        $payload = [
             'notifier_id' => 0, // System notification (0 = admin/system)
-            'recipient_id' => $this->user_id,
+            'recipient_id' => $recipientId,
             'type' => 'verification_result',
             'type2' => $approved ? 'approved' : 'rejected',
             'text' => $text,
@@ -382,8 +426,14 @@ class VerificationRequest extends Model
                 : '/settings/verification',
             'seen' => 0,
             'time' => time(),
-            'page_id' => $this->isPageVerification() ? $this->page_id : null,
-        ]);
+        ];
+
+        if ($this->isPageVerification() && !empty($this->page_id)) {
+            $payload['page_id'] = $this->page_id;
+        }
+
+        // Insert notification into Wo_Notifications table
+        \Illuminate\Support\Facades\DB::table('Wo_Notifications')->insert($payload);
     }
 
     /**

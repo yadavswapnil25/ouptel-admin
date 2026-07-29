@@ -256,13 +256,19 @@ class VerificationRequestsResource extends Resource
                     ->searchable()
                     ->sortable()
                     ->weight('bold')
-                    ->color('primary'),
+                    ->color('primary')
+                    ->placeholder('—')
+                    ->formatStateUsing(fn ($state, ?VerificationRequest $record): string =>
+                        $state ?: ($record?->displayName() ?? '—')),
 
                 TextColumn::make('user_name')
                     ->label('Full Name')
                     ->searchable()
                     ->sortable()
-                    ->limit(30),
+                    ->limit(30)
+                    ->placeholder('—')
+                    ->formatStateUsing(fn ($state, ?VerificationRequest $record): string =>
+                        $state ?: ($record?->displayName() ?? '—')),
 
                 TextColumn::make('type')
                     ->label('Type')
@@ -396,20 +402,22 @@ class VerificationRequestsResource extends Resource
                     ->color('success')
                     ->requiresConfirmation()
                     ->modalHeading('Approve Verification Request')
-                    ->modalDescription(fn ($record) => $record->isPageVerification()
-                        ? "Are you sure you want to approve verification for page \"{$record->user_name}\"?"
-                        : "Are you sure you want to approve this verification request for {$record->user_name}? They will receive a {$record->badge_type} badge.")
+                    ->modalDescription(fn (?VerificationRequest $record): string => $record?->isPageVerification()
+                        ? 'Are you sure you want to approve verification for page "'.($record->displayName()).'"?'
+                        : 'Are you sure you want to approve this verification request for '.($record?->displayName() ?? 'this user').'? They will receive a '.($record?->badge_type ?? 'verification').' badge.')
                     ->modalSubmitActionLabel('Yes, Approve')
-                    ->visible(fn ($record) => $record->status === 'pending' && ($record->badge_type !== null || $record->isPageVerification()))
-                    ->action(function ($record) {
-                        $adminUserId = Auth::id() ?? 1; // Get current admin user ID
+                    ->visible(fn (?VerificationRequest $record): bool => (bool) $record
+                        && $record->status === 'pending'
+                        && ($record->badge_type !== null || $record->isPageVerification()))
+                    ->action(function (VerificationRequest $record) {
+                        $adminUserId = (int) (Auth::id() ?? 1);
                         
                         if ($record->approve($adminUserId)) {
                             Notification::make()
                                 ->title('Verification Approved')
                                 ->body($record->isPageVerification()
-                                    ? "Page \"{$record->user_name}\" has been verified."
-                                    : "User {$record->user_name} has been verified with a {$record->badge_type} badge.")
+                                    ? 'Page "'.$record->displayName().'" has been verified.'
+                                    : 'User '.$record->displayName().' has been verified with a '.$record->badge_type.' badge.')
                                 ->success()
                                 ->send();
                         } else {
@@ -428,7 +436,8 @@ class VerificationRequestsResource extends Resource
                     ->color('danger')
                     ->requiresConfirmation()
                     ->modalHeading('Reject Verification Request')
-                    ->modalDescription(fn ($record) => "Please select a reason for rejecting the verification request for {$record->user_name}.")
+                    ->modalDescription(fn (?VerificationRequest $record): string =>
+                        'Please select a reason for rejecting the verification request for '.($record?->displayName() ?? 'this request').'.')
                     ->form([
                         Select::make('rejection_reason')
                             ->label('Rejection Reason')
@@ -449,17 +458,19 @@ class VerificationRequestsResource extends Resource
                             ->helperText('Use this when none of the preset rejection reasons fit.'),
                     ])
                     ->modalSubmitActionLabel('Reject Request')
-                    ->visible(fn ($record) => $record->status === 'pending' && ($record->badge_type !== null || $record->isPageVerification()))
-                    ->action(function ($record, array $data) {
-                        $adminUserId = Auth::id() ?? 1; // Get current admin user ID
-                        $reason = $data['rejection_reason'] === 'custom'
+                    ->visible(fn (?VerificationRequest $record): bool => (bool) $record
+                        && $record->status === 'pending'
+                        && ($record->badge_type !== null || $record->isPageVerification()))
+                    ->action(function (VerificationRequest $record, array $data) {
+                        $adminUserId = (int) (Auth::id() ?? 1);
+                        $reason = ($data['rejection_reason'] ?? '') === 'custom'
                             ? trim((string) ($data['custom_rejection_reason'] ?? ''))
-                            : $data['rejection_reason'];
+                            : trim((string) ($data['rejection_reason'] ?? ''));
                         
                         if ($reason !== '' && $record->reject($adminUserId, $reason)) {
                             Notification::make()
                                 ->title('Verification Rejected')
-                                ->body("Verification request for {$record->user_name} has been rejected.")
+                                ->body('Verification request for '.$record->displayName().' has been rejected.')
                                 ->warning()
                                 ->send();
                         } else {
