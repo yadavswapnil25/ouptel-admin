@@ -27,6 +27,7 @@ use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Grid;
 use Filament\Forms\Components\ViewField;
+use Filament\Forms\Get;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TernaryFilter;
 use Filament\Notifications\Notification;
@@ -431,16 +432,31 @@ class VerificationRequestsResource extends Resource
                     ->form([
                         Select::make('rejection_reason')
                             ->label('Rejection Reason')
-                            ->options(VerificationRequest::REJECTION_REASONS)
+                            ->options([
+                                ...VerificationRequest::REJECTION_REASONS,
+                                'custom' => 'Custom reason',
+                            ])
                             ->required()
+                            ->live()
                             ->helperText('The user will be notified with this reason.'),
+                        Textarea::make('custom_rejection_reason')
+                            ->label('Custom Reason')
+                            ->rows(4)
+                            ->maxLength(255)
+                            ->placeholder('Type the rejection reason that should be sent to the user')
+                            ->visible(fn (Get $get) => $get('rejection_reason') === 'custom')
+                            ->required(fn (Get $get) => $get('rejection_reason') === 'custom')
+                            ->helperText('Use this when none of the preset rejection reasons fit.'),
                     ])
                     ->modalSubmitActionLabel('Reject Request')
                     ->visible(fn ($record) => $record->status === 'pending' && ($record->badge_type !== null || $record->isPageVerification()))
                     ->action(function ($record, array $data) {
                         $adminUserId = Auth::id() ?? 1; // Get current admin user ID
+                        $reason = $data['rejection_reason'] === 'custom'
+                            ? trim((string) ($data['custom_rejection_reason'] ?? ''))
+                            : $data['rejection_reason'];
                         
-                        if ($record->reject($adminUserId, $data['rejection_reason'])) {
+                        if ($reason !== '' && $record->reject($adminUserId, $reason)) {
                             Notification::make()
                                 ->title('Verification Rejected')
                                 ->body("Verification request for {$record->user_name} has been rejected.")
@@ -449,7 +465,7 @@ class VerificationRequestsResource extends Resource
                         } else {
                             Notification::make()
                                 ->title('Rejection Failed')
-                                ->body('Failed to reject the verification request.')
+                                ->body($reason === '' ? 'Please enter a custom rejection reason.' : 'Failed to reject the verification request.')
                                 ->danger()
                                 ->send();
                         }
