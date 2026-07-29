@@ -2669,10 +2669,19 @@ class PagesController extends BaseController
             ], 400);
         }
 
-        $validated = $request->validate([
-            'message' => ['nullable', 'string', 'max:500'],
-            'document' => ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,pdf', 'max:10240'],
-        ]);
+        $backRequired = !in_array($request->input('id_proof_type'), ['pan_card'], true);
+
+        $rules = [
+            'id_proof_type'        => ['required', 'string', 'max:50'],
+            'id_proof_number'      => ['nullable', 'string', 'max:50'],
+            'id_proof_front_image' => ['required', 'file', 'mimes:jpeg,jpg,png,gif,webp', 'max:5120'],
+            'id_proof_back_image'  => [$backRequired ? 'required' : 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp', 'max:5120'],
+            'verification_video'   => ['required', 'file', 'mimes:mp4,webm,mov,avi', 'max:51200'],
+            'video_challenge_code' => ['nullable', 'string', 'max:20'],
+            'message'              => ['nullable', 'string', 'max:500'],
+        ];
+
+        $validated = $request->validate($rules);
 
         $pendingRequest = DB::table('Wo_Verification_Requests')
             ->where('page_id', $id)
@@ -2687,32 +2696,52 @@ class PagesController extends BaseController
             ], 400);
         }
 
-        $documentPath = '';
-        if ($request->hasFile('document')) {
-            $document = $request->file('document');
-            if ($document && $document->isValid()) {
-                $extension = $document->getClientOriginalExtension();
-                $filename = 'page_verification_' . $id . '_' . time() . '.' . $extension;
-                $stored = $document->storeAs('upload/verification/' . date('Y/m'), $filename, 'public');
-                if ($stored) {
-                    $documentPath = $stored;
-                }
-            }
+        $storagePath = 'upload/verification/' . date('Y/m');
+        $prefix = 'page_' . $id . '_' . time();
+
+        $frontPath = '';
+        if ($request->hasFile('id_proof_front_image') && $request->file('id_proof_front_image')->isValid()) {
+            $file = $request->file('id_proof_front_image');
+            $frontPath = $file->storeAs($storagePath, $prefix . '_front.' . $file->getClientOriginalExtension(), 'public') ?: '';
+        }
+
+        $backPath = '';
+        if ($request->hasFile('id_proof_back_image') && $request->file('id_proof_back_image')->isValid()) {
+            $file = $request->file('id_proof_back_image');
+            $backPath = $file->storeAs($storagePath, $prefix . '_back.' . $file->getClientOriginalExtension(), 'public') ?: '';
+        }
+
+        $videoPath = '';
+        $videoSize = 0;
+        $videoDuration = 0;
+        if ($request->hasFile('verification_video') && $request->file('verification_video')->isValid()) {
+            $file = $request->file('verification_video');
+            $videoPath = $file->storeAs($storagePath, $prefix . '_video.' . $file->getClientOriginalExtension(), 'public') ?: '';
+            $videoSize = $file->getSize();
         }
 
         DB::table('Wo_Verification_Requests')->insert([
-            'page_id' => (int) $id,
-            'user_id' => (int) $auth['user_id'],
-            'user_name' => $page->page_title ?? $page->page_name ?? '',
-            'type' => 'Page',
-            'status' => 'pending',
-            'seen' => 0,
-            'message' => $validated['message'] ?? '',
-            'passport' => $documentPath,
-            'photo' => '',
-            'submitted_at' => now(),
-            'created_at' => now(),
-            'updated_at' => now(),
+            'page_id'              => (int) $id,
+            'user_id'              => (int) $auth['user_id'],
+            'user_name'            => $page->page_title ?? $page->page_name ?? '',
+            'type'                 => 'Page',
+            'status'               => 'pending',
+            'seen'                 => 0,
+            'id_proof_type'        => $validated['id_proof_type'],
+            'id_proof_number'      => $validated['id_proof_number'] ?? '',
+            'id_proof_front_image' => $frontPath,
+            'id_proof_back_image'  => $backPath,
+            'verification_video'   => $videoPath,
+            'video_size'           => $videoSize,
+            'video_duration'       => $videoDuration,
+            'video_uploaded_at'    => $videoPath ? now() : null,
+            'video_challenge_code' => $validated['video_challenge_code'] ?? '',
+            'message'              => $validated['message'] ?? '',
+            'passport'             => '',
+            'photo'                => '',
+            'submitted_at'         => now(),
+            'created_at'           => now(),
+            'updated_at'           => now(),
         ]);
 
         return response()->json([
