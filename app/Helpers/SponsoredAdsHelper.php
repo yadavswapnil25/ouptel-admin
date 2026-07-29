@@ -68,6 +68,10 @@ class SponsoredAdsHelper
                 'url' => $url,
                 'image_upload' => $imageUpload,
                 'image_url' => $imageUrl,
+                'price' => trim((string) ($item['price'] ?? '')),
+                'cta_text' => trim((string) ($item['cta_text'] ?? '')),
+                'shares_text' => trim((string) ($item['shares_text'] ?? '')),
+                'likes_text' => trim((string) ($item['likes_text'] ?? '')),
             ];
         }
 
@@ -108,6 +112,10 @@ class SponsoredAdsHelper
         $imageUpload = self::normalizeUploadPath($item['image_upload'] ?? '');
         $imageUrl = trim((string) ($item['image_url'] ?? ''));
         $resolvedImage = self::toPublicUrl($imageUpload !== '' ? $imageUpload : $imageUrl);
+        $price = trim((string) ($item['price'] ?? ''));
+        $ctaText = trim((string) ($item['cta_text'] ?? ''));
+        $sharesText = trim((string) ($item['shares_text'] ?? ''));
+        $likesText = trim((string) ($item['likes_text'] ?? ''));
 
         if ($name === '' && $url === '' && $resolvedImage === '') {
             return [];
@@ -117,6 +125,10 @@ class SponsoredAdsHelper
             'name' => $name !== '' ? $name : 'Sponsored',
             'url' => $url !== '' ? $url : '#',
             'image_url' => $resolvedImage,
+            'price' => $price,
+            'cta_text' => $ctaText !== '' ? $ctaText : 'Shop Now',
+            'shares_text' => $sharesText,
+            'likes_text' => $likesText,
         ];
     }
 
@@ -136,6 +148,10 @@ class SponsoredAdsHelper
             'name' => $name !== '' ? $name : 'Sponsored',
             'url' => $url !== '' ? $url : '#',
             'image_url' => $imageUrl,
+            'price' => '',
+            'cta_text' => 'Shop Now',
+            'shares_text' => '',
+            'likes_text' => '',
         ];
     }
 

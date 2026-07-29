@@ -227,14 +227,14 @@ class GeneralSettings extends Page
                     ->columns(1),
 
                 Section::make('Sponsored Section')
-                    ->description('Add multiple sponsored ads. They appear in the sidebar sponsored slider on the website.')
+                    ->description('Add multiple sponsored ads. They appear in the home feed Sponsors Ads carousel and the sidebar sponsored slider.')
                     ->schema([
                         Repeater::make('sponsored_items')
                             ->label('Sponsored Ads')
                             ->schema([
                                 TextInput::make('name')
                                     ->label('Ad Name')
-                                    ->placeholder('IQ Options Broker')
+                                    ->placeholder('Potato Baby Fider')
                                     ->required()
                                     ->columnSpan(1),
                                 TextInput::make('url')
@@ -254,6 +254,23 @@ class GeneralSettings extends Page
                                     ->label('Image URL (fallback)')
                                     ->placeholder('https://example.com/sponsor.jpg')
                                     ->helperText('Used if no uploaded image is set.')
+                                    ->columnSpan(1),
+                                TextInput::make('price')
+                                    ->label('Price (optional)')
+                                    ->placeholder('$24')
+                                    ->columnSpan(1),
+                                TextInput::make('cta_text')
+                                    ->label('CTA Text')
+                                    ->placeholder('Shop Now')
+                                    ->default('Shop Now')
+                                    ->columnSpan(1),
+                                TextInput::make('shares_text')
+                                    ->label('Shares label (optional)')
+                                    ->placeholder('50 shares')
+                                    ->columnSpan(1),
+                                TextInput::make('likes_text')
+                                    ->label('Likes label (optional)')
+                                    ->placeholder('20k Likes')
                                     ->columnSpan(1),
                             ])
                             ->columns(2)
