@@ -378,8 +378,8 @@ class NotificationsController extends Controller
                     'first_name' => 'Ouptel',
                     'last_name' => '',
                     'name' => 'Ouptel',
-                    'avatar' => 'user.png',
-                    'avatar_url' => asset('user.png'),
+                    'avatar' => 'op_fav.png',
+                    'avatar_url' => asset('op_fav.png'),
                     'verified' => false,
                 ];
             }
