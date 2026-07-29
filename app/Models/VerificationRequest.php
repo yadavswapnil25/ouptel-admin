@@ -377,9 +377,12 @@ class VerificationRequest extends Model
             'type' => 'verification_result',
             'type2' => $approved ? 'approved' : 'rejected',
             'text' => $text,
-            'url' => '/settings/verification',
+            'url' => $this->isPageVerification()
+                ? '/page/' . $this->page_id . '/settings'
+                : '/settings/verification',
             'seen' => 0,
             'time' => time(),
+            'page_id' => $this->isPageVerification() ? $this->page_id : null,
         ]);
     }
 
