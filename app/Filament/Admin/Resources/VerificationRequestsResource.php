@@ -187,10 +187,58 @@ class VerificationRequestsResource extends Resource
                                 );
                             }),
 
+                        Select::make('id_proof_type')
+                            ->label('ID Proof Type')
+                            ->options(VerificationRequest::ID_PROOF_TYPES)
+                            ->disabled(),
+
+                        TextInput::make('id_proof_number')
+                            ->label('ID Proof Number')
+                            ->disabled(),
+
                         Textarea::make('message')
                             ->label('Why should this page be verified?')
                             ->rows(4)
-                            ->disabled(),
+                            ->disabled()
+                            ->columnSpanFull(),
+
+                        Placeholder::make('page_front_image_preview')
+                            ->label('ID Front Image')
+                            ->content(function ($record) {
+                                if ($record?->id_proof_front_image) {
+                                    $url = asset('storage/' . ltrim($record->id_proof_front_image, '/'));
+                                    return new \Illuminate\Support\HtmlString(
+                                        "<a href='{$url}' target='_blank' rel='noopener'><img src='{$url}' alt='ID front' class='max-w-md max-h-64 rounded-lg shadow-lg cursor-pointer hover:opacity-80' /></a>"
+                                    );
+                                }
+                                return 'No front image uploaded';
+                            }),
+
+                        Placeholder::make('page_back_image_preview')
+                            ->label('ID Back Image')
+                            ->content(function ($record) {
+                                if ($record?->id_proof_back_image) {
+                                    $url = asset('storage/' . ltrim($record->id_proof_back_image, '/'));
+                                    return new \Illuminate\Support\HtmlString(
+                                        "<a href='{$url}' target='_blank' rel='noopener'><img src='{$url}' alt='ID back' class='max-w-md max-h-64 rounded-lg shadow-lg cursor-pointer hover:opacity-80' /></a>"
+                                    );
+                                }
+                                return 'No back image uploaded';
+                            }),
+
+                        Placeholder::make('live_photo_preview')
+                            ->label('Live Photo')
+                            ->content(function ($record) {
+                                $path = trim((string) ($record?->photo ?? ''));
+                                if ($path !== '') {
+                                    $url = asset('storage/' . ltrim($path, '/'));
+                                    return new \Illuminate\Support\HtmlString(
+                                        "<a href='{$url}' target='_blank' rel='noopener'><img src='{$url}' alt='Live photo' class='max-w-md max-h-64 rounded-lg shadow-lg cursor-pointer hover:opacity-80' /></a>"
+                                    );
+                                }
+                                return 'No live photo uploaded';
+                            })
+                            ->columnSpanFull(),
 
                         Placeholder::make('supporting_document')
                             ->label('Supporting document')
@@ -211,9 +259,10 @@ class VerificationRequestsResource extends Resource
                                     . "<img src=\"{$url}\" alt=\"Supporting document\" class=\"max-w-md max-h-64 rounded-lg shadow-lg cursor-pointer hover:opacity-80\" />"
                                     . '</a>'
                                 );
-                            }),
+                            })
+                            ->columnSpanFull(),
                     ])
-                    ->columns(1)
+                    ->columns(2)
                     ->visible(fn ($record) => $record?->isPageVerification()),
 
                 Section::make('Legacy Verification Information')
@@ -482,26 +531,41 @@ class VerificationRequestsResource extends Resource
                         }
                     }),
 
-                // View Images Action
+                // View Images Action (user badge + page verification)
                 Action::make('view_images')
-                    ->label('View ID')
+                    ->label(fn (?VerificationRequest $record): string =>
+                        $record?->isPageVerification() ? 'View Photos' : 'View ID')
                     ->icon('heroicon-o-photo')
                     ->color('info')
-                    ->modalHeading('ID Proof Images')
+                    ->modalHeading(fn (?VerificationRequest $record): string =>
+                        $record?->isPageVerification() ? 'Page Verification Photos' : 'ID Proof Images')
                     ->modalContent(function ($record) {
-                        $frontUrl = $record->id_proof_front_image ? asset('storage/' . $record->id_proof_front_image) : null;
-                        $backUrl = $record->id_proof_back_image ? asset('storage/' . $record->id_proof_back_image) : null;
-                        
+                        $frontUrl = $record->id_proof_front_image
+                            ? asset('storage/' . ltrim($record->id_proof_front_image, '/'))
+                            : null;
+                        $backUrl = $record->id_proof_back_image
+                            ? asset('storage/' . ltrim($record->id_proof_back_image, '/'))
+                            : null;
+                        $livePhotoUrl = $record->photo
+                            ? asset('storage/' . ltrim($record->photo, '/'))
+                            : null;
+
                         return view('filament.modals.verification-images', [
                             'frontUrl' => $frontUrl,
                             'backUrl' => $backUrl,
+                            'livePhotoUrl' => $livePhotoUrl,
+                            'isPageVerification' => $record->isPageVerification(),
                             'idProofType' => VerificationRequest::ID_PROOF_TYPES[$record->id_proof_type] ?? 'Unknown',
                             'idProofNumber' => $record->id_proof_number,
                         ]);
                     })
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('Close')
-                    ->visible(fn ($record) => $record->badge_type !== null && ($record->id_proof_front_image || $record->id_proof_back_image)),
+                    ->visible(fn ($record) => (bool) $record && (
+                        $record->id_proof_front_image
+                        || $record->id_proof_back_image
+                        || ($record->isPageVerification() && filled($record->photo))
+                    )),
 
                 ActionGroup::make([
                     ViewAction::make(),
