@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Models\Page;
 use App\Models\PageCategory;
 use App\Models\PageSubCategory;
+use App\Helpers\CommentVisibilityHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
@@ -1786,9 +1787,7 @@ class PagesController extends BaseController
     {
         if (Schema::hasTable('Wo_Comments')) {
             try {
-                return DB::table('Wo_Comments')
-                    ->where('post_id', $postId)
-                    ->count();
+                return CommentVisibilityHelper::countForPost($postId);
             } catch (\Exception $e) {
                 return 0;
             }

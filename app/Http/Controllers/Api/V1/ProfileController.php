@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Helpers\CommentVisibilityHelper;
 use App\Models\User;
 use App\Services\ProfileInterestService;
 use Illuminate\Http\JsonResponse;
@@ -1787,9 +1788,7 @@ class ProfileController extends Controller
             $commentsCount = 0;
             if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Comments')) {
                 try {
-                    $commentsCount = DB::table('Wo_Comments')
-                        ->where('post_id', $commentLookupPostId)
-                        ->count();
+                    $commentsCount = CommentVisibilityHelper::countForPost($commentLookupPostId);
                 } catch (\Exception $e) {
                     $commentsCount = (int) ($post->post_comments ?? 0);
                 }

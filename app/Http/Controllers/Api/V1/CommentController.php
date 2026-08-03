@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Helpers\CommentVisibilityHelper;
 use App\Models\Comment;
 use App\Models\Post;
 use App\Models\PostReaction;
@@ -164,8 +165,8 @@ class CommentController extends Controller
             // Create the comment
             $comment = Comment::create($commentData);
 
-            // Get comment count for the post (WoWonder style)
-            $commentCount = Comment::where('post_id', $post->post_id)->count();
+            // Get comment count for the post (exclude deleted/inactive authors)
+            $commentCount = CommentVisibilityHelper::countForPost((int) $post->post_id);
 
             // Send notifications
             $this->sendCommentNotifications($comment, $post, $tokenUserId);
@@ -232,7 +233,8 @@ class CommentController extends Controller
             $page = $request->input('page', 1);
 
             $query = Comment::with('user')
-                ->where('post_id', $post->post_id);
+                ->where('post_id', $post->post_id)
+                ->whereHas('user', CommentVisibilityHelper::authorIsVisible());
             
             // Exclude replies (only get top-level comments)
             // Method 1: Check if parent_comment_id column exists
@@ -724,21 +726,32 @@ class CommentController extends Controller
             $hasRepliesTable = DB::getSchemaBuilder()->hasTable('Wo_CommentReplies');
             
             if ($hasRepliesTable) {
-                // Get replies from separate table
+                // Get replies from separate table (skip deleted/inactive authors)
                 $offset = ($page - 1) * $perPage;
-                $replies = DB::table('Wo_CommentReplies')
-                    ->where('comment_id', $commentId)
-                    ->orderBy('time', 'asc')
+
+                $countQuery = DB::table('Wo_CommentReplies as r')
+                    ->join('Wo_Users as u', 'u.user_id', '=', 'r.user_id')
+                    ->where('r.comment_id', $commentId);
+                CommentVisibilityHelper::constrainActiveUser($countQuery, 'u');
+                $total = (int) $countQuery->count('r.id');
+
+                $listQuery = DB::table('Wo_CommentReplies as r')
+                    ->join('Wo_Users as u', 'u.user_id', '=', 'r.user_id')
+                    ->where('r.comment_id', $commentId)
+                    ->select('r.*');
+                CommentVisibilityHelper::constrainActiveUser($listQuery, 'u');
+
+                $replies = $listQuery
+                    ->orderBy('r.time', 'asc')
                     ->offset($offset)
                     ->limit($perPage)
                     ->get();
 
-                $total = DB::table('Wo_CommentReplies')
-                    ->where('comment_id', $commentId)
-                    ->count();
-
                 $formattedReplies = $replies->map(function ($reply) use ($tokenUserId) {
                     $user = User::where('user_id', $reply->user_id)->first();
+                    if (!$user) {
+                        return null;
+                    }
                     return [
                         'id' => $reply->id,
                         'comment_id' => $reply->comment_id,
@@ -751,10 +764,10 @@ class CommentController extends Controller
                         'is_reply' => true,
                         'is_owner' => $reply->user_id == $tokenUserId,
                         'author' => [
-                            'user_id' => $user?->user_id ?? $reply->user_id,
-                            'username' => $user?->username ?? 'Unknown',
+                            'user_id' => $user->user_id,
+                            'username' => $user->username ?? 'Unknown',
                             'name' => $this->getUserName($user),
-                            'avatar_url' => ($user?->avatar) ? asset('storage/' . $user->avatar) : null,
+                            'avatar_url' => ($user->avatar) ? asset('storage/' . $user->avatar) : null,
                         ],
                         'created_at' => date('c', $reply->time),
                         'created_at_human' => $this->getHumanTime($reply->time),
@@ -762,13 +775,15 @@ class CommentController extends Controller
                         'total_reactions' => $this->getReplyReactionsCount($reply->id),
                         'user_reaction' => $this->getUserReplyReaction($reply->id, $tokenUserId),
                     ];
-                });
+                })->filter()->values();
             } else {
                 // Get replies from same table using parent_comment_id
                 $hasParentColumn = DB::getSchemaBuilder()->hasColumn('Wo_Comments', 'parent_comment_id');
                 
                 if ($hasParentColumn) {
-                    $query = Comment::where('parent_comment_id', $commentId)
+                    $query = Comment::with('user')
+                        ->where('parent_comment_id', $commentId)
+                        ->whereHas('user', CommentVisibilityHelper::authorIsVisible())
                         ->orderBy('time', 'asc');
                     
                     $replies = $query->paginate($perPage, ['*'], 'page', $page);
@@ -922,15 +937,19 @@ class CommentController extends Controller
         $hasRepliesTable = DB::getSchemaBuilder()->hasTable('Wo_CommentReplies');
         
         if ($hasRepliesTable) {
-            return DB::table('Wo_CommentReplies')
-                ->where('comment_id', $commentId)
-                ->count();
+            $query = DB::table('Wo_CommentReplies as r')
+                ->join('Wo_Users as u', 'u.user_id', '=', 'r.user_id')
+                ->where('r.comment_id', $commentId);
+            CommentVisibilityHelper::constrainActiveUser($query, 'u');
+            return (int) $query->count('r.id');
         }
         
         // Check if parent_comment_id column exists in Wo_Comments
         $hasParentColumn = DB::getSchemaBuilder()->hasColumn('Wo_Comments', 'parent_comment_id');
         if ($hasParentColumn) {
-            return Comment::where('parent_comment_id', $commentId)->count();
+            return (int) Comment::where('parent_comment_id', $commentId)
+                ->whereHas('user', CommentVisibilityHelper::authorIsVisible())
+                ->count();
         }
         
         return 0;
@@ -950,14 +969,22 @@ class CommentController extends Controller
         $hasRepliesTable = DB::getSchemaBuilder()->hasTable('Wo_CommentReplies');
         
         if ($hasRepliesTable) {
-            $replies = DB::table('Wo_CommentReplies')
-                ->where('comment_id', $commentId)
-                ->orderBy('time', 'asc')
+            $query = DB::table('Wo_CommentReplies as r')
+                ->join('Wo_Users as u', 'u.user_id', '=', 'r.user_id')
+                ->where('r.comment_id', $commentId)
+                ->select('r.*');
+            CommentVisibilityHelper::constrainActiveUser($query, 'u');
+
+            $replies = $query
+                ->orderBy('r.time', 'asc')
                 ->limit($limit)
                 ->get();
 
             return $replies->map(function ($reply) use ($userId) {
                 $user = User::where('user_id', $reply->user_id)->first();
+                if (!$user) {
+                    return null;
+                }
                 return [
                     'id' => $reply->id,
                     'comment_id' => $reply->comment_id,
@@ -970,10 +997,10 @@ class CommentController extends Controller
                     'is_reply' => true,
                     'is_owner' => $reply->user_id == $userId,
                     'author' => [
-                        'user_id' => $user?->user_id ?? $reply->user_id,
-                        'username' => $user?->username ?? 'Unknown',
+                        'user_id' => $user->user_id,
+                        'username' => $user->username ?? 'Unknown',
                         'name' => $this->getUserName($user),
-                        'avatar_url' => ($user?->avatar) ? asset('storage/' . $user->avatar) : null,
+                        'avatar_url' => ($user->avatar) ? asset('storage/' . $user->avatar) : null,
                     ],
                     'created_at' => date('c', $reply->time),
                     'created_at_human' => $this->getHumanTime($reply->time),
@@ -981,13 +1008,15 @@ class CommentController extends Controller
                     'total_reactions' => $this->getReplyReactionsCount($reply->id),
                     'user_reaction' => $this->getUserReplyReaction($reply->id, $userId),
                 ];
-            })->toArray();
+            })->filter()->values()->toArray();
         }
         
         // Check if parent_comment_id column exists
         $hasParentColumn = DB::getSchemaBuilder()->hasColumn('Wo_Comments', 'parent_comment_id');
         if ($hasParentColumn) {
-            $replies = Comment::where('parent_comment_id', $commentId)
+            $replies = Comment::with('user')
+                ->where('parent_comment_id', $commentId)
+                ->whereHas('user', CommentVisibilityHelper::authorIsVisible())
                 ->orderBy('time', 'asc')
                 ->limit($limit)
                 ->get();

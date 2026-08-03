@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Helpers\PostMediaHelper;
+use App\Helpers\CommentVisibilityHelper;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -580,7 +581,7 @@ class NewFeedController extends Controller
                 foreach ($previewRows as $preview) {
                     $answerAuthor = DB::table('Wo_Users')->where('user_id', $preview->user_id)->first();
                     $publicAnswerPostId = $preview->post_id ?? $preview->id;
-                    $replyCount = (int) DB::table('Wo_Comments')->where('post_id', $publicAnswerPostId)->count();
+                    $replyCount = CommentVisibilityHelper::countForPost((int) $publicAnswerPostId);
                     $answerPreviews[] = [
                         'id' => $preview->id,
                         'post_id' => $publicAnswerPostId,
@@ -1127,24 +1128,18 @@ class NewFeedController extends Controller
      */
     private function getPostCommentsCount(int $postId, $post = null): int
     {
-        // Try to count from Wo_Comments table (more accurate, real-time count)
         if (Schema::hasTable('Wo_Comments')) {
             try {
-                $count = DB::table('Wo_Comments')
-                    ->where('post_id', $postId)
-                    ->count();
-                return $count;
+                return CommentVisibilityHelper::countForPost($postId);
             } catch (\Exception $e) {
-                // If query fails, fall through to post_comments column
+                // fall through
             }
         }
         
-        // Fallback: Use post_comments column if available (cached count)
         if ($post && isset($post->post_comments)) {
             return (int) ($post->post_comments ?? 0);
         }
         
-        // Last resort: Query post_comments column
         try {
             $postComments = DB::table('Wo_Posts')
                 ->where('id', $postId)

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Helpers\CommentVisibilityHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -305,13 +306,11 @@ class HashtagController extends Controller
         $userReaction = $this->getUserReaction($postIdForReactions, $loggedUserId);
         $isLiked = $userReaction !== null;
 
-        // Get comments count
+        // Get comments count (exclude deleted/inactive authors)
         $commentsCount = 0;
         if (Schema::hasTable('Wo_Comments')) {
             try {
-                $commentsCount = DB::table('Wo_Comments')
-                    ->where('post_id', $post->id)
-                    ->count();
+                $commentsCount = CommentVisibilityHelper::countForPost((int) ($post->post_id ?? $post->id));
             } catch (\Exception $e) {
                 $commentsCount = (int) ($post->post_comments ?? 0);
             }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Helpers\CommentVisibilityHelper;
 use App\Models\Post;
 use App\Models\PostReaction;
 use App\Models\User;
@@ -2251,13 +2252,10 @@ class PostController extends Controller
      */
     private function getPostCommentsCount(int $postId, $post = null): int
     {
-        // Try to count from Wo_Comments table (more accurate, real-time count)
+        // Try to count from Wo_Comments table (exclude deleted/inactive authors)
         if (Schema::hasTable('Wo_Comments')) {
             try {
-                $count = DB::table('Wo_Comments')
-                    ->where('post_id', $postId)
-                    ->count();
-                return $count;
+                return CommentVisibilityHelper::countForPost($postId);
             } catch (\Exception $e) {
                 // If query fails, fall through to post_comments column
             }

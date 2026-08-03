@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Helpers\CommentVisibilityHelper;
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -376,7 +377,7 @@ class QuestionController extends Controller
         $publicPostId = $post->post_id ?? $post->id;
         $replyCount = 0;
         if (($post->postType ?? '') === 'answer' && $publicPostId) {
-            $replyCount = (int) DB::table('Wo_Comments')->where('post_id', $publicPostId)->count();
+            $replyCount = CommentVisibilityHelper::countForPost((int) $publicPostId);
         }
 
         return [

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Helpers\CommentVisibilityHelper;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -1058,9 +1059,7 @@ class PeopleFollowController extends Controller
         }
 
         try {
-            return DB::table('Wo_Comments')
-                ->where('post_id', $postId)
-                ->count();
+            return CommentVisibilityHelper::countForPost($postId);
         } catch (\Exception $e) {
             return 0;
         }
