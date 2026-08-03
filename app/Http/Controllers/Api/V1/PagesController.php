@@ -107,6 +107,9 @@ class PagesController extends BaseController
                 'sub_category' => $subCategoryValue,
                 'sub_category_name' => $subCategoryName,
                 'verified' => $this->isPageVerified($page->verified ?? 0),
+                'gov_registered' => Schema::hasColumn('Wo_Pages', 'gov_registered')
+                    ? $this->isTruthyFlag($page->gov_registered ?? 0)
+                    : false,
                 'avatar' => $page->getAttributes()['avatar'] ?? '',
                 'cover' => $page->getAttributes()['cover'] ?? '',
                 'avatar_url' => $this->getFileUrl($page->getAttributes()['avatar'] ?? ''),
@@ -372,6 +375,15 @@ class PagesController extends BaseController
             }
             if (Schema::hasColumn('Wo_Pages', 'agreement_accepted_at')) {
                 $page->setAttribute('agreement_accepted_at', now());
+            }
+
+            if (Schema::hasColumn('Wo_Pages', 'gov_registered')) {
+                $govRegistered = filter_var(
+                    $request->input('gov_registered', $request->input('is_gov_registered', false)),
+                    FILTER_VALIDATE_BOOLEAN,
+                    FILTER_NULL_ON_FAILURE
+                );
+                $page->setAttribute('gov_registered', $govRegistered === true ? 1 : 0);
             }
             
             // Set sub_category directly on attributes since it's not in fillable
@@ -1272,6 +1284,9 @@ class PagesController extends BaseController
                     'category' => $page->page_category ?? 0,
                     'category_name' => $categoryName,
                     'verified' => $this->isPageVerified($page->verified ?? 0),
+                    'gov_registered' => Schema::hasColumn('Wo_Pages', 'gov_registered')
+                        ? $this->isTruthyFlag($pageData->gov_registered ?? ($page->gov_registered ?? 0))
+                        : false,
                     'active' => $page->active ?? '1',
                     'avatar' => $page->avatar ?? '',
                     'avatar_url' => $this->getFileUrl($page->avatar ?? ''),
@@ -3119,10 +3134,15 @@ class PagesController extends BaseController
 
     private function isPageVerified(mixed $verified): bool
     {
-        return $verified === 1
-            || $verified === '1'
-            || $verified === true
-            || $verified === 'true';
+        return $this->isTruthyFlag($verified);
+    }
+
+    private function isTruthyFlag(mixed $value): bool
+    {
+        return $value === 1
+            || $value === '1'
+            || $value === true
+            || $value === 'true';
     }
 }
 

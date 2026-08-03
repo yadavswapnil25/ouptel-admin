@@ -321,6 +321,21 @@ class JobsController extends Controller
             return response()->json(['ok' => false, 'message' => 'Only verified pages can post jobs'], 400);
         }
 
+        if (Schema::hasColumn('Wo_Pages', 'gov_registered')) {
+            $govRegisteredRaw = $page->gov_registered ?? 0;
+            $isGovRegistered = $govRegisteredRaw === 1
+                || $govRegisteredRaw === '1'
+                || $govRegisteredRaw === true
+                || $govRegisteredRaw === 'true';
+
+            if (!$isGovRegistered) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => 'Only government-registered pages can post jobs',
+                ], 400);
+            }
+        }
+
         // Check if job title already exists
         $existingJob = Job::where('title', $validated['title'])->first();
         if ($existingJob) {
@@ -1104,6 +1119,14 @@ class JobsController extends Controller
             || $verifiedRaw === true
             || $verifiedRaw === 'true';
 
+        $govRegisteredRaw = Schema::hasColumn('Wo_Pages', 'gov_registered')
+            ? ($page->gov_registered ?? 0)
+            : 0;
+        $isGovRegistered = $govRegisteredRaw === 1
+            || $govRegisteredRaw === '1'
+            || $govRegisteredRaw === true
+            || $govRegisteredRaw === 'true';
+
         $avatar = trim((string) ($page->avatar ?? ''));
         $avatarUrl = null;
         if ($avatar !== '') {
@@ -1120,6 +1143,7 @@ class JobsController extends Controller
             'page_name' => $pageName,
             'page_title' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
             'verified' => $isVerified,
+            'gov_registered' => $isGovRegistered,
             'avatar_url' => $avatarUrl,
         ];
     }

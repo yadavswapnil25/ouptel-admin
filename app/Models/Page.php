@@ -29,11 +29,13 @@ class Page extends Model
         'agreement_accepted',
         'agreed_to_terms',
         'agreement_accepted_at',
+        'gov_registered',
         'active',
     ];
 
     protected $casts = [
         'verified' => 'boolean',
+        'gov_registered' => 'boolean',
         'active' => 'string',
         'user_id' => 'string',
     ];
