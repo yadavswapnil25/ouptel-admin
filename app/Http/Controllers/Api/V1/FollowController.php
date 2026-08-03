@@ -261,16 +261,30 @@ class FollowController extends Controller
             $perPage = max(1, min($perPage, 100));
 
             // Get followers with user details
+            $selectColumns = [
+                'u.user_id',
+                'u.username',
+                'u.first_name',
+                'u.last_name',
+                'u.avatar',
+                'u.verified',
+                'f.time as followed_at',
+            ];
+            if (Schema::hasColumn('Wo_Users', 'verified_badge_at')) {
+                $selectColumns[] = 'u.verified_badge_at';
+            }
+
             $followers = DB::table('Wo_Followers as f')
                 ->join('Wo_Users as u', 'f.follower_id', '=', 'u.user_id')
                 ->where('f.following_id', $userId)
                 ->where('f.active', '1')
                 ->where('u.active', '1')
-                ->select('u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified', 'f.time as followed_at')
+                ->select($selectColumns)
                 ->orderBy('f.time', 'desc')
                 ->paginate($perPage);
 
             $followerIds = $followers->getCollection()->pluck('user_id')->map(fn ($id) => (string) $id)->all();
+            $badgeByUserId = $this->getApprovedBadgeTypesByUserIds($followerIds);
             $iFollowSet = [];
             $iPendingSet = [];
             $followsMeSet = [];
@@ -310,13 +324,14 @@ class FollowController extends Controller
                 }
             }
 
-            $formattedFollowers = $followers->map(function ($follower) use ($tokenUserId, $iFollowSet, $iPendingSet, $followsMeSet) {
+            $formattedFollowers = $followers->map(function ($follower) use ($tokenUserId, $iFollowSet, $iPendingSet, $followsMeSet, $badgeByUserId) {
                 $fullName = trim(($follower->first_name ?? '') . ' ' . ($follower->last_name ?? '')) ?: $follower->username;
                 $fid = (string) $follower->user_id;
                 $isMe = $fid === (string) $tokenUserId;
                 $isFollowing = !$isMe && isset($iFollowSet[$fid]);
                 $isPending = !$isMe && isset($iPendingSet[$fid]);
                 $isFollowingMe = !$isMe && isset($followsMeSet[$fid]);
+                $badgeType = $badgeByUserId[$fid] ?? null;
 
                 return [
                     'user_id' => $follower->user_id,
@@ -326,6 +341,9 @@ class FollowController extends Controller
                     'last_name' => $follower->last_name ?? '',
                     'avatar_url' => $follower->avatar ? asset('storage/' . $follower->avatar) : null,
                     'verified' => $follower->verified === '1',
+                    'badge' => $badgeType ? 1 : null,
+                    'badge_type' => $badgeType,
+                    'verified_badge_at' => $badgeType ? (string) ($follower->verified_badge_at ?? '1') : null,
                     'followed_at' => date('c', $follower->followed_at),
                     // 0 = not following, 1 = following, 2 = pending (auth → this user)
                     'is_following' => $isFollowing ? 1 : ($isPending ? 2 : 0),
@@ -982,6 +1000,56 @@ class FollowController extends Controller
                 'following_id' => $followingId,
                 'error' => $e->getMessage()
             ]);
+        }
+    }
+
+    /**
+     * Map user_id => approved blue/golden badge_type for users with verified_badge_at set.
+     *
+     * @param  array<int, string|int>  $userIds
+     * @return array<string, string>
+     */
+    private function getApprovedBadgeTypesByUserIds(array $userIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map(
+            static fn ($id) => (string) $id,
+            $userIds
+        ))));
+        if ($ids === [] || !Schema::hasColumn('Wo_Users', 'verified_badge_at')) {
+            return [];
+        }
+
+        try {
+            $verifiedIds = DB::table('Wo_Users')
+                ->whereIn('user_id', $ids)
+                ->whereNotNull('verified_badge_at')
+                ->where('verified_badge_at', '!=', '')
+                ->pluck('user_id')
+                ->map(static fn ($id) => (string) $id)
+                ->all();
+
+            if ($verifiedIds === []) {
+                return [];
+            }
+
+            $rows = DB::table('Wo_Verification_Requests')
+                ->whereIn('user_id', $verifiedIds)
+                ->where('status', 'approved')
+                ->whereIn('badge_type', ['blue', 'golden'])
+                ->orderByDesc('approved_at')
+                ->get(['user_id', 'badge_type']);
+
+            $map = [];
+            foreach ($rows as $row) {
+                $uid = (string) $row->user_id;
+                if (!isset($map[$uid]) && in_array($row->badge_type, ['blue', 'golden'], true)) {
+                    $map[$uid] = $row->badge_type;
+                }
+            }
+
+            return $map;
+        } catch (\Exception $e) {
+            return [];
         }
     }
 }

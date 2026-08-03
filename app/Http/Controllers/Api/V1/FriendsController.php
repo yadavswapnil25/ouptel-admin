@@ -140,6 +140,9 @@ class FriendsController extends Controller
                         $friendsData->all(),
                         array_map('strval', $paginatedFriendIds)
                     );
+                    $badgeByUserId = $this->getApprovedBadgeTypesByUserIds(
+                        array_map('strval', $paginatedFriendIds)
+                    );
 
                     foreach ($friendsData as $friend) {
                         $mutualFriendsCount = 0;
@@ -174,6 +177,8 @@ class FriendsController extends Controller
                             $mutualFriendsCount = count(array_intersect($viewerFollowing, $friendFollowing));
                         }
 
+                        $badgeType = $badgeByUserId[(string) $friend->user_id] ?? null;
+
                         $friends[] = [
                             'user_id' => $friend->user_id,
                             'username' => $friend->username ?? 'Unknown',
@@ -186,6 +191,11 @@ class FriendsController extends Controller
                             'cover' => $friend->cover ?? '',
                             'cover_url' => $friend->cover ? asset('storage/' . $friend->cover) : null,
                             'verified' => (bool) ($friend->verified ?? false),
+                            'badge' => $badgeType ? 1 : null,
+                            'badge_type' => $badgeType,
+                            'verified_badge_at' => $badgeType
+                                ? (string) ($friend->verified_badge_at ?? '1')
+                                : null,
                             'is_following' => $isFollowing,
                             'is_following_me' => $isFollowingMe,
                             'is_friend' => true,
@@ -3046,6 +3056,56 @@ class FriendsController extends Controller
             }
         } catch (\Exception $e) {
             // Silently fail if notification creation fails
+        }
+    }
+
+    /**
+     * Map user_id => approved blue/golden badge_type for users with verified_badge_at set.
+     *
+     * @param  array<int, string|int>  $userIds
+     * @return array<string, string>
+     */
+    private function getApprovedBadgeTypesByUserIds(array $userIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map(
+            static fn ($id) => (string) $id,
+            $userIds
+        ))));
+        if ($ids === [] || !Schema::hasColumn('Wo_Users', 'verified_badge_at')) {
+            return [];
+        }
+
+        try {
+            $verifiedIds = DB::table('Wo_Users')
+                ->whereIn('user_id', $ids)
+                ->whereNotNull('verified_badge_at')
+                ->where('verified_badge_at', '!=', '')
+                ->pluck('user_id')
+                ->map(static fn ($id) => (string) $id)
+                ->all();
+
+            if ($verifiedIds === []) {
+                return [];
+            }
+
+            $rows = DB::table('Wo_Verification_Requests')
+                ->whereIn('user_id', $verifiedIds)
+                ->where('status', 'approved')
+                ->whereIn('badge_type', ['blue', 'golden'])
+                ->orderByDesc('approved_at')
+                ->get(['user_id', 'badge_type']);
+
+            $map = [];
+            foreach ($rows as $row) {
+                $uid = (string) $row->user_id;
+                if (!isset($map[$uid]) && in_array($row->badge_type, ['blue', 'golden'], true)) {
+                    $map[$uid] = $row->badge_type;
+                }
+            }
+
+            return $map;
+        } catch (\Exception $e) {
+            return [];
         }
     }
 }
