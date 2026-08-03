@@ -107,6 +107,8 @@ class UserAdResource extends Resource
                             '35-44' => '35–44',
                             '45-54' => '45–54',
                             '55+' => '55+',
+                            '65-80' => '65–80',
+                            '81+' => '81+',
                         ])
                         ->visible(fn () => Schema::hasColumn('Wo_UserAds', 'age_group'))
                         ->default('all'),

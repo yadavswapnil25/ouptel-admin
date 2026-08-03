@@ -388,7 +388,8 @@ class UserManagementResource extends Resource
                         '35_44' => '35–44',
                         '45_54' => '45–54',
                         '55_64' => '55–64',
-                        '65_plus' => '65+',
+                        '65_80' => '65–80',
+                        '81_plus' => '81+',
                         'missing' => 'No date of birth',
                     ])
                     ->query(function (Builder $query, array $data): Builder {
@@ -427,9 +428,13 @@ class UserManagementResource extends Resource
                                 "birthday IS NOT NULL AND birthday != '' AND STR_TO_DATE(birthday, '%Y-%m-%d') IS NOT NULL AND TIMESTAMPDIFF(YEAR, STR_TO_DATE(birthday, '%Y-%m-%d'), CURDATE()) BETWEEN ? AND ?",
                                 [55, 64],
                             ),
-                            '65_plus' => $query->whereRaw(
+                            '65_80' => $query->whereRaw(
+                                "birthday IS NOT NULL AND birthday != '' AND STR_TO_DATE(birthday, '%Y-%m-%d') IS NOT NULL AND TIMESTAMPDIFF(YEAR, STR_TO_DATE(birthday, '%Y-%m-%d'), CURDATE()) BETWEEN ? AND ?",
+                                [65, 80],
+                            ),
+                            '81_plus' => $query->whereRaw(
                                 "birthday IS NOT NULL AND birthday != '' AND STR_TO_DATE(birthday, '%Y-%m-%d') IS NOT NULL AND TIMESTAMPDIFF(YEAR, STR_TO_DATE(birthday, '%Y-%m-%d'), CURDATE()) >= ?",
-                                [65],
+                                [81],
                             ),
                             default => $query,
                         };

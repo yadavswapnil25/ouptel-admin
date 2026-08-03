@@ -162,7 +162,7 @@ class GroupsController extends BaseController
             'privacy' => ['required', 'in:public,private'],
             'join_privacy' => ['required', 'in:public,private'],
             'allowed_gender' => ['nullable', 'in:all,male,female,other'],
-            'age_group' => ['nullable', 'in:,0_17,18_24,25_34,35_44,45_54,55_64,65_plus'],
+            'age_group' => ['nullable', 'in:,0_17,18_24,25_34,35_44,45_54,55_64,65_80,81_plus,65_plus'],
             'community_preferences' => ['nullable', 'array'],
             'community_preferences.*' => ['integer', 'exists:community_preferences,id'],
             'avatar' => ['sometimes', 'image', 'max:10240'],
@@ -474,7 +474,7 @@ class GroupsController extends BaseController
                     'privacy' => ['public', 'private'],
                     'join_privacy' => ['public', 'private'],
                     'allowed_gender' => ['all', 'male', 'female', 'other'],
-                    'age_group' => ['', '0_17', '18_24', '25_34', '35_44', '45_54', '55_64', '65_plus'],
+                    'age_group' => ['', '0_17', '18_24', '25_34', '35_44', '45_54', '55_64', '65_80', '81_plus'],
                 ],
                 'community_preferences' => Schema::hasTable('community_preferences')
                     ? CommunityPreference::query()
@@ -1092,7 +1092,7 @@ class GroupsController extends BaseController
             'privacy' => ['sometimes', 'in:public,private'],
             'join_privacy' => ['sometimes', 'in:public,private'],
             'allowed_gender' => ['sometimes', 'nullable', 'in:all,male,female,other'],
-            'age_group' => ['sometimes', 'nullable', 'in:,0_17,18_24,25_34,35_44,45_54,55_64,65_plus'],
+            'age_group' => ['sometimes', 'nullable', 'in:,0_17,18_24,25_34,35_44,45_54,55_64,65_80,81_plus,65_plus'],
             'community_preferences' => ['sometimes', 'nullable', 'array'],
             'community_preferences.*' => ['integer', 'exists:community_preferences,id'],
             'category' => ['sometimes', 'integer'],
@@ -1397,6 +1397,8 @@ class GroupsController extends BaseController
             '35_44' => [35, 44, '35–44'],
             '45_54' => [45, 54, '45–54'],
             '55_64' => [55, 64, '55–64'],
+            '65_80' => [65, 80, '65–80'],
+            '81_plus' => [81, null, '81+'],
             '65_plus' => [65, null, '65+'],
             default => null,
         };

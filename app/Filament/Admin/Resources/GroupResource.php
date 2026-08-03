@@ -105,7 +105,8 @@ class GroupResource extends Resource
                                 '35_44' => '35–44',
                                 '45_54' => '45–54',
                                 '55_64' => '55–64',
-                                '65_plus' => '65+',
+                                '65_80' => '65–80',
+                                '81_plus' => '81+',
                             ])
                             ->nullable()
                             ->searchable(false)
@@ -171,6 +172,8 @@ class GroupResource extends Resource
                         '35_44' => '35–44',
                         '45_54' => '45–54',
                         '55_64' => '55–64',
+                        '65_80' => '65–80',
+                        '81_plus' => '81+',
                         '65_plus' => '65+',
                         default => 'Any',
                     })

@@ -2092,6 +2092,8 @@ class FriendsController extends Controller
             '35_44' => $age >= 35 && $age <= 44,
             '45_54' => $age >= 45 && $age <= 54,
             '55_64' => $age >= 55 && $age <= 64,
+            '65_80' => $age >= 65 && $age <= 80,
+            '81_plus' => $age >= 81,
             '65_plus' => $age >= 65,
             default => true,
         };
@@ -2106,6 +2108,8 @@ class FriendsController extends Controller
             '35_44' => '35–44',
             '45_54' => '45–54',
             '55_64' => '55–64',
+            '65_80' => '65–80',
+            '81_plus' => '81+',
             '65_plus' => '65+',
             'nobody' => 'Nobody',
             default => 'Everyone (all ages)',
