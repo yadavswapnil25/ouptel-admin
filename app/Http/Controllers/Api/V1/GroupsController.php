@@ -1311,7 +1311,7 @@ class GroupsController extends BaseController
                 'recipient_id' => $recipientId,
                 'type' => 'invited_group',
                 'text' => '',
-                'url' => 'index.php?link1=timeline&group_id=' . $groupId,
+                'url' => '/group/' . $groupId,
                 'seen' => 0,
             ];
 

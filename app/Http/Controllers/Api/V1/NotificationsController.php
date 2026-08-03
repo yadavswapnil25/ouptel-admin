@@ -362,6 +362,19 @@ class NotificationsController extends Controller
             $pageId = $notification->page_id ?? null;
             $notificationUrl = $notification->url ?? '';
 
+            // Rewrite legacy WoWonder group/page timeline links to SPA paths
+            if (preg_match('/[?&]group_id=(\d+)/i', (string) $notificationUrl, $gm)) {
+                $notificationUrl = '/group/' . $gm[1];
+                if (empty($notification->group_id ?? null)) {
+                    $notification->group_id = (int) $gm[1];
+                }
+            } elseif (preg_match('/[?&]page_id=(\d+)/i', (string) $notificationUrl, $pm)) {
+                $notificationUrl = '/page/' . $pm[1];
+                if (empty($notification->page_id ?? null)) {
+                    $pageId = (int) $pm[1];
+                }
+            }
+
             if (
                 empty($pageId)
                 && ($notification->type ?? '') === 'verification_result'
