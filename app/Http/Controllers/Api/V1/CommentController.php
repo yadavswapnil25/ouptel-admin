@@ -1408,6 +1408,9 @@ class CommentController extends Controller
      */
     private function formatCommentData(Comment $comment, string $userId): array
     {
+        $author = $comment->user;
+        $avatar = $author?->avatar ?? null;
+
         return [
             'id' => $comment->id,
             'post_id' => $comment->post_id,
@@ -1422,10 +1425,10 @@ class CommentController extends Controller
             'has_replies' => $this->getCommentRepliesCount($comment->id) > 0,
             'is_owner' => $comment->user_id == $userId,
             'author' => [
-                'user_id' => $comment->user->user_id ?? $comment->user_id,
-                'username' => $comment->user->username ?? 'Unknown',
-                'name' => $comment->user->name ?? 'Unknown User',
-                'avatar_url' => $comment->user->avatar ? asset('storage/' . $comment->user->avatar) : null,
+                'user_id' => $author?->user_id ?? $comment->user_id,
+                'username' => $author?->username ?? 'Unknown',
+                'name' => $this->getUserName($author),
+                'avatar_url' => $avatar ? asset('storage/' . $avatar) : null,
             ],
             'created_at' => date('c', $comment->time),
             'created_at_human' => $comment->human_time,
