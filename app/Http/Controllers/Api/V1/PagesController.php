@@ -106,7 +106,7 @@ class PagesController extends BaseController
                 'category_name' => $categoryName,
                 'sub_category' => $subCategoryValue,
                 'sub_category_name' => $subCategoryName,
-                'verified' => $page->verified,
+                'verified' => $this->isPageVerified($page->verified ?? 0),
                 'avatar' => $page->getAttributes()['avatar'] ?? '',
                 'cover' => $page->getAttributes()['cover'] ?? '',
                 'avatar_url' => $this->getFileUrl($page->getAttributes()['avatar'] ?? ''),
@@ -1271,7 +1271,7 @@ class PagesController extends BaseController
                     'about' => $page->page_description ?? '', // 'about' is mapped to page_description since column doesn't exist
                     'category' => $page->page_category ?? 0,
                     'category_name' => $categoryName,
-                    'verified' => (bool) ($page->verified ?? false),
+                    'verified' => $this->isPageVerified($page->verified ?? 0),
                     'active' => $page->active ?? '1',
                     'avatar' => $page->avatar ?? '',
                     'avatar_url' => $this->getFileUrl($page->avatar ?? ''),
@@ -3115,6 +3115,14 @@ class PagesController extends BaseController
         } catch (\Throwable $e) {
             // ignore
         }
+    }
+
+    private function isPageVerified(mixed $verified): bool
+    {
+        return $verified === 1
+            || $verified === '1'
+            || $verified === true
+            || $verified === 'true';
     }
 }
 

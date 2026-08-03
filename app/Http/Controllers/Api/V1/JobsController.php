@@ -311,7 +311,13 @@ class JobsController extends Controller
             return response()->json(['ok' => false, 'message' => 'You are not the owner of this page'], 403);
         }
 
-        if (!$page->verified) {
+        $verifiedRaw = $page->verified ?? 0;
+        $isVerified = $verifiedRaw === 1
+            || $verifiedRaw === '1'
+            || $verifiedRaw === true
+            || $verifiedRaw === 'true';
+
+        if (!$isVerified) {
             return response()->json(['ok' => false, 'message' => 'Only verified pages can post jobs'], 400);
         }
 
