@@ -369,6 +369,11 @@ class ShareController extends Controller
             DB::table('Wo_Posts')->where('id', $newPostId)->update(['post_id' => $newPostId]);
         }
 
+        // Ensure shared_from is set when the column exists (some DBs omit it from insert defaults)
+        if ($newPostId && Schema::hasColumn('Wo_Posts', 'shared_from')) {
+            DB::table('Wo_Posts')->where('id', $newPostId)->update(['shared_from' => $postId]);
+        }
+
         // Bump share count on the original post
         if (Schema::hasColumn('Wo_Posts', 'postShare')) {
             DB::table('Wo_Posts')->where('id', $postId)->increment('postShare');

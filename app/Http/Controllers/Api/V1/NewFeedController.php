@@ -562,6 +562,38 @@ class NewFeedController extends Controller
 
             $postType = $this->getPostType($post);
 
+            // Nested original post for shares (parent_id / shared_from)
+            $sharedFrom = null;
+            $isAnswerPost = strtolower((string) ($post->postType ?? '')) === 'answer';
+            $sharedSourceId = (int) ($post->parent_id ?: ($post->shared_from ?? 0));
+            if ($sharedSourceId > 0 && !$isAnswerPost) {
+                $sharedPost = DB::table('Wo_Posts')->where('id', $sharedSourceId)->first();
+                if ($sharedPost) {
+                    $sharedUser = DB::table('Wo_Users')->where('user_id', $sharedPost->user_id)->first();
+                    $sharedPublisher = $sharedUser ? [
+                        'user_id' => $sharedUser->user_id,
+                        'username' => $sharedUser->username ?? 'Unknown',
+                        'name' => trim(($sharedUser->first_name ?? '') . ' ' . ($sharedUser->last_name ?? ''))
+                            ?: ($sharedUser->name ?? $sharedUser->username ?? 'Unknown User'),
+                        'avatar_url' => $sharedUser->avatar ? asset('storage/' . $sharedUser->avatar) : null,
+                        'verified' => (bool) ($sharedUser->verified ?? false),
+                    ] : null;
+                    $sharedFrom = [
+                        'id' => $sharedPost->id,
+                        'post_id' => (int) ($sharedPost->post_id ?: $sharedPost->id),
+                        'postText' => $sharedPost->postText ?? '',
+                        'post_text' => $sharedPost->postText ?? '',
+                        'postType' => $sharedPost->postType ?? 'post',
+                        'post_type' => $sharedPost->postType ?? 'post',
+                        'post_photo_url' => $this->getPostPhotoUrl($sharedPost),
+                        'time' => $sharedPost->time ?? null,
+                        'created_at' => !empty($sharedPost->time) ? date('c', $sharedPost->time) : null,
+                        'publisher' => $sharedPublisher,
+                        'author' => $sharedPublisher,
+                    ];
+                }
+            }
+
             // Q&A enrichment for question posts
             $answerCount = 0;
             $answerPreviews = [];
@@ -611,6 +643,7 @@ class NewFeedController extends Controller
                 'post_text' => $post->postText ?? '',
                 'post_type' => $postType,
                 'parent_id' => (int) ($post->parent_id ?? 0),
+                'shared_from' => $sharedFrom,
                 'answer_count' => $answerCount,
                 'answers' => $answerPreviews,
                 'post_privacy' => $post->postPrivacy ?? '0',

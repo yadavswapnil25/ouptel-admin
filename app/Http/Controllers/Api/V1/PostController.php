@@ -2364,20 +2364,31 @@ class PostController extends Controller
         // Get shared post info if exists (parent_id on answer posts points at the question, not a share)
         $sharedFrom = null;
         $isAnswerPost = strtolower((string) ($post->postType ?? '')) === 'answer';
-        if ($post->parent_id && !$isAnswerPost) {
-            $sharedPost = DB::table('Wo_Posts')->where('id', $post->parent_id)->first();
+        $sharedSourceId = (int) ($post->parent_id ?: ($post->shared_from ?? 0));
+        if ($sharedSourceId > 0 && !$isAnswerPost) {
+            $sharedPost = DB::table('Wo_Posts')->where('id', $sharedSourceId)->first();
             if ($sharedPost) {
                 $sharedUser = DB::table('Wo_Users')->where('user_id', $sharedPost->user_id)->first();
+                $sharedPublisher = $sharedUser ? [
+                    'user_id' => $sharedUser->user_id,
+                    'username' => $sharedUser->username ?? 'Unknown',
+                    'name' => trim(($sharedUser->first_name ?? '') . ' ' . ($sharedUser->last_name ?? ''))
+                        ?: ($sharedUser->name ?? $sharedUser->username ?? 'Unknown User'),
+                    'avatar_url' => $sharedUser->avatar ? asset('storage/' . $sharedUser->avatar) : null,
+                    'verified' => (bool) ($sharedUser->verified ?? false),
+                ] : null;
                 $sharedFrom = [
                     'id' => $sharedPost->id,
+                    'post_id' => (int) ($sharedPost->post_id ?: $sharedPost->id),
                     'postText' => $sharedPost->postText ?? '',
+                    'post_text' => $sharedPost->postText ?? '',
                     'postType' => $sharedPost->postType ?? 'post',
-                    'publisher' => $sharedUser ? [
-                        'user_id' => $sharedUser->user_id,
-                        'username' => $sharedUser->username ?? 'Unknown',
-                        'name' => $sharedUser->name ?? $sharedUser->username ?? 'Unknown User',
-                        'avatar_url' => $sharedUser->avatar ? asset('storage/' . $sharedUser->avatar) : null,
-                    ] : null,
+                    'post_type' => $sharedPost->postType ?? 'post',
+                    'post_photo_url' => $this->getPostPhotoUrl($sharedPost),
+                    'time' => $sharedPost->time ?? null,
+                    'created_at' => !empty($sharedPost->time) ? date('c', $sharedPost->time) : null,
+                    'publisher' => $sharedPublisher,
+                    'author' => $sharedPublisher,
                 ];
             }
         }

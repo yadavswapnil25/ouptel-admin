@@ -1831,6 +1831,38 @@ class ProfileController extends Controller
                 $postType = 'blog';
             }
 
+            $sharedFrom = null;
+            $isAnswerPost = strtolower((string) ($post->postType ?? '')) === 'answer';
+            $sharedSourceId = (int) ($post->parent_id ?: ($post->shared_from ?? 0));
+            if ($sharedSourceId > 0 && !$isAnswerPost) {
+                $sharedPost = DB::table('Wo_Posts')->where('id', $sharedSourceId)->first();
+                if ($sharedPost) {
+                    $sharedUser = DB::table('Wo_Users')->where('user_id', $sharedPost->user_id)->first();
+                    $sharedPublisher = $sharedUser ? [
+                        'user_id' => $sharedUser->user_id,
+                        'username' => $sharedUser->username ?? 'Unknown',
+                        'name' => trim(($sharedUser->first_name ?? '') . ' ' . ($sharedUser->last_name ?? ''))
+                            ?: ($sharedUser->name ?? $sharedUser->username ?? 'Unknown User'),
+                        'avatar_url' => $sharedUser->avatar ? asset('storage/' . $sharedUser->avatar) : null,
+                        'verified' => (bool) ($sharedUser->verified ?? false),
+                    ] : null;
+                    $photo = $sharedPost->postPhoto ?? '';
+                    $sharedFrom = [
+                        'id' => $sharedPost->id,
+                        'post_id' => (int) ($sharedPost->post_id ?: $sharedPost->id),
+                        'postText' => $sharedPost->postText ?? '',
+                        'post_text' => $sharedPost->postText ?? '',
+                        'postType' => $sharedPost->postType ?? 'post',
+                        'post_type' => $sharedPost->postType ?? 'post',
+                        'post_photo_url' => $photo !== '' ? asset('storage/' . ltrim($photo, '/')) : null,
+                        'time' => $sharedPost->time ?? null,
+                        'created_at' => !empty($sharedPost->time) ? date('c', $sharedPost->time) : null,
+                        'publisher' => $sharedPublisher,
+                        'author' => $sharedPublisher,
+                    ];
+                }
+            }
+
             $recipient = null;
             if (!empty($post->recipient_id) && (int) $post->recipient_id > 0) {
                 $recipientUser = DB::table('Wo_Users')->where('user_id', (int) $post->recipient_id)->first();
@@ -1924,6 +1956,8 @@ class ProfileController extends Controller
                 'postText' => $post->postText ?? '',
                 'postType' => $postType,
                 'post_type' => $postType,
+                'parent_id' => (int) ($post->parent_id ?? 0),
+                'shared_from' => $sharedFrom,
                 'postPrivacy' => $post->postPrivacy ?? '0',
                 'postPhoto' => $post->postPhoto ?? '',
                 'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
