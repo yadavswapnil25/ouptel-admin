@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 
@@ -1042,10 +1043,14 @@ class PagesController extends BaseController
         $validated = $request->validate([
             'page_id' => ['required', 'integer'],
             'password' => ['required', 'string'],
+            'reason' => ['nullable', 'string', 'max:100'],
+            'reason_other' => ['nullable', 'string', 'max:500'],
         ]);
 
         $pageId = $validated['page_id'];
         $password = $validated['password'];
+        $deleteReason = trim((string) ($validated['reason'] ?? ''));
+        $deleteReasonOther = trim((string) ($validated['reason_other'] ?? ''));
 
         // Check if page exists
         $page = Page::find($pageId);
@@ -1119,6 +1124,16 @@ class PagesController extends BaseController
                 ],
             ], 400);
         }
+
+        Log::info('Page deleted by owner', [
+            'page_id' => $pageId,
+            'user_id' => $userId,
+            'page_name' => $page->page_name ?? $page->page_title ?? null,
+            'reason' => $deleteReason !== '' ? $deleteReason : null,
+            'reason_other' => $deleteReason === 'other' && $deleteReasonOther !== ''
+                ? $deleteReasonOther
+                : null,
+        ]);
 
         // Delete related data first
         DB::table('Wo_Pages_Likes')->where('page_id', $pageId)->delete();
