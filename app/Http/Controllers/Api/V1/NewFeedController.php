@@ -517,7 +517,7 @@ class NewFeedController extends Controller
 
             // Get post reactions count (try Wo_Reactions table first, fallback to post_likes column)
             // Use post_id field (which is used to store reactions) with fallback to id
-            $postIdForReactions = $post->post_id ?? $post->id;
+            $postIdForReactions = (int) ($post->post_id ?: $post->id);
             $reactionsCount = $this->getPostReactionsCount($postIdForReactions, $post);
 
             // Get detailed reaction breakdown and user's reaction (for reaction bar UI)
@@ -530,7 +530,7 @@ class NewFeedController extends Controller
             
             // Get post comments count (try Wo_Comments table first, fallback to post_comments column)
             // Use post_id field (which is used to store comments) with fallback to id
-            $postIdForComments = $post->post_id ?? $post->id;
+            $postIdForComments = (int) ($post->post_id ?: $post->id);
             $commentsCount = $this->getPostCommentsCount($postIdForComments, $post);
             
             // Get album images if it's an album post (has album_name OR multi_image_post is set)
@@ -602,7 +602,7 @@ class NewFeedController extends Controller
             
             return [
                 'id' => $post->id,
-                'post_id' => $post->post_id ?? $post->id,
+                'post_id' => (int) ($post->post_id ?: $post->id),
                 'user_id' => $post->user_id,
                 'recipient_id' => (int) ($post->recipient_id ?? 0),
                 'recipient' => $recipient,

@@ -1368,7 +1368,7 @@ class ProfileController extends Controller
 
         return [
             'id' => $post->id,
-            'post_id' => $post->post_id ?? $post->id,
+            'post_id' => (int) ($post->post_id ?: $post->id),
             'user_id' => $post->user_id,
             'user' => [
                 'user_id' => $user->user_id ?? 0,
@@ -1771,7 +1771,7 @@ class ProfileController extends Controller
         $result = [];
         foreach ($posts as $post) {
             // Use post_id for reactions (matching PostController pattern)
-            $postIdForReactions = $post->post_id ?? $post->id;
+            $postIdForReactions = (int) ($post->post_id ?: $post->id);
             
             $user = DB::table('Wo_Users')->where('user_id', $post->user_id)->first();
             
@@ -1784,7 +1784,7 @@ class ProfileController extends Controller
             $isLiked = $userReaction !== null;
 
             // Wo_Comments.post_id matches Wo_Posts.post_id (public id), same as new-feed — not internal id
-            $commentLookupPostId = (int) ($post->post_id ?? $post->id);
+            $commentLookupPostId = (int) ($post->post_id ?: $post->id);
             $commentsCount = 0;
             if (\Illuminate\Support\Facades\Schema::hasTable('Wo_Comments')) {
                 try {
@@ -1911,7 +1911,7 @@ class ProfileController extends Controller
 
             $result[] = [
                 'id' => $post->id,
-                'post_id' => $post->post_id ?? $post->id,
+                'post_id' => (int) ($post->post_id ?: $post->id),
                 'user_id' => $post->user_id,
                 'recipient_id' => (int) ($post->recipient_id ?? 0),
                 'recipient' => $recipient,

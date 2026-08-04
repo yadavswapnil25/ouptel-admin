@@ -128,13 +128,15 @@ class CommentController extends Controller
         try {
             DB::beginTransaction();
 
+            $engagementPostId = (int) ($post->post_id ?: $post->id);
+
             // Prepare comment data
             $pageId = $request->input('page_id', '');
             $textComment = $hasText ? trim($request->input('text')) : '';
 
             $commentData = [
                 'user_id' => $tokenUserId,
-                'post_id' => $post->post_id,
+                'post_id' => $engagementPostId,
                 'text' => $textComment,
                 'time' => time(),
             ];
@@ -166,7 +168,7 @@ class CommentController extends Controller
             $comment = Comment::create($commentData);
 
             // Get comment count for the post (exclude deleted/inactive authors)
-            $commentCount = CommentVisibilityHelper::countForPost((int) $post->post_id);
+            $commentCount = CommentVisibilityHelper::countForPost($engagementPostId);
 
             // Send notifications
             $this->sendCommentNotifications($comment, $post, $tokenUserId);
@@ -233,7 +235,7 @@ class CommentController extends Controller
             $page = $request->input('page', 1);
 
             $query = Comment::with('user')
-                ->where('post_id', $post->post_id)
+                ->where('post_id', (int) ($post->post_id ?: $post->id))
                 ->whereHas('user', CommentVisibilityHelper::authorIsVisible());
             
             // Exclude replies (only get top-level comments)
@@ -295,7 +297,7 @@ class CommentController extends Controller
                         'total' => $comments->total(),
                         'has_more' => $comments->hasMorePages(),
                     ],
-                    'post_id' => $post->post_id,
+                    'post_id' => (int) ($post->post_id ?: $post->id),
                 ]
             ]);
 
@@ -626,7 +628,7 @@ class CommentController extends Controller
             $replyData = [
                 'user_id' => $tokenUserId,
                 'comment_id' => $commentId,
-                'post_id' => $post->post_id,
+                'post_id' => (int) ($post->post_id ?: $post->id),
                 'text' => $request->input('text'),
                 'time' => time(),
             ];

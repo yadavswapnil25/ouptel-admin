@@ -1326,12 +1326,13 @@ class PostController extends Controller
     }
 
     $reactionType = $request->input('reaction');
+    $engagementPostId = (int) ($post->post_id ?: $post->id);
 
     try {
         DB::beginTransaction();
 
         // Check if user already reacted to this post
-        $existingReaction = PostReaction::where('post_id', $post->post_id)
+        $existingReaction = PostReaction::where('post_id', $engagementPostId)
             ->where('user_id', $tokenUserId)
             ->where('comment_id', 0) // Only post reactions, not comment reactions
             ->first();
@@ -1350,7 +1351,7 @@ class PostController extends Controller
             // Create new reaction
             PostReaction::create([
                 'user_id'    => $tokenUserId,
-                'post_id'    => $post->post_id,
+                'post_id'    => $engagementPostId,
                 'comment_id' => 0,
                 'replay_id'  => 0,
                 'message_id' => 0,
@@ -1375,7 +1376,7 @@ class PostController extends Controller
                 DB::table('Wo_Notifications')
                     ->where('recipient_id', $postOwnerId)
                     ->where('notifier_id', $tokenUserId)
-                    ->where('post_id', $post->post_id)
+                    ->where('post_id', $engagementPostId)
                     ->where('type', 'liked_post')
                     ->delete();
             } else {
@@ -1384,13 +1385,13 @@ class PostController extends Controller
                     [
                         'notifier_id'  => $tokenUserId,
                         'recipient_id' => $postOwnerId,
-                        'post_id'      => $post->post_id,
+                        'post_id'      => $engagementPostId,
                         'type'         => 'liked_post',
                     ],
                     [
                         'type2'    => $post->postType ?? $post->post_type ?? 'post',
                         'text'     => $post->postText ?? $post->post_text ?? null,
-                        'url'      => '/post/' . $post->post_id,
+                        'url'      => '/post/' . $engagementPostId,
                         'page_id'  => $post->page_id ?? 0,
                         'group_id' => $post->group_id ?? 0,
                         'event_id' => 0,
@@ -1402,7 +1403,7 @@ class PostController extends Controller
         }
 
         // Get updated reaction counts
-        $reactionCounts = $this->getPostReactionCounts($post->post_id);
+        $reactionCounts = $this->getPostReactionCounts($engagementPostId);
 
         DB::commit();
 
@@ -1410,9 +1411,7 @@ class PostController extends Controller
             'ok' => true,
             'message' => 'Reaction ' . $action . ' successfully',
             'data' => [
-                'post_id'         => $post->post_id,
-                'action'          => $action,
-                'reaction_type'   => $reactionType,
+                'post_id'         => $engagementPostId,
                 'reaction_name'   => $this->getReactionName($reactionType),
                 'reaction_icon'   => $this->getReactionIcon($reactionType),
                 'reaction_counts' => $reactionCounts,
@@ -1464,13 +1463,14 @@ class PostController extends Controller
         }
 
         try {
-            $reactionCounts = $this->getPostReactionCounts($post->post_id);
-            $userReaction = $this->getUserReaction($post->post_id, $tokenUserId);
+            $engagementPostId = (int) ($post->post_id ?: $post->id);
+            $reactionCounts = $this->getPostReactionCounts($engagementPostId);
+            $userReaction = $this->getUserReaction($engagementPostId, $tokenUserId);
 
             return response()->json([
                 'ok' => true,
                 'data' => [
-                    'post_id' => $post->post_id,
+                    'post_id' => $engagementPostId,
                     'reaction_counts' => $reactionCounts,
                     'total_reactions' => array_sum($reactionCounts),
                     'user_reaction' => $userReaction,
@@ -1521,8 +1521,10 @@ class PostController extends Controller
         try {
             DB::beginTransaction();
 
+            $engagementPostId = (int) ($post->post_id ?: $post->id);
+
             // Find and remove user's reaction
-            $reaction = PostReaction::where('post_id', $post->post_id)
+            $reaction = PostReaction::where('post_id', $engagementPostId)
                 ->where('user_id', $tokenUserId)
                 ->where('comment_id', 0) // Only post reactions, not comment reactions
                 ->first();
@@ -1535,7 +1537,7 @@ class PostController extends Controller
             $reaction->delete();
 
             // Get updated reaction counts
-            $reactionCounts = $this->getPostReactionCounts($post->post_id);
+            $reactionCounts = $this->getPostReactionCounts($engagementPostId);
 
             DB::commit();
 
@@ -1543,7 +1545,7 @@ class PostController extends Controller
                 'ok' => true,
                 'message' => 'Reaction removed successfully',
                 'data' => [
-                    'post_id' => $post->post_id,
+                    'post_id' => $engagementPostId,
                     'action' => 'removed',
                     'removed_reaction_type' => $removedReactionType,
                     'removed_reaction_name' => $this->getReactionName($removedReactionType),
@@ -1981,7 +1983,7 @@ class PostController extends Controller
 
         return [
             'id' => $post->id,
-            'post_id' => $post->post_id,
+            'post_id' => (int) ($post->post_id ?: $post->id),
             'user_id' => $post->user_id,
             'post_text' => $post->postText ?? '',
             'post_text_preview' => $post->post_text_preview,
@@ -2022,9 +2024,9 @@ class PostController extends Controller
             'created_at' => date('c', $post->time),
             'created_at_human' => $this->getHumanTime($post->time),
             'time' => $post->time,
-            'reaction_counts' => $this->getPostReactionCounts($post->post_id),
-            'total_reactions' => array_sum($this->getPostReactionCounts($post->post_id)),
-            'user_reaction' => $this->getUserReaction($post->post_id, $userId),
+            'reaction_counts' => $this->getPostReactionCounts((int) ($post->post_id ?: $post->id)),
+            'total_reactions' => array_sum($this->getPostReactionCounts((int) ($post->post_id ?: $post->id))),
+            'user_reaction' => $this->getUserReaction((int) ($post->post_id ?: $post->id), $userId),
             'color_id' => $colorId > 0 ? $colorId : null,
             'color' => $colorData,
             'color_data' => $colorData,
@@ -2420,8 +2422,8 @@ class PostController extends Controller
             }
         }
 
-        // Get post ID for reactions (use post_id field if available, fallback to id)
-        $postIdForReactions = $post->post_id ?? $post->id;
+        // Use post_id when set; 0/null must fall back to id (shared posts often missed post_id)
+        $postIdForReactions = (int) ($post->post_id ?: $post->id);
         
         // Get reaction counts (detailed breakdown by reaction type)
         $reactionCounts = $this->getPostReactionCounts($postIdForReactions);
@@ -2434,7 +2436,7 @@ class PostController extends Controller
         $isLiked = $userReaction !== null;
         
         // Get comments count
-        $postIdForComments = $post->post_id ?? $post->id;
+        $postIdForComments = (int) ($post->post_id ?: $post->id);
         $commentsCount = $this->getPostCommentsCount($postIdForComments, $post);
         
         // Get shares count
@@ -2522,7 +2524,7 @@ class PostController extends Controller
         
         return [
             'id' => $post->id,
-            'post_id' => $post->post_id ?? $post->id,
+            'post_id' => (int) ($post->post_id ?: $post->id),
             'user_id' => $post->user_id,
             'post_text' => $post->postText ?? '',
             'post_type' => $postType,
@@ -3618,8 +3620,8 @@ class PostController extends Controller
             $page = (int) ($request->query('page', 1));
             $page = max(1, $page);
 
-            // Get post ID for reactions (use post_id field if available, fallback to id)
-            $postIdForReactions = $post->post_id ?? $post->id;
+            // Get post ID for reactions (use post_id when set; 0 must fall back to id)
+            $postIdForReactions = (int) ($post->post_id ?: $post->id);
 
             // Get total likes count
             $totalLikes = 0;

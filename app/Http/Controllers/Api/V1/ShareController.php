@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 
 class ShareController extends Controller
@@ -320,12 +321,18 @@ class ShareController extends Controller
             return null;
         }
 
-        // Create new post as a share
+        // Create new post as a share — never keep profile media post types on shares
+        // (those labels belong only to the original cover/avatar update posts).
+        $originalType = strtolower(trim((string) ($originalPost->postType ?? '')));
+        $sharePostType = in_array($originalType, ['profile_cover_picture', 'profile_picture', 'answer'], true)
+            ? 'post'
+            : (($originalPost->postType ?? '') !== '' ? $originalPost->postType : 'post');
+
         $newPostId = DB::table('Wo_Posts')->insertGetId([
             'user_id' => $userId,
             'postText' => !empty($text) ? $text : $originalPost->postText,
             'postPrivacy' => $originalPost->postPrivacy ?? '0',
-            'postType' => $originalPost->postType ?? 'post',
+            'postType' => $sharePostType,
             'parent_id' => $postId, // Reference to original post
             'page_id' => $pageId,
             'group_id' => $groupId,
@@ -356,6 +363,16 @@ class ShareController extends Controller
             'time' => time(),
             'active' => 1,
         ]);
+
+        // Align post_id with PK so reactions/comments attach to this share, not post_id=0
+        if ($newPostId && Schema::hasColumn('Wo_Posts', 'post_id')) {
+            DB::table('Wo_Posts')->where('id', $newPostId)->update(['post_id' => $newPostId]);
+        }
+
+        // Bump share count on the original post
+        if (Schema::hasColumn('Wo_Posts', 'postShare')) {
+            DB::table('Wo_Posts')->where('id', $postId)->increment('postShare');
+        }
 
         return $newPostId;
     }
