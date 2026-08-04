@@ -2186,14 +2186,7 @@ class ProfileController extends Controller
         }
 
         $birthPrivacy = (string) ($user->birth_privacy ?? '0');
-        if (!$isOwner) {
-            if ($birthPrivacy === '2') {
-                return $default;
-            }
-            if ($birthPrivacy === '1' && !$this->isFriend($loggedUserId, (string) $user->user_id)) {
-                return $default;
-            }
-        }
+        $today = now()->startOfDay();
 
         try {
             $birthDate = \Carbon\Carbon::parse($birthdayRaw);
@@ -2201,17 +2194,32 @@ class ProfileController extends Controller
             return $default;
         }
 
-        $today = now()->startOfDay();
+        $isToday = method_exists($birthDate, 'isBirthday')
+            ? $birthDate->isBirthday($today)
+            : ($birthDate->month === $today->month && $birthDate->day === $today->day);
+
+        // "Only me" stays private. For birthday *today*, show a celebration card to
+        // any profile visitor (even if birth date privacy is friends-only).
+        if (!$isOwner) {
+            if ($birthPrivacy === '2') {
+                return $default;
+            }
+            if ($birthPrivacy === '1' && !$isToday && !$this->isFriend($loggedUserId, (string) $user->user_id)) {
+                return $default;
+            }
+        }
+
         $nextBirthday = $birthDate->copy()->year($today->year)->startOfDay();
         if ($nextBirthday->lt($today)) {
             $nextBirthday->addYear();
         }
-        $daysUntil = (int) $today->diffInDays($nextBirthday, false);
-        $isToday = $daysUntil === 0;
+        $daysUntil = $isToday ? 0 : (int) $today->diffInDays($nextBirthday);
         $turningAge = $nextBirthday->year - $birthDate->year;
 
         return [
-            'birthday' => $birthdayRaw,
+            'birthday' => ($isOwner || $birthPrivacy === '0' || ($birthPrivacy === '1' && $this->isFriend($loggedUserId, (string) $user->user_id)))
+                ? $birthdayRaw
+                : null,
             'is_today' => $isToday,
             'days_until' => $daysUntil,
             'turning_age' => $turningAge,
