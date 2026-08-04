@@ -621,6 +621,7 @@ class SettingsController extends Controller
             }
 
             if (empty($errors) && !empty($updateData)) {
+                $this->appendSyncedDisplayName($updateData, $user);
                 DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
             }
         }
@@ -885,6 +886,7 @@ class SettingsController extends Controller
         }
 
         if (empty($errors) && !empty($updateData)) {
+            $this->appendSyncedDisplayName($updateData, $user);
             DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
         }
 
@@ -970,10 +972,33 @@ class SettingsController extends Controller
         }
 
         if (!empty($updateData)) {
+            $this->appendSyncedDisplayName($updateData, $user);
             DB::table('Wo_Users')->where('user_id', $user->user_id)->update($updateData);
         }
 
         return $errors;
+    }
+
+    /**
+     * Keep Wo_Users.name in sync with first_name + last_name when those change.
+     */
+    private function appendSyncedDisplayName(array &$updateData, User $user): void
+    {
+        if (!isset($updateData['first_name']) && !isset($updateData['last_name'])) {
+            return;
+        }
+        if (!Schema::hasColumn('Wo_Users', 'name')) {
+            return;
+        }
+
+        $first = array_key_exists('first_name', $updateData)
+            ? (string) $updateData['first_name']
+            : (string) ($user->first_name ?? '');
+        $last = array_key_exists('last_name', $updateData)
+            ? (string) $updateData['last_name']
+            : (string) ($user->last_name ?? '');
+
+        $updateData['name'] = trim($first . ' ' . $last);
     }
 
     /**

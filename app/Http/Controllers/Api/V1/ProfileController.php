@@ -465,6 +465,14 @@ class ProfileController extends Controller
             $userData['phone_number'] = '';
         }
 
+        // Prefer first/last name over a stale Wo_Users.name column (often left outdated after edits).
+        $fullName = trim(($userData['first_name'] ?? '') . ' ' . ($userData['last_name'] ?? ''));
+        if ($fullName !== '') {
+            $userData['name'] = $fullName;
+        } elseif (empty($userData['name'])) {
+            $userData['name'] = $userData['username'] ?? '';
+        }
+
         return $userData;
     }
 
