@@ -228,6 +228,26 @@ class NewFeedController extends Controller
             });
             // Note: privacy column doesn't exist in Wo_Posts table
 
+        // Hide posts from users in a mutual block relationship with the viewer.
+        if (Schema::hasTable('Wo_Blocks')) {
+            $blockedIds = DB::table('Wo_Blocks')
+                ->where('blocker', $userId)
+                ->pluck('blocked')
+                ->merge(
+                    DB::table('Wo_Blocks')
+                        ->where('blocked', $userId)
+                        ->pluck('blocker')
+                )
+                ->unique()
+                ->filter()
+                ->values()
+                ->all();
+
+            if (!empty($blockedIds)) {
+                $query->whereNotIn('Wo_Posts.user_id', $blockedIds);
+            }
+        }
+
         // Filter by user's community preferences when column exists
         // - Users WITH preferences: see posts in their preferences + uncategorized (null)
         // - Users WITHOUT preferences: see ONLY uncategorized posts (not community-tagged)

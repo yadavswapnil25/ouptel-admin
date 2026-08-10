@@ -144,6 +144,23 @@ class ProfileController extends Controller
                 ], 404);
             }
 
+            // Mutual block: neither side can view the other's profile.
+            if (
+                (string) $profileUserId !== (string) $tokenUserId
+                && $this->isBlocked((int) $profileUserId, (int) $tokenUserId)
+            ) {
+                return response()->json([
+                    'api_status' => '403',
+                    'api_text' => 'failed',
+                    'api_version' => '1.0',
+                    'is_blocked' => 1,
+                    'errors' => [
+                        'error_id' => 'blocked',
+                        'error_text' => 'This profile is unavailable.',
+                    ],
+                ], 403);
+            }
+
             // Parse fetch parameters
             $fetch = $request->input('fetch', 'user_data');
             $fetchItems = array_map('trim', explode(',', $fetch));
@@ -1461,6 +1478,23 @@ class ProfileController extends Controller
                     'error_text' => 'User not found.'
                 ]
             ], 404);
+        }
+
+        // Mutual block: hide timeline for blocked relationships.
+        if (
+            (string) $user->user_id !== (string) $tokenUserId
+            && $this->isBlocked((int) $user->user_id, (int) $tokenUserId)
+        ) {
+            return response()->json([
+                'api_status' => '403',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'is_blocked' => 1,
+                'errors' => [
+                    'error_id' => 'blocked',
+                    'error_text' => 'This profile is unavailable.',
+                ],
+            ], 403);
         }
 
         // Pagination parameters - support both page-based and cursor-based
