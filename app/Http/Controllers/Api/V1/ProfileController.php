@@ -145,20 +145,23 @@ class ProfileController extends Controller
             }
 
             // Mutual block: neither side can view the other's profile.
-            if (
-                (string) $profileUserId !== (string) $tokenUserId
-                && $this->isBlocked((int) $profileUserId, (int) $tokenUserId)
-            ) {
-                return response()->json([
-                    'api_status' => '403',
-                    'api_text' => 'failed',
-                    'api_version' => '1.0',
-                    'is_blocked' => 1,
-                    'errors' => [
-                        'error_id' => 'blocked',
-                        'error_text' => 'This profile is unavailable.',
-                    ],
-                ], 403);
+            if ((string) $profileUserId !== (string) $tokenUserId) {
+                $blockDirection = $this->getBlockDirection((int) $profileUserId, (int) $tokenUserId);
+                if ($blockDirection !== null) {
+                    return response()->json([
+                        'api_status' => '403',
+                        'api_text' => 'failed',
+                        'api_version' => '1.0',
+                        'is_blocked' => 1,
+                        'block_direction' => $blockDirection,
+                        'errors' => [
+                            'error_id' => 'blocked',
+                            'error_text' => $blockDirection === 'by_me'
+                                ? 'You blocked this profile.'
+                                : 'This profile is unavailable.',
+                        ],
+                    ], 403);
+                }
             }
 
             // Parse fetch parameters
@@ -876,20 +879,43 @@ class ProfileController extends Controller
     }
 
     /**
-     * Check if user is blocked
+     * Check if user is blocked (either direction).
      */
     private function isBlocked(int $userId, int $loggedUserId): int
     {
-        $blocked = DB::table('Wo_Blocks')
-            ->where(function($query) use ($userId, $loggedUserId) {
-                $query->where('blocker', $userId)->where('blocked', $loggedUserId);
-            })
-            ->orWhere(function($query) use ($userId, $loggedUserId) {
-                $query->where('blocker', $loggedUserId)->where('blocked', $userId);
-            })
-            ->exists();
+        return $this->getBlockDirection($userId, $loggedUserId) !== null ? 1 : 0;
+    }
 
-        return $blocked ? 1 : 0;
+    /**
+     * @return 'by_me'|'by_them'|null
+     */
+    private function getBlockDirection(int $profileUserId, int $loggedUserId): ?string
+    {
+        if ($profileUserId <= 0 || $loggedUserId <= 0 || $profileUserId === $loggedUserId) {
+            return null;
+        }
+
+        if (!Schema::hasTable('Wo_Blocks')) {
+            return null;
+        }
+
+        $iBlockedThem = DB::table('Wo_Blocks')
+            ->where('blocker', $loggedUserId)
+            ->where('blocked', $profileUserId)
+            ->exists();
+        if ($iBlockedThem) {
+            return 'by_me';
+        }
+
+        $theyBlockedMe = DB::table('Wo_Blocks')
+            ->where('blocker', $profileUserId)
+            ->where('blocked', $loggedUserId)
+            ->exists();
+        if ($theyBlockedMe) {
+            return 'by_them';
+        }
+
+        return null;
     }
 
     /**
@@ -1481,20 +1507,23 @@ class ProfileController extends Controller
         }
 
         // Mutual block: hide timeline for blocked relationships.
-        if (
-            (string) $user->user_id !== (string) $tokenUserId
-            && $this->isBlocked((int) $user->user_id, (int) $tokenUserId)
-        ) {
-            return response()->json([
-                'api_status' => '403',
-                'api_text' => 'failed',
-                'api_version' => '1.0',
-                'is_blocked' => 1,
-                'errors' => [
-                    'error_id' => 'blocked',
-                    'error_text' => 'This profile is unavailable.',
-                ],
-            ], 403);
+        if ((string) $user->user_id !== (string) $tokenUserId) {
+            $blockDirection = $this->getBlockDirection((int) $user->user_id, (int) $tokenUserId);
+            if ($blockDirection !== null) {
+                return response()->json([
+                    'api_status' => '403',
+                    'api_text' => 'failed',
+                    'api_version' => '1.0',
+                    'is_blocked' => 1,
+                    'block_direction' => $blockDirection,
+                    'errors' => [
+                        'error_id' => 'blocked',
+                        'error_text' => $blockDirection === 'by_me'
+                            ? 'You blocked this profile.'
+                            : 'This profile is unavailable.',
+                    ],
+                ], 403);
+            }
         }
 
         // Pagination parameters - support both page-based and cursor-based
