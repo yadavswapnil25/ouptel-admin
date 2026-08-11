@@ -117,13 +117,20 @@ class FriendActivityNotificationService
 
     /**
      * Friends + people who follow the author (for story alerts).
+     * Also includes people the author follows when that follow is active,
+     * so one-sided follow edges still get story alerts in both directions
+     * when either user would see the other's vibes in the feed.
      *
      * @return list<string>
      */
     public static function getStoryRecipientIds(string $userId): array
     {
         $ids = self::getFriendIds($userId);
-        $ids = array_values(array_unique(array_merge($ids, self::getFollowerIds($userId))));
+        $ids = array_values(array_unique(array_merge(
+            $ids,
+            self::getFollowerIds($userId),
+            self::getFollowingIds($userId),
+        )));
         $ids = array_values(array_diff($ids, [$userId]));
 
         $blockedIds = self::getBlockedUserIds($userId);
@@ -132,6 +139,30 @@ class FriendActivityNotificationService
         }
 
         return $ids;
+    }
+
+    /**
+     * Active accounts this user follows.
+     *
+     * @return list<string>
+     */
+    public static function getFollowingIds(string $userId): array
+    {
+        if (!Schema::hasTable('Wo_Followers')) {
+            return [];
+        }
+
+        return DB::table('Wo_Followers')
+            ->where('follower_id', $userId)
+            ->where(function ($q) {
+                $q->where('active', '=', '1')
+                    ->orWhere('active', '=', 1);
+            })
+            ->pluck('following_id')
+            ->map(fn ($id) => (string) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
@@ -223,6 +254,10 @@ class FriendActivityNotificationService
     }
 
     /**
+     * Drop recipients who muted the author — but never mute accepted friends.
+     * (Wo_Followers.notify often defaults to 0 on insert, which incorrectly
+     * blocked one side of a friendship from receiving story/post alerts.)
+     *
      * @param  list<string>  $recipientIds
      * @return list<string>
      */
@@ -237,7 +272,7 @@ class FriendActivityNotificationService
         }
 
         try {
-            $mutedRecipientIds = DB::table('Wo_Followers')
+            $mutedFollowerIds = DB::table('Wo_Followers')
                 ->where('following_id', $authorId)
                 ->whereIn('follower_id', $recipientIds)
                 ->where(function ($q) {
@@ -247,11 +282,23 @@ class FriendActivityNotificationService
                 ->map(fn ($id) => (string) $id)
                 ->all();
 
-            if ($mutedRecipientIds === []) {
+            if ($mutedFollowerIds === []) {
                 return $recipientIds;
             }
 
-            return array_values(array_diff($recipientIds, $mutedRecipientIds));
+            // Accepted friends always receive friend-activity notifications.
+            $friendIds = self::getFriendIds($authorId);
+            $friendSet = array_fill_keys($friendIds, true);
+            $mutedNonFriends = array_values(array_filter(
+                $mutedFollowerIds,
+                static fn (string $id): bool => !isset($friendSet[$id])
+            ));
+
+            if ($mutedNonFriends === []) {
+                return $recipientIds;
+            }
+
+            return array_values(array_diff($recipientIds, $mutedNonFriends));
         } catch (\Throwable $e) {
             return $recipientIds;
         }

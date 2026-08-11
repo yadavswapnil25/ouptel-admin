@@ -2859,17 +2859,26 @@ class FriendsController extends Controller
 
             if ($exists) {
                 // Update any existing row (pending or not) to active=1
+                $update = ['active' => '1'];
+                if (Schema::hasColumn('Wo_Followers', 'notify')) {
+                    // Don't leave notify stuck at DB default 0 (blocks friend alerts).
+                    $update['notify'] = '1';
+                }
                 DB::table('Wo_Followers')
                     ->where('follower_id', $followerKey)
                     ->where('following_id', $followingKey)
-                    ->update(['active' => '1']);
+                    ->update($update);
             } else {
-                DB::table('Wo_Followers')->insert([
+                $row = [
                     'follower_id' => $followerKey,
                     'following_id' => $followingKey,
                     'active' => '1',
                     'time' => time(),
-                ]);
+                ];
+                if (Schema::hasColumn('Wo_Followers', 'notify')) {
+                    $row['notify'] = '1';
+                }
+                DB::table('Wo_Followers')->insert($row);
             }
         } catch (\Exception $e) {
             // ignore – best-effort
