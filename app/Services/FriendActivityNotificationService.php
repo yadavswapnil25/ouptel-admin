@@ -14,95 +14,127 @@ class FriendActivityNotificationService
      */
     public static function notifyFriendsOfNewPost(Post $post, string $authorId): void
     {
-        if (!Schema::hasTable('Wo_Notifications') || !self::isGlobalNotifyEnabled('notify_new_post')) {
-            return;
+        try {
+            if (!Schema::hasTable('Wo_Notifications') || !self::isGlobalNotifyEnabled('notify_new_post')) {
+                return;
+            }
+
+            if (!self::shouldNotifyFriendsForPost($post)) {
+                return;
+            }
+
+            $friendIds = self::getFriendIds($authorId);
+            if ($friendIds === []) {
+                return;
+            }
+
+            $recipientId = (int) ($post->recipient_id ?? 0);
+            $authorIdInt = (int) $authorId;
+            if ($recipientId > 0 && $recipientId !== $authorIdInt) {
+                $friendIds = array_values(array_diff($friendIds, [(string) $recipientId]));
+            }
+
+            $friendIds = self::filterRecipientsAllowingAuthorNotifications($authorId, $friendIds);
+            if ($friendIds === []) {
+                return;
+            }
+
+            $postPublicId = $post->post_id ?? $post->id;
+            $postType = strtolower((string) ($post->postType ?? ''));
+            $type2 = self::mapPostTypeToNotificationType2($postType);
+
+            self::insertFriendNotifications(
+                notifierId: $authorIdInt,
+                recipientIds: $friendIds,
+                type: 'posted',
+                url: '/post/' . $postPublicId,
+                extra: [
+                    'post_id' => $postPublicId,
+                    'type2' => $type2,
+                    'text' => self::truncateText((string) ($post->postText ?? '')),
+                    'page_id' => (int) ($post->page_id ?? 0),
+                    'group_id' => (int) ($post->group_id ?? 0),
+                    'event_id' => 0,
+                ],
+            );
+        } catch (\Throwable $e) {
+            Log::warning('notifyFriendsOfNewPost failed: ' . $e->getMessage());
         }
-
-        if (!self::shouldNotifyFriendsForPost($post)) {
-            return;
-        }
-
-        $friendIds = self::getFriendIds($authorId);
-        if ($friendIds === []) {
-            return;
-        }
-
-        $recipientId = (int) ($post->recipient_id ?? 0);
-        $authorIdInt = (int) $authorId;
-        if ($recipientId > 0 && $recipientId !== $authorIdInt) {
-            $friendIds = array_values(array_diff($friendIds, [(string) $recipientId]));
-        }
-
-        $friendIds = self::filterRecipientsAllowingAuthorNotifications($authorId, $friendIds);
-        if ($friendIds === []) {
-            return;
-        }
-
-        $postPublicId = $post->post_id ?? $post->id;
-        $postType = strtolower((string) ($post->postType ?? ''));
-        $type2 = self::mapPostTypeToNotificationType2($postType);
-
-        self::insertFriendNotifications(
-            notifierId: $authorIdInt,
-            recipientIds: $friendIds,
-            type: 'posted',
-            url: '/post/' . $postPublicId,
-            extra: [
-                'post_id' => $postPublicId,
-                'type2' => $type2,
-                'text' => self::truncateText((string) ($post->postText ?? '')),
-                'page_id' => (int) ($post->page_id ?? 0),
-                'group_id' => (int) ($post->group_id ?? 0),
-                'event_id' => 0,
-            ],
-        );
     }
 
     /**
-     * Notify the author's friends about a new story.
+     * Notify friends + followers about a new story/vibe.
      */
     public static function notifyFriendsOfNewStory(int $storyId, string $authorId): void
     {
-        if (!Schema::hasTable('Wo_Notifications')) {
-            return;
+        try {
+            if (!Schema::hasTable('Wo_Notifications')) {
+                return;
+            }
+
+            // Stories are always notified unless explicitly disabled.
+            if (!self::isGlobalNotifyEnabled('notify_new_story')) {
+                return;
+            }
+
+            $recipientIds = self::getStoryRecipientIds($authorId);
+            if ($recipientIds === []) {
+                Log::info('notifyFriendsOfNewStory: no recipients for author ' . $authorId);
+                return;
+            }
+
+            $recipientIds = self::filterRecipientsAllowingAuthorNotifications($authorId, $recipientIds);
+            if ($recipientIds === []) {
+                return;
+            }
+
+            $author = DB::table('Wo_Users')->where('user_id', $authorId)->first(['username']);
+            $username = trim((string) ($author->username ?? ''));
+            $url = $username !== ''
+                ? 'index.php?link1=timeline&u=' . $username
+                : '/profile/' . $authorId;
+
+            $extra = [
+                'post_id' => 0,
+                'page_id' => 0,
+                'group_id' => 0,
+                'event_id' => 0,
+                'text' => '',
+            ];
+
+            if (Schema::hasColumn('Wo_Notifications', 'story_id')) {
+                $extra['story_id'] = $storyId;
+            }
+
+            self::insertFriendNotifications(
+                notifierId: (int) $authorId,
+                recipientIds: $recipientIds,
+                type: 'new_story',
+                url: $url,
+                extra: $extra,
+            );
+        } catch (\Throwable $e) {
+            Log::warning('notifyFriendsOfNewStory failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Friends + people who follow the author (for story alerts).
+     *
+     * @return list<string>
+     */
+    public static function getStoryRecipientIds(string $userId): array
+    {
+        $ids = self::getFriendIds($userId);
+        $ids = array_values(array_unique(array_merge($ids, self::getFollowerIds($userId))));
+        $ids = array_values(array_diff($ids, [$userId]));
+
+        $blockedIds = self::getBlockedUserIds($userId);
+        if ($blockedIds !== []) {
+            $ids = array_values(array_diff($ids, $blockedIds));
         }
 
-        if (!self::isGlobalNotifyEnabled('notify_new_post') && !self::isGlobalNotifyEnabled('notify_new_story')) {
-            return;
-        }
-
-        $friendIds = self::getFriendIds($authorId);
-        if ($friendIds === []) {
-            return;
-        }
-
-        $friendIds = self::filterRecipientsAllowingAuthorNotifications($authorId, $friendIds);
-        if ($friendIds === []) {
-            return;
-        }
-
-        $author = DB::table('Wo_Users')->where('user_id', $authorId)->first(['username']);
-        $username = trim((string) ($author->username ?? ''));
-        $url = $username !== ''
-            ? 'index.php?link1=timeline&u=' . $username
-            : '/profile/' . $authorId;
-
-        $extra = [
-            'url' => $url,
-            'type2' => 'story',
-        ];
-
-        if (Schema::hasColumn('Wo_Notifications', 'story_id')) {
-            $extra['story_id'] = $storyId;
-        }
-
-        self::insertFriendNotifications(
-            notifierId: (int) $authorId,
-            recipientIds: $friendIds,
-            type: 'new_story',
-            url: $url,
-            extra: $extra,
-        );
+        return $ids;
     }
 
     /**
@@ -147,6 +179,30 @@ class FriendActivityNotificationService
         return $friendIds;
     }
 
+    /**
+     * Active followers of the author.
+     *
+     * @return list<string>
+     */
+    public static function getFollowerIds(string $userId): array
+    {
+        if (!Schema::hasTable('Wo_Followers')) {
+            return [];
+        }
+
+        return DB::table('Wo_Followers')
+            ->where('following_id', $userId)
+            ->where(function ($q) {
+                $q->where('active', '=', '1')
+                    ->orWhere('active', '=', 1);
+            })
+            ->pluck('follower_id')
+            ->map(fn ($id) => (string) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     private static function shouldNotifyFriendsForPost(Post $post): bool
     {
         if ((string) ($post->send_notify ?? '1') === '0') {
@@ -179,21 +235,29 @@ class FriendActivityNotificationService
             return $recipientIds;
         }
 
-        $mutedRecipientIds = DB::table('Wo_Followers')
-            ->where('following_id', $authorId)
-            ->whereIn('follower_id', $recipientIds)
-            ->where(function ($q) {
-                $q->where('notify', 0)->orWhere('notify', '0');
-            })
-            ->pluck('follower_id')
-            ->map(fn ($id) => (string) $id)
-            ->all();
-
-        if ($mutedRecipientIds === []) {
+        if (!Schema::hasColumn('Wo_Followers', 'notify')) {
             return $recipientIds;
         }
 
-        return array_values(array_diff($recipientIds, $mutedRecipientIds));
+        try {
+            $mutedRecipientIds = DB::table('Wo_Followers')
+                ->where('following_id', $authorId)
+                ->whereIn('follower_id', $recipientIds)
+                ->where(function ($q) {
+                    $q->where('notify', 0)->orWhere('notify', '0');
+                })
+                ->pluck('follower_id')
+                ->map(fn ($id) => (string) $id)
+                ->all();
+
+            if ($mutedRecipientIds === []) {
+                return $recipientIds;
+            }
+
+            return array_values(array_diff($recipientIds, $mutedRecipientIds));
+        } catch (\Throwable $e) {
+            return $recipientIds;
+        }
     }
 
     /**
@@ -212,7 +276,7 @@ class FriendActivityNotificationService
         }
 
         $now = time();
-        $rows = [];
+        $inserted = 0;
 
         foreach ($recipientIds as $recipientId) {
             if ($recipientId === '' || (int) $recipientId === $notifierId) {
@@ -234,19 +298,31 @@ class FriendActivityNotificationService
                 }
             }
 
-            $rows[] = $row;
-        }
-
-        if ($rows === []) {
-            return;
-        }
-
-        try {
-            foreach (array_chunk($rows, 500) as $chunk) {
-                DB::table('Wo_Notifications')->insert($chunk);
+            // Ensure common NOT NULL numeric columns have defaults when present.
+            foreach (['post_id', 'page_id', 'group_id', 'event_id'] as $requiredNumeric) {
+                if (self::notificationColumnExists($requiredNumeric) && !array_key_exists($requiredNumeric, $row)) {
+                    $row[$requiredNumeric] = 0;
+                }
             }
-        } catch (\Exception $e) {
-            Log::warning('Failed to create friend activity notifications: ' . $e->getMessage());
+
+            try {
+                DB::table('Wo_Notifications')->insert($row);
+                $inserted++;
+            } catch (\Throwable $e) {
+                Log::warning('Failed to insert friend activity notification: ' . $e->getMessage(), [
+                    'type' => $type,
+                    'notifier_id' => $notifierId,
+                    'recipient_id' => $recipientId,
+                ]);
+            }
+        }
+
+        if ($inserted === 0 && $recipientIds !== []) {
+            Log::warning('Friend activity notifications inserted 0 rows', [
+                'type' => $type,
+                'notifier_id' => $notifierId,
+                'recipient_count' => count($recipientIds),
+            ]);
         }
     }
 
@@ -262,11 +338,12 @@ class FriendActivityNotificationService
                 if ($value !== null) {
                     return !in_array((string) $value, ['0', 'off', 'false'], true);
                 }
-            } catch (\Exception $e) {
+            } catch (\Throwable $e) {
                 continue;
             }
         }
 
+        // Missing setting = enabled by default.
         return true;
     }
 
@@ -336,7 +413,7 @@ class FriendActivityNotificationService
                     ->values()
                     ->all();
             }
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return [];
         }
 

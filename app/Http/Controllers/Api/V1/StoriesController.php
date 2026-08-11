@@ -513,9 +513,10 @@ class StoriesController extends Controller
                 }
             }
 
-            FriendActivityNotificationService::notifyFriendsOfNewStory($storyId, (string) $tokenUserId);
-
             DB::commit();
+
+            // Notify after commit so story create never fails due to notification errors.
+            FriendActivityNotificationService::notifyFriendsOfNewStory((int) $storyId, (string) $tokenUserId);
 
             return response()->json([
                 'api_status' => 200,

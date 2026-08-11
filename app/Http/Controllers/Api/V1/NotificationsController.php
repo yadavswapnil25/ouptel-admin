@@ -755,7 +755,9 @@ class NotificationsController extends Controller
                 $notification['icon'] = 'file-text';
                 break;
             case 'new_story':
-                $notification['type_text'] = 'added to their story';
+            case 'posted_story':
+            case 'story':
+                $notification['type_text'] = 'added to their vibe';
                 $notification['icon'] = 'story';
                 break;
             case 'birthday':
