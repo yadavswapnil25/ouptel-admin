@@ -177,9 +177,12 @@ class ProfileController extends Controller
                 'api_version' => '1.0'
             ];
 
-            // Send profile visit notification if requested
-            if ($request->input('send_notify') == 1 && $profileUserId != $tokenUserId) {
-                $this->sendProfileVisitNotification($tokenUserId, $profileUserId);
+            // Send profile visit notification if requested (LinkedIn-style)
+            if (
+                ($request->boolean('send_notify') || (string) $request->input('send_notify') === '1')
+                && (string) $profileUserId !== (string) $tokenUserId
+            ) {
+                $this->sendProfileVisitNotification((int) $tokenUserId, (int) $profileUserId);
             }
 
             // Fetch user_data
@@ -827,56 +830,109 @@ class ProfileController extends Controller
     }
 
     /**
-     * Send profile visit notification
+     * Send profile visit notification (LinkedIn-style).
+     * Throttled to once per visitor → owner pair within 24 hours.
      */
     private function sendProfileVisitNotification(int $visitorId, int $profileOwnerId): void
     {
-        // Check if profile visits are enabled in settings
+        if ($visitorId <= 0 || $profileOwnerId <= 0 || $visitorId === $profileOwnerId) {
+            return;
+        }
+
+        if (!Schema::hasTable('Wo_Notifications')) {
+            return;
+        }
+
+        // Optional site toggle — default ON when config is missing
         try {
-            $profileVisitEnabled = DB::table('Wo_Config')->where('name', 'profileVisit')->value('value');
-            
-            if ($profileVisitEnabled != '1') {
+            if (Schema::hasTable('Wo_Config')) {
+                $profileVisitEnabled = DB::table('Wo_Config')->where('name', 'profileVisit')->value('value');
+                if ($profileVisitEnabled !== null && (string) $profileVisitEnabled !== '1') {
+                    return;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Continue with default enabled
+        }
+
+        $visitor = User::where('user_id', $visitorId)->first();
+        if (!$visitor) {
+            return;
+        }
+
+        // Visitor opted out of sharing profile visits
+        if (Schema::hasColumn('Wo_Users', 'visit_privacy') && (int) ($visitor->visit_privacy ?? 0) === 1) {
+            return;
+        }
+
+        $profileOwner = User::where('user_id', $profileOwnerId)->first();
+        if (!$profileOwner) {
+            return;
+        }
+
+        // Owner disabled "someone visited your profile" notifications
+        if (Schema::hasColumn('Wo_Users', 'e_visited') && (string) ($profileOwner->e_visited ?? '1') === '0') {
+            return;
+        }
+
+        try {
+            $since = time() - 86400; // 24h throttle
+            $existingQuery = DB::table('Wo_Notifications')
+                ->where('notifier_id', $visitorId)
+                ->where('recipient_id', $profileOwnerId)
+                ->where('type', 'visited_profile');
+
+            if (Schema::hasColumn('Wo_Notifications', 'time')) {
+                $existingQuery->where('time', '>=', $since);
+            }
+
+            if (Schema::hasColumn('Wo_Notifications', 'id')) {
+                $existing = $existingQuery->orderByDesc('id')->first();
+            } elseif (Schema::hasColumn('Wo_Notifications', 'time')) {
+                $existing = $existingQuery->orderByDesc('time')->first();
+            } else {
+                $existing = $existingQuery->first();
+            }
+
+            if ($existing) {
+                // Refresh timestamp so it stays near top without creating spam rows
+                $update = [];
+                if (Schema::hasColumn('Wo_Notifications', 'time')) {
+                    $update['time'] = time();
+                }
+                if (Schema::hasColumn('Wo_Notifications', 'seen')) {
+                    $update['seen'] = 0;
+                }
+                if ($update !== []) {
+                    $pk = Schema::hasColumn('Wo_Notifications', 'id') ? 'id' : 'notification_id';
+                    if (isset($existing->{$pk})) {
+                        DB::table('Wo_Notifications')->where($pk, $existing->{$pk})->update($update);
+                    }
+                }
                 return;
             }
-        } catch (\Exception $e) {
-            // Config table doesn't exist, skip notification
-            return;
-        }
 
-        // Get visitor data
-        $visitor = User::where('user_id', $visitorId)->first();
-        if (!$visitor || $visitor->visit_privacy == 1) {
-            return;
-        }
-
-        // Get profile owner data
-        $profileOwner = User::where('user_id', $profileOwnerId)->first();
-        if (!$profileOwner || $profileOwner->visit_privacy == 1) {
-            return;
-        }
-
-        // Check if profile owner is pro and has profile visitors feature
-        $canNotify = false;
-        if ($profileOwner->is_pro == 1) {
-            $canNotify = true;
-        }
-
-        if (!$canNotify) {
-            return;
-        }
-
-        // Create notification
-        try {
-            DB::table('Wo_Notifications')->insert([
+            $notificationData = [
                 'notifier_id' => $visitorId,
                 'recipient_id' => $profileOwnerId,
                 'type' => 'visited_profile',
-                'url' => 'index.php?link1=timeline&u=' . $visitor->username,
-                'time' => time(),
-                'seen' => 0
-            ]);
-        } catch (\Exception $e) {
-            // Silently fail if notification insertion fails
+                'url' => '/profile/' . $visitorId,
+                'seen' => 0,
+            ];
+
+            if (Schema::hasColumn('Wo_Notifications', 'text')) {
+                $notificationData['text'] = '';
+            }
+            if (Schema::hasColumn('Wo_Notifications', 'type2')) {
+                $notificationData['type2'] = '';
+            }
+            if (Schema::hasColumn('Wo_Notifications', 'time')) {
+                $notificationData['time'] = time();
+            }
+
+            DB::table('Wo_Notifications')->insert($notificationData);
+        } catch (\Throwable $e) {
+            // Silently fail — profile load must not break
         }
     }
 
