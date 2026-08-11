@@ -234,16 +234,6 @@ class PostController extends Controller
         $postSticker = $request->input('postSticker', '');
         $postGif = $request->input('postGif', '');
 
-        // At least one content field must be provided
-        if (empty($postText) && !$postPhoto && !$postFile && !$postVideo && !$postRecord && 
-            empty($postYoutube) && empty($postVimeo) && empty($postFacebook) && empty($postPlaytube) && 
-            empty($postLink) && empty($postMap) && empty($postSticker) && empty($postGif)) {
-            return response()->json([
-                'ok' => false,
-                'message' => 'At least one content field must be provided (text, photo, file, video, link, location, sticker, or gif)'
-            ], 422);
-        }
-
         try {
             DB::beginTransaction();
 
