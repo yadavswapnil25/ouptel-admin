@@ -379,6 +379,8 @@ Route::post('/settings/update-user-data', [SettingsController::class, 'updateUse
 // Profile routes (mimics old WoWonder API)
 Route::get('/profile/user-data', [ProfileController::class, 'getUserData']);
 Route::post('/profile/user-data', [ProfileController::class, 'getUserData']);
+Route::post('/profile/visit', [ProfileController::class, 'recordProfileVisit']);
+Route::get('/profile/visit', [ProfileController::class, 'recordProfileVisit']);
 Route::get('/profile/interest-fields', [ProfileInterestFieldsController::class, 'index']);
 Route::get('/update-data', [ProfileController::class, 'updateData']);
 Route::post('/update-data', [ProfileController::class, 'updateData']);

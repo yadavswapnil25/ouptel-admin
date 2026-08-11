@@ -830,49 +830,98 @@ class ProfileController extends Controller
     }
 
     /**
+     * Record a profile visit and notify the owner (LinkedIn-style).
+     * POST/GET /api/v1/profile/visit  body/query: user_id | user_profile_id
+     */
+    public function recordProfileVisit(Request $request): JsonResponse
+    {
+        $authHeader = (string) $request->header('Authorization', '');
+        if (!preg_match('/Bearer\s+(\S+)/i', $authHeader, $m)) {
+            return response()->json([
+                'api_status' => '400',
+                'ok' => false,
+                'message' => 'Authorization required.',
+            ], 401);
+        }
+
+        $tokenUserId = DB::table('Wo_AppsSessions')->where('session_id', $m[1])->value('user_id');
+        if (!$tokenUserId) {
+            return response()->json([
+                'api_status' => '400',
+                'ok' => false,
+                'message' => 'Session id is wrong.',
+            ], 401);
+        }
+
+        $lookup = $request->input('user_profile_id', $request->input('user_id'));
+        $profileUserId = $this->resolveProfileUserId($lookup, 0);
+        if (!$profileUserId || (string) $profileUserId === '0') {
+            return response()->json([
+                'api_status' => '400',
+                'ok' => false,
+                'message' => 'user_profile_id is required.',
+            ], 422);
+        }
+
+        if ((string) $profileUserId === (string) $tokenUserId) {
+            return response()->json([
+                'api_status' => '200',
+                'ok' => true,
+                'notified' => false,
+                'message' => 'Own profile — no notification.',
+            ]);
+        }
+
+        $notified = $this->sendProfileVisitNotification((int) $tokenUserId, (int) $profileUserId);
+
+        return response()->json([
+            'api_status' => '200',
+            'ok' => true,
+            'notified' => $notified,
+            'message' => $notified ? 'Profile visit recorded.' : 'Visit recorded without new notification.',
+        ]);
+    }
+
+    /**
      * Send profile visit notification (LinkedIn-style).
      * Throttled to once per visitor → owner pair within 24 hours.
+     * @return bool true when a notification row was inserted or refreshed
      */
-    private function sendProfileVisitNotification(int $visitorId, int $profileOwnerId): void
+    private function sendProfileVisitNotification(int $visitorId, int $profileOwnerId): bool
     {
         if ($visitorId <= 0 || $profileOwnerId <= 0 || $visitorId === $profileOwnerId) {
-            return;
+            return false;
         }
 
         if (!Schema::hasTable('Wo_Notifications')) {
-            return;
-        }
-
-        // Optional site toggle — default ON when config is missing
-        try {
-            if (Schema::hasTable('Wo_Config')) {
-                $profileVisitEnabled = DB::table('Wo_Config')->where('name', 'profileVisit')->value('value');
-                if ($profileVisitEnabled !== null && (string) $profileVisitEnabled !== '1') {
-                    return;
-                }
-            }
-        } catch (\Throwable $e) {
-            // Continue with default enabled
+            Log::warning('Profile visit notify skipped: Wo_Notifications missing');
+            return false;
         }
 
         $visitor = User::where('user_id', $visitorId)->first();
         if (!$visitor) {
-            return;
+            return false;
         }
 
-        // Visitor opted out of sharing profile visits
-        if (Schema::hasColumn('Wo_Users', 'visit_privacy') && (int) ($visitor->visit_privacy ?? 0) === 1) {
-            return;
+        // Visitor opted out of sharing profile visits ("Hidden")
+        if (
+            Schema::hasColumn('Wo_Users', 'visit_privacy')
+            && (string) ($visitor->getAttributes()['visit_privacy'] ?? '0') === '1'
+        ) {
+            return false;
         }
 
         $profileOwner = User::where('user_id', $profileOwnerId)->first();
         if (!$profileOwner) {
-            return;
+            return false;
         }
 
-        // Owner disabled "someone visited your profile" notifications
-        if (Schema::hasColumn('Wo_Users', 'e_visited') && (string) ($profileOwner->e_visited ?? '1') === '0') {
-            return;
+        // Owner disabled "someone visited your profile" in notification settings
+        if (
+            Schema::hasColumn('Wo_Users', 'e_visited')
+            && (string) ($profileOwner->getAttributes()['e_visited'] ?? '1') === '0'
+        ) {
+            return false;
         }
 
         try {
@@ -895,7 +944,6 @@ class ProfileController extends Controller
             }
 
             if ($existing) {
-                // Refresh timestamp so it stays near top without creating spam rows
                 $update = [];
                 if (Schema::hasColumn('Wo_Notifications', 'time')) {
                     $update['time'] = time();
@@ -909,7 +957,7 @@ class ProfileController extends Controller
                         DB::table('Wo_Notifications')->where($pk, $existing->{$pk})->update($update);
                     }
                 }
-                return;
+                return true;
             }
 
             $notificationData = [
@@ -930,9 +978,21 @@ class ProfileController extends Controller
                 $notificationData['time'] = time();
             }
 
+            // WoWonder often requires these NOT NULL numeric columns
+            foreach (['post_id', 'page_id', 'group_id', 'event_id', 'story_id'] as $col) {
+                if (Schema::hasColumn('Wo_Notifications', $col)) {
+                    $notificationData[$col] = 0;
+                }
+            }
+
             DB::table('Wo_Notifications')->insert($notificationData);
+            return true;
         } catch (\Throwable $e) {
-            // Silently fail — profile load must not break
+            Log::warning('Profile visit notification failed: ' . $e->getMessage(), [
+                'visitor_id' => $visitorId,
+                'profile_owner_id' => $profileOwnerId,
+            ]);
+            return false;
         }
     }
 
