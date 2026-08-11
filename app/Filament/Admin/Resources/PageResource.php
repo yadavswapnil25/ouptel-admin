@@ -78,7 +78,11 @@ class PageResource extends Resource
                         
                         Select::make('user_id')
                             ->label('Owner')
-                            ->relationship('owner', 'name')
+                            ->relationship('owner', 'username')
+                            ->getOptionLabelFromRecordUsing(
+                                fn ($record) => trim(($record->first_name ?? '') . ' ' . ($record->last_name ?? ''))
+                                    ?: ($record->username ?? (string) $record->user_id)
+                            )
                             ->searchable()
                             ->required(),
                         
@@ -147,11 +151,33 @@ class PageResource extends Resource
                     ->searchable()
                     ->url(fn (Page $record): string => $record->url)
                     ->openUrlInNewTab(),
-                
-                TextColumn::make('owner.name')
-                    ->label('Owner')
+
+                TextColumn::make('page_title')
+                    ->label('Page Title')
                     ->sortable()
                     ->searchable()
+                    ->toggleable(),
+                
+                TextColumn::make('owner.username')
+                    ->label('Owner')
+                    ->sortable()
+                    ->searchable(query: function ($query, string $search) {
+                        $query->whereHas('owner', function ($ownerQuery) use ($search) {
+                            $ownerQuery->where(function ($q) use ($search) {
+                                $q->where('username', 'like', "%{$search}%")
+                                    ->orWhere('first_name', 'like', "%{$search}%")
+                                    ->orWhere('last_name', 'like', "%{$search}%");
+                            });
+                        });
+                    })
+                    ->formatStateUsing(function ($state, Page $record) {
+                        $owner = $record->owner;
+                        if (!$owner) {
+                            return '—';
+                        }
+                        $full = trim(($owner->first_name ?? '') . ' ' . ($owner->last_name ?? ''));
+                        return $full !== '' ? "{$full} (@{$owner->username})" : ($owner->username ?? '—');
+                    })
                     ->url(fn (Page $record): string => $record->owner->url ?? '#')
                     ->openUrlInNewTab(),
                 
