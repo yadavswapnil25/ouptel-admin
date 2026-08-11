@@ -112,7 +112,8 @@ class ProfileController extends Controller
 
             // Validate parameters
             $validator = Validator::make($request->all(), [
-                'user_profile_id' => 'nullable|integer',
+                // Accept numeric user_id or username slug (SPA routes often use /profile/:username)
+                'user_profile_id' => 'nullable',
                 'fetch' => 'nullable|string', // Comma-separated: user_data,followers,following,liked_pages,joined_groups,family,albums
                 'send_notify' => 'nullable|boolean',
             ]);
@@ -128,7 +129,8 @@ class ProfileController extends Controller
 
         try {
             // Get profile user ID (default to logged-in user)
-            $profileUserId = $request->input('user_profile_id', $tokenUserId);
+            $profileLookup = $request->input('user_profile_id', $tokenUserId);
+            $profileUserId = $this->resolveProfileUserId($profileLookup, $tokenUserId);
             
             // Get user data
             $user = User::where('user_id', $profileUserId)->first();
@@ -884,6 +886,37 @@ class ProfileController extends Controller
     private function isBlocked(int $userId, int $loggedUserId): int
     {
         return $this->getBlockDirection($userId, $loggedUserId) !== null ? 1 : 0;
+    }
+
+    /**
+     * Resolve profile lookup value to a numeric user_id.
+     * Accepts numeric ids or usernames (for /profile/:username SPA routes).
+     */
+    private function resolveProfileUserId(mixed $lookup, mixed $fallbackUserId): string|int
+    {
+        $raw = is_string($lookup) || is_numeric($lookup) ? trim((string) $lookup) : '';
+        if ($raw === '' || $raw === '0') {
+            return $fallbackUserId;
+        }
+
+        if (ctype_digit($raw)) {
+            return $raw;
+        }
+
+        $byUsername = DB::table('Wo_Users')
+            ->where('username', $raw)
+            ->value('user_id');
+
+        if ($byUsername) {
+            return $byUsername;
+        }
+
+        // Case-insensitive username fallback
+        $byUsernameCi = DB::table('Wo_Users')
+            ->whereRaw('LOWER(username) = ?', [strtolower($raw)])
+            ->value('user_id');
+
+        return $byUsernameCi ?: $raw;
     }
 
     /**

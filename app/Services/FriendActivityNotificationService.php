@@ -88,11 +88,8 @@ class FriendActivityNotificationService
                 return;
             }
 
-            $author = DB::table('Wo_Users')->where('user_id', $authorId)->first(['username']);
-            $username = trim((string) ($author->username ?? ''));
-            $url = $username !== ''
-                ? 'index.php?link1=timeline&u=' . $username
-                : '/profile/' . $authorId;
+            // Prefer numeric profile id for SPA routes (/profile/:id).
+            $url = '/profile/' . $authorId;
 
             $extra = [
                 'post_id' => 0,
