@@ -38,6 +38,7 @@ class Page extends Model
         'gov_registered' => 'boolean',
         'active' => 'string',
         'user_id' => 'string',
+        'page_category' => 'integer',
     ];
 
     /**
@@ -105,6 +106,11 @@ class Page extends Model
         return $this->belongsTo(User::class, 'user_id', 'user_id');
     }
 
+    public function category(): BelongsTo
+    {
+        return $this->belongsTo(PageCategory::class, 'page_category', 'id');
+    }
+
     public function getAvatarAttribute(): string
     {
         // Access the raw attribute to avoid infinite loop
@@ -122,9 +128,17 @@ class Page extends Model
         if (!$this->page_category) {
             return 'Uncategorized';
         }
-        
-        // Convert category values to proper names
-        return match ($this->page_category) {
+
+        $category = $this->relationLoaded('category')
+            ? $this->category
+            : $this->category()->first();
+
+        if ($category) {
+            return $category->name;
+        }
+
+        // Legacy slug values (if any old rows still store strings)
+        return match ((string) $this->page_category) {
             'business' => 'Business',
             'entertainment' => 'Entertainment',
             'education' => 'Education',
@@ -133,7 +147,7 @@ class Page extends Model
             'sports' => 'Sports',
             'news' => 'News',
             'other' => 'Other',
-            default => ucfirst($this->page_category),
+            default => 'Uncategorized',
         };
     }
 }

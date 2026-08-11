@@ -4,6 +4,7 @@ namespace App\Filament\Admin\Resources;
 
 use App\Filament\Admin\Resources\PageResource\Pages;
 use App\Models\Page;
+use App\Models\PageCategory;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -64,17 +65,16 @@ class PageResource extends Resource
                         
                         Select::make('page_category')
                             ->label('Category')
-                            ->options([
-                                'business' => 'Business',
-                                'entertainment' => 'Entertainment',
-                                'education' => 'Education',
-                                'health' => 'Health',
-                                'technology' => 'Technology',
-                                'sports' => 'Sports',
-                                'news' => 'News',
-                                'other' => 'Other',
-                            ])
-                            ->default('other'),
+                            ->options(fn (): array => PageCategory::query()
+                                ->orderBy('id')
+                                ->get()
+                                ->mapWithKeys(fn (PageCategory $category): array => [
+                                    $category->id => $category->name,
+                                ])
+                                ->all())
+                            ->searchable()
+                            ->preload()
+                            ->native(false),
                         
                         Select::make('user_id')
                             ->label('Owner')
@@ -214,16 +214,13 @@ class PageResource extends Resource
             ->filters([
                 SelectFilter::make('page_category')
                     ->label('Category')
-                    ->options([
-                        'business' => 'Business',
-                        'entertainment' => 'Entertainment',
-                        'education' => 'Education',
-                        'health' => 'Health',
-                        'technology' => 'Technology',
-                        'sports' => 'Sports',
-                        'news' => 'News',
-                        'other' => 'Other',
-                    ]),
+                    ->options(fn (): array => PageCategory::query()
+                        ->orderBy('id')
+                        ->get()
+                        ->mapWithKeys(fn (PageCategory $category): array => [
+                            $category->id => $category->name,
+                        ])
+                        ->all()),
                 
                 Filter::make('verified')
                     ->label('Verified Pages')
