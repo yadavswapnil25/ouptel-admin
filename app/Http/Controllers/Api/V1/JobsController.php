@@ -141,26 +141,7 @@ class JobsController extends Controller
             $isOwner = $ownerUserId && (string) $ownerUserId === (string) $tokenUserId;
             
             // Get owner details if user_id exists
-            $owner = [
-                'user_id' => $ownerUserId,
-                'username' => 'Unknown',
-                'avatar_url' => null,
-            ];
-            
-            if ($ownerUserId && Schema::hasTable('Wo_Users')) {
-                try {
-                    $ownerUser = DB::table('Wo_Users')->where('user_id', $ownerUserId)->first();
-                    if ($ownerUser) {
-                        $owner['username'] = $ownerUser->username ?? 'Unknown';
-                        $avatar = $ownerUser->avatar ?? '';
-                        if ($avatar) {
-                            $owner['avatar_url'] = asset('storage/' . $avatar);
-                        }
-                    }
-                } catch (\Exception $e) {
-                    // Keep default values
-                }
-            }
+            $owner = $this->buildJobOwnerPayload($ownerUserId);
 
             // Determine if current authenticated user has applied to this job
             $isApplied = false;
@@ -436,11 +417,7 @@ class JobsController extends Controller
                 'applications_count' => 0,
                 'is_applied' => false,
                 'is_owner' => true,
-                'owner' => [
-                    'user_id' => $userId,
-                    'username' => 'Unknown',
-                    'avatar_url' => null,
-                ],
+                'owner' => $this->buildJobOwnerPayload($userId),
                 'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
             ],
         ], 201);
@@ -579,26 +556,7 @@ class JobsController extends Controller
         $isOwner = $ownerUserId && (string) $ownerUserId === (string) $tokenUserId;
         
         // Get owner details
-        $owner = [
-            'user_id' => $ownerUserId,
-            'username' => 'Unknown',
-            'avatar_url' => null,
-        ];
-        
-        if ($ownerUserId && Schema::hasTable('Wo_Users')) {
-            try {
-                $ownerUser = DB::table('Wo_Users')->where('user_id', $ownerUserId)->first();
-                if ($ownerUser) {
-                    $owner['username'] = $ownerUser->username ?? 'Unknown';
-                    $avatar = $ownerUser->avatar ?? '';
-                    if ($avatar) {
-                        $owner['avatar_url'] = asset('storage/' . $avatar);
-                    }
-                }
-            } catch (\Exception $e) {
-                // Keep default values
-            }
-        }
+        $owner = $this->buildJobOwnerPayload($ownerUserId);
         
         // Get applications count
         $applicationsCount = 0;
@@ -1146,6 +1104,48 @@ class JobsController extends Controller
             'gov_registered' => $isGovRegistered,
             'avatar_url' => $avatarUrl,
         ];
+    }
+
+    private function buildJobOwnerPayload($ownerUserId): array
+    {
+        $owner = [
+            'user_id' => $ownerUserId,
+            'username' => 'Unknown',
+            'name' => 'Unknown',
+            'avatar_url' => null,
+        ];
+
+        if (!$ownerUserId || !Schema::hasTable('Wo_Users')) {
+            return $owner;
+        }
+
+        try {
+            $ownerUser = DB::table('Wo_Users')->where('user_id', $ownerUserId)->first();
+            if (!$ownerUser) {
+                return $owner;
+            }
+
+            $username = $ownerUser->username ?? 'Unknown';
+            $fullName = trim(($ownerUser->first_name ?? '') . ' ' . ($ownerUser->last_name ?? ''));
+            if ($fullName === '') {
+                $fullName = trim((string) ($ownerUser->name ?? ''));
+            }
+            if ($fullName === '') {
+                $fullName = $username;
+            }
+
+            $owner['username'] = $username;
+            $owner['name'] = $fullName;
+
+            $avatar = $ownerUser->avatar ?? '';
+            if ($avatar) {
+                $owner['avatar_url'] = asset('storage/' . $avatar);
+            }
+        } catch (\Exception $e) {
+            // Keep default values
+        }
+
+        return $owner;
     }
 
     private function ensureJobApplyExtraColumns(): void
