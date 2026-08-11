@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\FriendActivityNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 
 class ShareController extends Controller
@@ -217,12 +220,55 @@ class ShareController extends Controller
                 // Create shared post
                 $newPostId = $this->sharePost($internalPostId, $typeId, 'group', $text);
 
+            } elseif ($s === 'story' || $s === 'vibe') {
+                // Facebook-style: share friend's post into your vibe/story
+                $storyId = $this->sharePostToStory($originalPost, (int) $tokenUserId, $text);
+                if (!$storyId) {
+                    throw new \Exception('Failed to share post to story');
+                }
+
+                DB::commit();
+
+                FriendActivityNotificationService::notifyFriendsOfNewStory((int) $storyId, (string) $tokenUserId);
+
+                $originalOwnerId = (int) ($originalPost->user_id ?? 0);
+                if ($originalOwnerId > 0 && $originalOwnerId !== (int) $tokenUserId && Schema::hasTable('Wo_Notifications')) {
+                    try {
+                        $notif = [
+                            'recipient_id' => $originalOwnerId,
+                            'notifier_id' => (int) $tokenUserId,
+                            'post_id' => $notificationPostId,
+                            'type' => 'shared_your_post',
+                            'type2' => 'story',
+                            'text' => 'shared your post to their vibe',
+                            'url' => '/profile/' . $tokenUserId,
+                            'time' => time(),
+                            'seen' => 0,
+                        ];
+                        foreach (['page_id', 'group_id', 'event_id'] as $col) {
+                            if (Schema::hasColumn('Wo_Notifications', $col)) {
+                                $notif[$col] = 0;
+                            }
+                        }
+                        DB::table('Wo_Notifications')->insert($notif);
+                    } catch (\Throwable $e) {
+                        Log::warning('Share-to-story owner notification failed: ' . $e->getMessage());
+                    }
+                }
+
+                return response()->json([
+                    'api_status' => 200,
+                    'ok' => true,
+                    'message' => 'Shared to your vibe.',
+                    'story_id' => $storyId,
+                ]);
+
             } else {
                 return response()->json([
                     'api_status' => 400,
                     'errors' => [
                         'error_id' => 10,
-                        'error_text' => 'Invalid share type. Use: timeline, page, or group'
+                        'error_text' => 'Invalid share type. Use: timeline, page, group, or story'
                     ]
                 ], 400);
             }
@@ -380,6 +426,301 @@ class ShareController extends Controller
         }
 
         return $newPostId;
+    }
+
+    /**
+     * Share a post into the current user's vibe/story (Facebook-style).
+     */
+    private function sharePostToStory(object $originalPost, int $userId, string $text = ''): ?int
+    {
+        if (!Schema::hasTable('Wo_UserStory')) {
+            throw new \Exception('Stories are not available');
+        }
+
+        $media = $this->resolvePostShareMedia($originalPost);
+        if (!$media) {
+            $media = $this->createShareStoryCardImage($originalPost, $text);
+        }
+        if (!$media || empty($media['filename'])) {
+            return null;
+        }
+
+        $overlayText = trim($text);
+        $storyDescription = '';
+        $textX = null;
+        $textY = null;
+        if ($overlayText !== '') {
+            $textX = 50.0;
+            $textY = 78.0;
+            $storyDescription = json_encode([
+                '__ouptel_overlay' => 1,
+                't' => $overlayText,
+                'x' => $textX,
+                'y' => $textY,
+            ], JSON_UNESCAPED_UNICODE);
+        } elseif (!empty($originalPost->postText)) {
+            // Keep a short caption for text shares without overlay positioning
+            $storyDescription = mb_substr(trim((string) $originalPost->postText), 0, 280);
+        }
+
+        $storyInsert = [
+            'user_id' => $userId,
+            'posted' => time(),
+            'expire' => time() + (60 * 60 * 24),
+            'title' => '',
+            'description' => $storyDescription,
+        ];
+        if (Schema::hasColumn('Wo_UserStory', 'text_x')) {
+            $storyInsert['text_x'] = $textX;
+        }
+        if (Schema::hasColumn('Wo_UserStory', 'text_y')) {
+            $storyInsert['text_y'] = $textY;
+        }
+
+        $storyId = (int) DB::table('Wo_UserStory')->insertGetId($storyInsert);
+        if ($storyId <= 0) {
+            return null;
+        }
+
+        $mediaTable = 'Wo_UserStoryMedia';
+        if (!Schema::hasTable($mediaTable)) {
+            if (Schema::hasTable('Wo_StoryMedia')) {
+                $mediaTable = 'Wo_StoryMedia';
+            } else {
+                throw new \Exception('Story media table does not exist');
+            }
+        }
+
+        $mediaInsert = [
+            'story_id' => $storyId,
+            'type' => $media['type'],
+            'filename' => $media['filename'],
+        ];
+        if (Schema::hasColumn($mediaTable, 'expire')) {
+            $mediaInsert['expire'] = time() + (60 * 60 * 24);
+        }
+        DB::table($mediaTable)->insert($mediaInsert);
+
+        if (Schema::hasColumn('Wo_UserStory', 'thumbnail')) {
+            DB::table('Wo_UserStory')->where('id', $storyId)->update([
+                'thumbnail' => $media['thumbnail'] ?? $media['filename'],
+            ]);
+        }
+
+        if (Schema::hasColumn('Wo_Posts', 'postShare')) {
+            DB::table('Wo_Posts')->where('id', (int) $originalPost->id)->increment('postShare');
+        }
+
+        return $storyId;
+    }
+
+    /**
+     * Resolve image/video path from a post for story sharing.
+     *
+     * @return array{type:string,filename:string,thumbnail:?string}|null
+     */
+    private function resolvePostShareMedia(object $post): ?array
+    {
+        $candidates = [];
+
+        $postPhoto = trim((string) ($post->postPhoto ?? ''));
+        if ($postPhoto !== '') {
+            $candidates[] = ['path' => $postPhoto, 'prefer' => 'image'];
+        }
+
+        $postFile = trim((string) ($post->postFile ?? ''));
+        if ($postFile !== '') {
+            $candidates[] = ['path' => $postFile, 'prefer' => 'video'];
+        }
+
+        $postFileThumb = trim((string) ($post->postFileThumb ?? ''));
+        if ($postFileThumb !== '') {
+            $candidates[] = ['path' => $postFileThumb, 'prefer' => 'image'];
+        }
+
+        if (Schema::hasTable('Wo_Albums_Media')) {
+            $albumImage = DB::table('Wo_Albums_Media')
+                ->where('post_id', (int) $post->id)
+                ->orderBy('id')
+                ->value('image');
+            if (!empty($albumImage)) {
+                $candidates[] = ['path' => (string) $albumImage, 'prefer' => 'image'];
+            }
+        }
+
+        foreach ($candidates as $candidate) {
+            $copied = $this->copyMediaToStoriesPath($candidate['path'], $candidate['prefer']);
+            if ($copied) {
+                return $copied;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Copy local storage media (or download remote image URL) into stories/.
+     *
+     * @return array{type:string,filename:string,thumbnail:?string}|null
+     */
+    private function copyMediaToStoriesPath(string $sourcePath, string $prefer = 'image'): ?array
+    {
+        $sourcePath = trim($sourcePath);
+        if ($sourcePath === '') {
+            return null;
+        }
+
+        $binary = null;
+        $extension = 'jpg';
+
+        if (filter_var($sourcePath, FILTER_VALIDATE_URL)) {
+            try {
+                $binary = @file_get_contents($sourcePath);
+            } catch (\Throwable $e) {
+                $binary = null;
+            }
+            $pathInfo = pathinfo(parse_url($sourcePath, PHP_URL_PATH) ?? '');
+            $extension = strtolower((string) ($pathInfo['extension'] ?? 'jpg'));
+        } else {
+            $relative = ltrim(preg_replace('#^storage/#', '', $sourcePath), '/');
+            if (Storage::disk('public')->exists($relative)) {
+                $binary = Storage::disk('public')->get($relative);
+                $extension = strtolower(pathinfo($relative, PATHINFO_EXTENSION) ?: 'jpg');
+            } elseif (is_file($sourcePath)) {
+                $binary = @file_get_contents($sourcePath);
+                $extension = strtolower(pathinfo($sourcePath, PATHINFO_EXTENSION) ?: 'jpg');
+            } elseif (is_file(public_path($relative))) {
+                $binary = @file_get_contents(public_path($relative));
+                $extension = strtolower(pathinfo($relative, PATHINFO_EXTENSION) ?: 'jpg');
+            } elseif (is_file(storage_path('app/public/' . $relative))) {
+                $binary = @file_get_contents(storage_path('app/public/' . $relative));
+                $extension = strtolower(pathinfo($relative, PATHINFO_EXTENSION) ?: 'jpg');
+            }
+        }
+
+        if ($binary === null || $binary === false || $binary === '') {
+            return null;
+        }
+
+        $videoExts = ['mp4', 'm4v', 'mov', 'webm', 'avi', 'mpg', 'mpeg'];
+        $imageExts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp'];
+        if (!in_array($extension, array_merge($videoExts, $imageExts), true)) {
+            $extension = $prefer === 'video' ? 'mp4' : 'jpg';
+        }
+
+        $type = in_array($extension, $videoExts, true) ? 'video' : 'image';
+        $filename = 'stories/' . date('Y/m') . '/' . uniqid('share_', true) . '_' . time() . '.' . $extension;
+        Storage::disk('public')->put($filename, $binary);
+
+        return [
+            'type' => $type,
+            'filename' => $filename,
+            'thumbnail' => $type === 'image' ? $filename : null,
+        ];
+    }
+
+    /**
+     * Generate a simple story card for text-only posts.
+     *
+     * @return array{type:string,filename:string,thumbnail:?string}|null
+     */
+    private function createShareStoryCardImage(object $post, string $userText = ''): ?array
+    {
+        if (!function_exists('imagecreatetruecolor')) {
+            return null;
+        }
+
+        $width = 720;
+        $height = 1280;
+        $img = imagecreatetruecolor($width, $height);
+        if (!$img) {
+            return null;
+        }
+
+        $bgTop = imagecolorallocate($img, 30, 58, 138);
+        $bgBottom = imagecolorallocate($img, 78, 110, 242);
+        for ($y = 0; $y < $height; $y++) {
+            $ratio = $y / max(1, $height - 1);
+            $r = (int) (30 + (78 - 30) * $ratio);
+            $g = (int) (58 + (110 - 58) * $ratio);
+            $b = (int) (138 + (242 - 138) * $ratio);
+            $color = imagecolorallocate($img, $r, $g, $b);
+            imageline($img, 0, $y, $width, $y, $color);
+        }
+        unset($bgTop, $bgBottom);
+
+        $white = imagecolorallocate($img, 255, 255, 255);
+        $muted = imagecolorallocate($img, 220, 230, 255);
+
+        $author = DB::table('Wo_Users')->where('user_id', (int) ($post->user_id ?? 0))->first();
+        $authorName = trim((string) ($author->name ?? $author->username ?? 'Ouptel'));
+        $body = trim($userText !== '' ? $userText : (string) ($post->postText ?? ''));
+        if ($body === '') {
+            $body = 'Shared a post';
+        }
+        $body = mb_substr($body, 0, 220);
+
+        $lines = $this->wrapGdText($body, 34);
+        $y = 420;
+        imagestring($img, 5, 40, 120, $this->gdSafeText('Shared from ' . $authorName, 40), $muted);
+        foreach (array_slice($lines, 0, 12) as $line) {
+            imagestring($img, 5, 40, $y, $this->gdSafeText($line, 42), $white);
+            $y += 36;
+        }
+        imagestring($img, 3, 40, $height - 80, 'ouptel', $muted);
+
+        ob_start();
+        imagejpeg($img, null, 88);
+        $binary = ob_get_clean();
+        imagedestroy($img);
+
+        if ($binary === false || $binary === '') {
+            return null;
+        }
+
+        $filename = 'stories/' . date('Y/m') . '/' . uniqid('share_card_', true) . '_' . time() . '.jpg';
+        Storage::disk('public')->put($filename, $binary);
+
+        return [
+            'type' => 'image',
+            'filename' => $filename,
+            'thumbnail' => $filename,
+        ];
+    }
+
+    private function wrapGdText(string $text, int $maxChars): array
+    {
+        $words = preg_split('/\s+/u', trim($text)) ?: [];
+        $lines = [];
+        $current = '';
+        foreach ($words as $word) {
+            $trial = $current === '' ? $word : $current . ' ' . $word;
+            if (mb_strlen($trial) > $maxChars) {
+                if ($current !== '') {
+                    $lines[] = $current;
+                }
+                $current = $word;
+            } else {
+                $current = $trial;
+            }
+        }
+        if ($current !== '') {
+            $lines[] = $current;
+        }
+        return $lines ?: [''];
+    }
+
+    private function gdSafeText(string $text, int $maxLen = 60): string
+    {
+        $ascii = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+        if ($ascii === false || $ascii === null) {
+            $ascii = preg_replace('/[^\x20-\x7E]/', '', $text) ?? '';
+        }
+        $ascii = trim((string) $ascii);
+        if ($ascii === '') {
+            $ascii = 'Shared post';
+        }
+        return mb_substr($ascii, 0, $maxLen);
     }
 
     /**
