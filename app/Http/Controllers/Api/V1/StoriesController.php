@@ -327,7 +327,9 @@ class StoriesController extends Controller
             'file' => 'required|file',
             'file_type' => 'required|in:video,image',
             'story_title' => 'nullable|string|max:100',
-            'story_description' => 'nullable|string',
+            'story_description' => 'nullable|string|max:500',
+            'text_x' => 'nullable|numeric|min:0|max:100',
+            'text_y' => 'nullable|numeric|min:0|max:100',
             'cover' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:10240',
             // Third-party track only (Deezer) — never upload/host audio files
             'music_url' => 'nullable|url|max:2000',
@@ -429,14 +431,32 @@ class StoriesController extends Controller
                 }
             }
 
+            $storyDescription = trim((string) $request->input('story_description', ''));
+            $hasOverlayText = $storyDescription !== '';
+            $textX = $request->has('text_x') ? round((float) $request->input('text_x'), 2) : null;
+            $textY = $request->has('text_y') ? round((float) $request->input('text_y'), 2) : null;
+            if ($hasOverlayText) {
+                $textX = $textX === null ? 50.0 : max(0, min(100, $textX));
+                $textY = $textY === null ? 40.0 : max(0, min(100, $textY));
+            } else {
+                $textX = null;
+                $textY = null;
+            }
+
             // Create story record
             $storyInsert = [
                 'user_id' => $tokenUserId,
                 'posted' => time(),
                 'expire' => time() + (60 * 60 * 24), // 24 hours
                 'title' => $request->input('story_title', ''),
-                'description' => $request->input('story_description', ''),
+                'description' => $storyDescription,
             ];
+            if (Schema::hasColumn('Wo_UserStory', 'text_x')) {
+                $storyInsert['text_x'] = $textX;
+            }
+            if (Schema::hasColumn('Wo_UserStory', 'text_y')) {
+                $storyInsert['text_y'] = $textY;
+            }
             if (Schema::hasColumn('Wo_UserStory', 'music')) {
                 $storyInsert['music'] = $musicRef;
             }
@@ -637,7 +657,7 @@ class StoriesController extends Controller
                 ];
             })->toArray(),
         ];
-        $storyData = array_merge($storyData, $this->formatStoryMusic($story));
+        $storyData = array_merge($storyData, $this->formatStoryMusic($story), $this->formatStoryTextOverlay($story));
 
         // Check if story is viewed and mark as viewed
         $isViewed = false;
@@ -1681,7 +1701,7 @@ class StoriesController extends Controller
                     'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                     'verified' => (bool) ($user->verified ?? false),
                 ] : null,
-            ], $this->formatStoryMusic($story));
+            ], $this->formatStoryMusic($story), $this->formatStoryTextOverlay($story));
         }
 
         return $formattedStories;
@@ -1883,7 +1903,7 @@ class StoriesController extends Controller
                     'time_text' => $this->getTimeElapsedString($story->posted),
                     'view_count' => $viewCount,
                     'is_viewed' => $isViewed,
-                ], $this->formatStoryMusic($story));
+                ], $this->formatStoryMusic($story), $this->formatStoryTextOverlay($story));
             }
 
             $userData['has_unseen'] = $hasUnseen;
@@ -1894,11 +1914,33 @@ class StoriesController extends Controller
     }
 
     /**
-     * Story music fields for API responses.
+     * Instagram-style text overlay position for story responses.
      *
      * @param object $story
      * @return array
      */
+    private function formatStoryTextOverlay(object $story): array
+    {
+        $description = trim((string) ($story->description ?? ''));
+        $rawX = property_exists($story, 'text_x') ? $story->text_x : null;
+        $rawY = property_exists($story, 'text_y') ? $story->text_y : null;
+        $hasPosition = $rawX !== null && $rawX !== '' && $rawY !== null && $rawY !== '';
+        $hasOverlay = $description !== '' && $hasPosition;
+
+        $textX = null;
+        $textY = null;
+        if ($hasOverlay) {
+            $textX = max(0, min(100, (float) $rawX));
+            $textY = max(0, min(100, (float) $rawY));
+        }
+
+        return [
+            'has_text_overlay' => $hasOverlay,
+            'text_x' => $textX,
+            'text_y' => $textY,
+        ];
+    }
+
     /**
      * Story music fields for API responses.
      * Audio is never hosted locally — resolve Deezer track id to a CDN preview URL.
