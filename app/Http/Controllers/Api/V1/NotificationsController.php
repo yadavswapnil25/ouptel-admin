@@ -750,6 +750,14 @@ class NotificationsController extends Controller
                     $notification['icon'] = 'user';
                 }
                 break;
+            case 'posted':
+                $notification['type_text'] = 'added a new ' . $type2Label . ($notificationText ? ' ' . $notificationText : '');
+                $notification['icon'] = 'file-text';
+                break;
+            case 'new_story':
+                $notification['type_text'] = 'added to their story';
+                $notification['icon'] = 'story';
+                break;
             case 'birthday':
                 $notification['type_text'] = 'has a birthday today. Help them celebrate!';
                 $notification['icon'] = 'birthday-cake';

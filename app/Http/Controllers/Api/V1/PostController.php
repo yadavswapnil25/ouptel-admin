@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
 use App\Models\Post;
+use App\Services\FriendActivityNotificationService;
 use App\Models\PostReaction;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -497,8 +498,9 @@ class PostController extends Controller
 
             // Note: User post count update skipped - posts column may not exist in Wo_Users table
 
-            // Send notifications to followers/friends
+            // Send notifications for wall posts and friend feed posts
             $this->sendPostNotifications($post, $tokenUserId);
+            FriendActivityNotificationService::notifyFriendsOfNewPost($post, (string) $tokenUserId);
 
             DB::commit();
 
