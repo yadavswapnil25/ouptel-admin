@@ -431,16 +431,33 @@ class StoriesController extends Controller
                 }
             }
 
-            $storyDescription = trim((string) $request->input('story_description', ''));
-            $hasOverlayText = $storyDescription !== '';
+            $plainOverlayText = trim((string) $request->input('story_description', ''));
             $textX = $request->has('text_x') ? round((float) $request->input('text_x'), 2) : null;
             $textY = $request->has('text_y') ? round((float) $request->input('text_y'), 2) : null;
+
+            // Allow clients to send portable overlay JSON in story_description
+            $parsedOverlay = $this->parseStoryOverlayPayload($plainOverlayText);
+            if ($parsedOverlay) {
+                $plainOverlayText = $parsedOverlay['t'];
+                $textX = $parsedOverlay['x'];
+                $textY = $parsedOverlay['y'];
+            }
+
+            $hasOverlayText = $plainOverlayText !== '';
             if ($hasOverlayText) {
                 $textX = $textX === null ? 50.0 : max(0, min(100, $textX));
                 $textY = $textY === null ? 40.0 : max(0, min(100, $textY));
+                // Portable format so position works even before text_x/text_y migration
+                $storyDescription = json_encode([
+                    '__ouptel_overlay' => 1,
+                    't' => $plainOverlayText,
+                    'x' => $textX,
+                    'y' => $textY,
+                ], JSON_UNESCAPED_UNICODE);
             } else {
                 $textX = null;
                 $textY = null;
+                $storyDescription = '';
             }
 
             // Create story record
@@ -627,11 +644,12 @@ class StoriesController extends Controller
         $user = DB::table('Wo_Users')->where('user_id', $story->user_id)->first();
 
         // Format story data
+        $textFields = $this->resolveStoryTextFields($story);
         $storyData = [
             'id' => $story->id,
             'user_id' => $story->user_id,
             'title' => $story->title ?? '',
-            'description' => $story->description ?? '',
+            'description' => $textFields['description'],
             'posted' => $story->posted,
             'expire' => $story->expire,
             'thumbnail' => $story->thumbnail ? asset('storage/' . $story->thumbnail) : ($user?->avatar ? asset('storage/' . $user->avatar) : null),
@@ -657,7 +675,7 @@ class StoriesController extends Controller
                 ];
             })->toArray(),
         ];
-        $storyData = array_merge($storyData, $this->formatStoryMusic($story), $this->formatStoryTextOverlay($story));
+        $storyData = array_merge($storyData, $this->formatStoryMusic($story), $textFields);
 
         // Check if story is viewed and mark as viewed
         $isViewed = false;
@@ -1683,11 +1701,12 @@ class StoriesController extends Controller
                 $thumbnail = $user->avatar ?? '';
             }
 
+            $textFields = $this->resolveStoryTextFields($story);
             $formattedStories[] = array_merge([
                 'id' => $story->id,
                 'user_id' => $story->user_id,
                 'title' => $story->title ?? '',
-                'description' => $story->description ?? '',
+                'description' => $textFields['description'],
                 'posted' => $story->posted,
                 'expire' => $story->expire,
                 'type' => $storyType ?? 'unknown', // 'image' or 'video'
@@ -1701,7 +1720,7 @@ class StoriesController extends Controller
                     'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
                     'verified' => (bool) ($user->verified ?? false),
                 ] : null,
-            ], $this->formatStoryMusic($story), $this->formatStoryTextOverlay($story));
+            ], $this->formatStoryMusic($story), $textFields);
         }
 
         return $formattedStories;
@@ -1890,11 +1909,12 @@ class StoriesController extends Controller
                     $hasUnseen = true;
                 }
 
+                $textFields = $this->resolveStoryTextFields($story);
                 $userData['stories'][] = array_merge([
                     'id' => $story->id,
                     'user_id' => $story->user_id,
                     'title' => $story->title ?? '',
-                    'description' => $story->description ?? '',
+                    'description' => $textFields['description'],
                     'posted' => $story->posted,
                     'expire' => $story->expire,
                     'type' => $storyType ?? 'unknown', // 'image' or 'video'
@@ -1903,7 +1923,7 @@ class StoriesController extends Controller
                     'time_text' => $this->getTimeElapsedString($story->posted),
                     'view_count' => $viewCount,
                     'is_viewed' => $isViewed,
-                ], $this->formatStoryMusic($story), $this->formatStoryTextOverlay($story));
+                ], $this->formatStoryMusic($story), $textFields);
             }
 
             $userData['has_unseen'] = $hasUnseen;
@@ -1914,30 +1934,73 @@ class StoriesController extends Controller
     }
 
     /**
-     * Instagram-style text overlay position for story responses.
+     * Resolve story description + Instagram-style overlay position.
+     * Supports portable JSON in description and optional text_x/text_y columns.
      *
      * @param object $story
-     * @return array
+     * @return array{description: string, has_text_overlay: bool, text_x: ?float, text_y: ?float}
      */
-    private function formatStoryTextOverlay(object $story): array
+    private function resolveStoryTextFields(object $story): array
     {
-        $description = trim((string) ($story->description ?? ''));
-        $rawX = property_exists($story, 'text_x') ? $story->text_x : null;
-        $rawY = property_exists($story, 'text_y') ? $story->text_y : null;
-        $hasPosition = $rawX !== null && $rawX !== '' && $rawY !== null && $rawY !== '';
-        $hasOverlay = $description !== '' && $hasPosition;
+        $raw = trim((string) ($story->description ?? ''));
+        $colX = property_exists($story, 'text_x') ? $story->text_x : null;
+        $colY = property_exists($story, 'text_y') ? $story->text_y : null;
 
-        $textX = null;
-        $textY = null;
-        if ($hasOverlay) {
-            $textX = max(0, min(100, (float) $rawX));
-            $textY = max(0, min(100, (float) $rawY));
+        $parsed = $this->parseStoryOverlayPayload($raw);
+        if ($parsed) {
+            return [
+                'description' => $parsed['t'],
+                'has_text_overlay' => true,
+                'text_x' => $parsed['x'],
+                'text_y' => $parsed['y'],
+            ];
+        }
+
+        $hasColumnPosition = $colX !== null && $colX !== '' && $colY !== null && $colY !== '';
+        if ($raw !== '' && $hasColumnPosition) {
+            return [
+                'description' => $raw,
+                'has_text_overlay' => true,
+                'text_x' => max(0, min(100, (float) $colX)),
+                'text_y' => max(0, min(100, (float) $colY)),
+            ];
         }
 
         return [
-            'has_text_overlay' => $hasOverlay,
-            'text_x' => $textX,
-            'text_y' => $textY,
+            'description' => $raw,
+            'has_text_overlay' => false,
+            'text_x' => null,
+            'text_y' => null,
+        ];
+    }
+
+    /**
+     * @param string $raw
+     * @return array{t: string, x: float, y: float}|null
+     */
+    private function parseStoryOverlayPayload(string $raw): ?array
+    {
+        if ($raw === '' || $raw[0] !== '{') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded) || empty($decoded['__ouptel_overlay'])) {
+            return null;
+        }
+
+        $text = trim((string) ($decoded['t'] ?? $decoded['text'] ?? ''));
+        if ($text === '') {
+            return null;
+        }
+
+        $x = isset($decoded['x']) ? (float) $decoded['x'] : 50.0;
+        $y = isset($decoded['y']) ? (float) $decoded['y'] : 40.0;
+
+        return [
+            't' => $text,
+            'x' => max(0, min(100, $x)),
+            'y' => max(0, min(100, $y)),
         ];
     }
 
