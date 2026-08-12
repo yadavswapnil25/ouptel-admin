@@ -63,7 +63,12 @@ class ChatController extends Controller
             return response()->json([
                 'ok' => true,
                 'data' => [],
-                'meta' => ['has_more' => false, 'next_before_at' => null, 'next_before_id' => null],
+                'meta' => [
+                    'has_more' => false,
+                    'next_before_at' => null,
+                    'next_before_id' => null,
+                    'total_unread' => 0,
+                ],
             ]);
         }
 
@@ -115,6 +120,9 @@ class ChatController extends Controller
                 'has_more' => $participants->count() === $limit,
                 'next_before_at' => (int) $last->last_message_at,
                 'next_before_id' => (int) $last->conversation_id,
+                // Counts every thread, not just this page, so badges stay right
+                // for users with more conversations than fit in one request.
+                'total_unread' => $this->chat->totalUnreadFor($userId),
             ],
         ]);
     }
