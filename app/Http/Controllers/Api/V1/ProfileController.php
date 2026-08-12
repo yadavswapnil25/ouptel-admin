@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
+use App\Models\Message;
 use App\Models\User;
 use App\Services\ProfileInterestService;
 use Illuminate\Http\JsonResponse;
@@ -1332,13 +1333,10 @@ class ProfileController extends Controller
                 // Just continue without popup notification
             }
 
-            // Get unread messages count
-            $data['messages'] = DB::table('Wo_Messages')
-                ->where('to_id', $tokenUserId)
-                ->where('seen', 0)
-                ->where('deleted_one', '!=', $tokenUserId)
-                ->where('deleted_two', '!=', $tokenUserId)
-                ->count();
+            // Get unread messages count. deleted_one/deleted_two hold per-side
+            // enum flags rather than user ids, so the scope on the model is the
+            // single place that definition lives.
+            $data['messages'] = Message::query()->unreadFor((int) $tokenUserId)->count();
 
             // Check for group chat unread messages (if table exists)
             try {

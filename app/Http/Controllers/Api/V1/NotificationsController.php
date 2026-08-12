@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Models\Message;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -88,13 +89,10 @@ class NotificationsController extends Controller
         // Get friend requests
         $friendRequests = $this->getFriendRequests($tokenUserId);
 
-        // Count unread messages
-        $countMessages = DB::table('Wo_Messages')
-            ->where('to_id', $tokenUserId)
-            ->where('seen', 0)
-            ->where('deleted_one', '!=', $tokenUserId)
-            ->where('deleted_two', '!=', $tokenUserId)
-            ->count();
+        // Count unread messages. deleted_one/deleted_two hold per-side enum flags
+        // rather than user ids, so the scope on the model is the single place that
+        // definition lives.
+        $countMessages = Message::query()->unreadFor((int) $tokenUserId)->count();
 
         // Mark notifications as seen if requested
         if ($request->filled('seen') && $request->input('seen') == 1) {

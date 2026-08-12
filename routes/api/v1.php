@@ -65,6 +65,7 @@ use App\Http\Controllers\Api\V1\SurveyController;
 use App\Http\Controllers\Api\V1\InvitationController;
 use App\Http\Controllers\Api\V1\StatesController;
 use App\Http\Controllers\Api\V1\ActivityController;
+use App\Http\Controllers\Api\V1\ChatController;
 
 Route::get('/ping', [PingController::class, 'index']);
 Route::get('/albums', [AlbumController::class, 'index']);
@@ -438,6 +439,19 @@ Route::post('/notifications/get', [NotificationsController::class, 'getNotificat
 Route::post('/notifications/delete', [NotificationsController::class, 'delete']); // Delete notification (old API: notifications.php?type=delete)
 Route::post('/notifications/stop-notify', [NotificationsController::class, 'stopNotify']); // Stop notify from user (old API: stop_notify.php)
 Route::post('/notifications/mark-all-seen', [NotificationsController::class, 'markAllSeen']); // Mark all notifications as seen
+
+// One-to-one chat. Static segments are declared before /chat/conversations/{id}
+// so they are not swallowed by the parameterised route.
+Route::get('/chat/unread-count', [ChatController::class, 'unreadCount']);
+Route::get('/chat/conversations', [ChatController::class, 'conversations']);
+Route::post('/chat/conversations', [ChatController::class, 'openConversation']);
+Route::get('/chat/conversations/{conversationId}', [ChatController::class, 'showConversation']);
+Route::delete('/chat/conversations/{conversationId}', [ChatController::class, 'destroyConversation']);
+Route::get('/chat/conversations/{conversationId}/messages', [ChatController::class, 'messages']);
+Route::post('/chat/conversations/{conversationId}/messages', [ChatController::class, 'sendMessage'])
+    ->middleware('throttle:120,1');
+Route::post('/chat/conversations/{conversationId}/read', [ChatController::class, 'markRead']);
+Route::delete('/chat/messages/{messageId}', [ChatController::class, 'destroyMessage']);
 
 // Address management routes (mimics old WoWonder API)
 Route::get('/addresses', [AddressController::class, 'getAddresses']);
