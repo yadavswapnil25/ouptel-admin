@@ -15,8 +15,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'apps.session.user' => \App\Http\Middleware\EnsureAppsSessionUserExists::class,
         ]);
+        // TouchUserLastSeen reads the user id resolved by the session middleware,
+        // so it has to run after it.
         $middleware->api(append: [
             \App\Http\Middleware\EnsureAppsSessionUserExists::class,
+            \App\Http\Middleware\TouchUserLastSeen::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
