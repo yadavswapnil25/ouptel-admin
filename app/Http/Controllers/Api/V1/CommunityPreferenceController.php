@@ -7,6 +7,7 @@ use App\Models\CommunityPreference;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class CommunityPreferenceController extends Controller
@@ -16,9 +17,14 @@ class CommunityPreferenceController extends Controller
      */
     public function index(): JsonResponse
     {
-        $preferences = CommunityPreference::orderBy('sort_order')
-            ->orderBy('name')
-            ->get(['id', 'name', 'slug', 'description']);
+        $preferences = Cache::store('file')->remember(
+            CommunityPreference::PUBLIC_LIST_CACHE_KEY,
+            now()->addMinutes(10),
+            fn () => CommunityPreference::query()
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'name', 'slug', 'description'])
+        );
 
         return response()->json([
             'ok' => true,

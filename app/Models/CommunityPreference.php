@@ -9,10 +9,19 @@ use Illuminate\Support\Str;
 
 class CommunityPreference extends Model
 {
+    public const PUBLIC_LIST_CACHE_KEY = 'community_preferences.public';
+
     protected $fillable = ['name', 'slug', 'description', 'sort_order'];
 
     protected static function booted(): void
     {
+        $forgetPublicList = static function () {
+            \Illuminate\Support\Facades\Cache::store('file')->forget(self::PUBLIC_LIST_CACHE_KEY);
+        };
+
+        static::saved($forgetPublicList);
+        static::deleted($forgetPublicList);
+
         static::creating(function (CommunityPreference $model) {
             if (empty($model->slug) && !empty($model->name)) {
                 $model->slug = Str::slug($model->name);

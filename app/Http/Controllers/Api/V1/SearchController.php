@@ -272,6 +272,7 @@ class SearchController extends Controller
                     $q->where('username', 'like', $like)
                       ->orWhere('first_name', 'like', $like)
                       ->orWhere('last_name', 'like', $like)
+                      ->orWhereRaw("CONCAT_WS(' ', TRIM(first_name), TRIM(last_name)) LIKE ?", [$like])
                       ->orWhere('about', 'like', $like);
                 });
             }
@@ -538,6 +539,9 @@ class SearchController extends Controller
                 }
                 if (Schema::hasColumn('Wo_Users', 'last_name')) {
                     $q->orWhere('last_name', 'like', $like);
+                }
+                if (Schema::hasColumn('Wo_Users', 'first_name') && Schema::hasColumn('Wo_Users', 'last_name')) {
+                    $q->orWhereRaw("CONCAT_WS(' ', TRIM(first_name), TRIM(last_name)) LIKE ?", [$like]);
                 }
                 if (Schema::hasColumn('Wo_Users', 'name')) {
                     $q->orWhere('name', 'like', $like);

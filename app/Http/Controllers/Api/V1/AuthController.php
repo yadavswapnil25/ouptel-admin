@@ -29,11 +29,16 @@ class AuthController extends BaseController
             return response()->json(['ok' => false, 'message' => 'Username or email is required'], 422);
         }
 
+        $username = isset($validated['username']) ? ltrim(trim((string) $validated['username']), '@') : '';
+        $email = isset($validated['email']) ? trim((string) $validated['email']) : '';
+
         $query = User::query();
-        if (!empty($validated['username'])) {
-            $query->where('username', $validated['username']);
+        if ($username !== '') {
+            $query->where('username', $username);
+        } elseif ($email !== '' && !str_contains($email, '@')) {
+            $query->where('username', ltrim($email, '@'));
         } else {
-            $query->where('email', $validated['email']);
+            $query->where('email', $email);
         }
 
         /** @var User|null $user */
@@ -114,30 +119,17 @@ class AuthController extends BaseController
         try {
             DB::beginTransaction();
 
-            // Check if username or email already exists
-            $existingUser = User::where('username', $request->username)
-                ->orWhere('email', $request->email)
-                ->first();
-
-            if ($existingUser) {
-                if ($existingUser->username === $request->username) {
-                    return response()->json(['ok' => false, 'message' => 'Username already taken'], 409);
-                }
-                if ($existingUser->email === $request->email) {
-                    return response()->json(['ok' => false, 'message' => 'Email already registered'], 409);
-                }
-            }
-
             // Validate verification code before creating user
             $cacheKey = 'signup_verify_' . strtolower($request->email);
-            $storedCode = Cache::get($cacheKey);
+            $storedCode = $this->signupOtpCache()->get($cacheKey);
             if (!$storedCode || $storedCode !== $request->verification_code) {
+                DB::rollBack();
                 return response()->json([
                     'ok' => false,
                     'message' => 'Invalid or expired verification code. Please request a new code.',
                 ], 422);
             }
-            Cache::forget($cacheKey); // One-time use
+            $this->signupOtpCache()->forget($cacheKey); // One-time use
 
             // Generate unique user ID
             $userId = $this->generateUserId();
@@ -280,7 +272,7 @@ class AuthController extends BaseController
         }
 
         $cacheKey = 'signup_verify_' . $email;
-        $lastSent = Cache::get($cacheKey . '_sent_at');
+        $lastSent = $this->signupOtpCache()->get($cacheKey . '_sent_at');
         if ($lastSent && (time() - $lastSent) < 60) {
             return response()->json([
                 'ok' => false,
@@ -289,8 +281,8 @@ class AuthController extends BaseController
         }
 
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        Cache::put($cacheKey, $code, now()->addMinutes(15));
-        Cache::put($cacheKey . '_sent_at', time(), now()->addMinutes(1));
+        $this->signupOtpCache()->put($cacheKey, $code, now()->addMinutes(15));
+        $this->signupOtpCache()->put($cacheKey . '_sent_at', time(), now()->addMinutes(1));
 
         try {
             $appName = config('app.name', 'OUPTEL');
@@ -339,7 +331,7 @@ class AuthController extends BaseController
 
         $email = strtolower($request->email);
         $cacheKey = 'signup_verify_' . $email;
-        $storedCode = Cache::get($cacheKey);
+        $storedCode = $this->signupOtpCache()->get($cacheKey);
 
         if (!$storedCode || $storedCode !== $request->code) {
             return response()->json([
@@ -576,6 +568,15 @@ class AuthController extends BaseController
         // In a real implementation, you would send a welcome email
         // For now, we'll just log the action
         Log::info("Welcome email sent to user {$user->user_id} ({$user->email})");
+    }
+
+    /**
+     * Signup OTP lives in the file cache so unique-checks and resend throttling
+     * don't depend on the MySQL cache table (which was adding seconds per call).
+     */
+    private function signupOtpCache()
+    {
+        return Cache::store('file');
     }
 
     /**
