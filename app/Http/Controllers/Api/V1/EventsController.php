@@ -465,6 +465,9 @@ class EventsController extends BaseController
         $perPage = (int) ($request->query('per_page', 20));
         $perPage = max(1, min($perPage, 50));
 
+        $currentUserId = $this->resolveUserId($request);
+        $isOwner = $currentUserId !== null && (int) $event->poster_id === (int) $currentUserId;
+
         $paginator = DB::table($table)
             ->join('Wo_Users', "{$table}.user_id", '=', 'Wo_Users.user_id')
             ->where("{$table}.event_id", $id)
@@ -472,7 +475,9 @@ class EventsController extends BaseController
             ->orderByDesc("{$table}.id")
             ->paginate($perPage);
 
-        $data = collect($paginator->items())->map(fn ($user) => $this->mapUserForEventGuest($user));
+        $data = collect($paginator->items())->map(
+            fn ($user) => $this->mapUserForEventGuest($user, $isOwner)
+        );
 
         return response()->json([
             'data' => $data,
@@ -483,6 +488,7 @@ class EventsController extends BaseController
                 'last_page' => $paginator->lastPage(),
             ],
             'type' => $type,
+            'is_owner' => $isOwner,
         ]);
     }
 
@@ -673,19 +679,36 @@ class EventsController extends BaseController
         ]);
     }
 
-    private function mapUserForEventGuest(object $user): array
+    private function mapUserForEventGuest(object $user, bool $includeContact = false): array
     {
         $name = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? ''));
         if ($name === '') {
             $name = $user->name ?? $user->username ?? 'User';
         }
 
-        return [
+        $payload = [
             'user_id' => $user->user_id,
             'username' => $user->username ?? '',
             'name' => $name,
             'avatar_url' => !empty($user->avatar) ? asset('storage/' . $user->avatar) : null,
         ];
+
+        if ($includeContact) {
+            $email = trim((string) ($user->email ?? ''));
+            $phone = '';
+            foreach (['phone_number', 'phone', 'mobile'] as $field) {
+                $value = trim((string) ($user->{$field} ?? ''));
+                if ($value !== '') {
+                    $phone = $value;
+                    break;
+                }
+            }
+            $payload['email'] = $email !== '' ? $email : null;
+            $payload['phone'] = $phone !== '' ? $phone : null;
+            $payload['mobile'] = $payload['phone'];
+        }
+
+        return $payload;
     }
 
     private function notifyEventHost(Event $event, int $actorUserId, string $type): void
