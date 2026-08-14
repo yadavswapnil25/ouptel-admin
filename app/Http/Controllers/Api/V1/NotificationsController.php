@@ -371,6 +371,11 @@ class NotificationsController extends Controller
                 if (empty($notification->page_id ?? null)) {
                     $pageId = (int) $pm[1];
                 }
+            } elseif (preg_match('/[?&](?:event_id|eid)=(\d+)/i', (string) $notificationUrl, $em)) {
+                $notificationUrl = '/events/' . $em[1];
+                if (empty($notification->event_id ?? null)) {
+                    $notification->event_id = (int) $em[1];
+                }
             }
 
             if (
@@ -839,6 +844,28 @@ class NotificationsController extends Controller
                 }
                 $notification['type_text'] = 'is going to ' . $eventName;
                 $notification['icon'] = 'calendar';
+                break;
+            case 'left_event':
+                $eventName = 'your event';
+                if (!empty($notification['event_id'])) {
+                    $eventRow = DB::table('Wo_Events')->where('id', $notification['event_id'])->value('name');
+                    if ($eventRow) {
+                        $eventName = $eventRow;
+                    }
+                }
+                $notification['type_text'] = 'left ' . $eventName;
+                $notification['icon'] = 'calendar';
+                break;
+            case 'uninterested_event':
+                $eventName = 'your event';
+                if (!empty($notification['event_id'])) {
+                    $eventRow = DB::table('Wo_Events')->where('id', $notification['event_id'])->value('name');
+                    if ($eventRow) {
+                        $eventName = $eventRow;
+                    }
+                }
+                $notification['type_text'] = 'is no longer interested in ' . $eventName;
+                $notification['icon'] = 'star';
                 break;
             default:
                 $notification['type_text'] = 'sent you a notification';

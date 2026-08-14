@@ -587,6 +587,8 @@ class EventsController extends BaseController
 
         if ($goStatus === 'going') {
             $this->notifyEventHost($event, (int) $userId, 'going_event');
+        } elseif ($goStatus === 'not-going') {
+            $this->notifyEventHost($event, (int) $userId, 'left_event');
         }
 
         return response()->json([
@@ -666,6 +668,8 @@ class EventsController extends BaseController
 
         if ($interestStatus === 'interested') {
             $this->notifyEventHost($event, (int) $userId, 'interested_event');
+        } elseif ($interestStatus === 'not-interested') {
+            $this->notifyEventHost($event, (int) $userId, 'uninterested_event');
         }
 
         return response()->json([
@@ -717,7 +721,7 @@ class EventsController extends BaseController
         if ($hostId <= 0 || $hostId === $actorUserId) {
             return;
         }
-        if (!in_array($type, ['interested_event', 'going_event'], true)) {
+        if (!in_array($type, ['interested_event', 'going_event', 'left_event', 'uninterested_event'], true)) {
             return;
         }
         if (!Schema::hasTable('Wo_Notifications')) {
