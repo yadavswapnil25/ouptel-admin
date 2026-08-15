@@ -2470,6 +2470,9 @@ class PagesController extends BaseController
             ], 400);
         }
 
+        $isGovRegistered = Schema::hasColumn('Wo_Pages', 'gov_registered')
+            && $this->isTruthyFlag($page->gov_registered ?? 0);
+
         $backRequired = !in_array($request->input('id_proof_type'), ['pan_card'], true);
 
         $rules = [
@@ -2479,6 +2482,13 @@ class PagesController extends BaseController
             'id_proof_back_image'  => [$backRequired ? 'required' : 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp', 'max:5120'],
             'live_photo'           => ['required', 'file', 'mimes:jpeg,jpg,png,webp', 'max:5120'],
             'message'              => ['nullable', 'string', 'max:500'],
+            // Government-registered pages must upload registration / ID proof document.
+            'gov_registration_document' => [
+                $isGovRegistered ? 'required' : 'nullable',
+                'file',
+                'mimes:jpeg,jpg,png,gif,webp,pdf',
+                'max:10240',
+            ],
         ];
 
         $validated = $request->validate($rules);
@@ -2517,6 +2527,16 @@ class PagesController extends BaseController
             $livePhotoPath = $file->storeAs($storagePath, $prefix . '_live_photo.' . $file->getClientOriginalExtension(), 'public') ?: '';
         }
 
+        $govDocPath = '';
+        if ($request->hasFile('gov_registration_document') && $request->file('gov_registration_document')->isValid()) {
+            $file = $request->file('gov_registration_document');
+            $govDocPath = $file->storeAs(
+                $storagePath,
+                $prefix . '_gov_reg.' . $file->getClientOriginalExtension(),
+                'public'
+            ) ?: '';
+        }
+
         DB::table('Wo_Verification_Requests')->insert([
             'page_id'              => (int) $id,
             'user_id'              => (int) $auth['user_id'],
@@ -2534,7 +2554,7 @@ class PagesController extends BaseController
             'video_uploaded_at'    => null,
             'video_challenge_code' => '',
             'message'              => $validated['message'] ?? '',
-            'passport'             => '',
+            'passport'             => $govDocPath,
             'photo'                => $livePhotoPath,
             'submitted_at'         => now(),
             'created_at'           => now(),
@@ -2655,6 +2675,9 @@ class PagesController extends BaseController
         $payload = [
             'page_id' => $pageId,
             'verified' => (bool) ($page->verified ?? false),
+            'gov_registered' => Schema::hasColumn('Wo_Pages', 'gov_registered')
+                ? $this->isTruthyFlag($page->gov_registered ?? 0)
+                : false,
             'verification_status' => $status,
             'can_request' => $status === 'not_verified' || $status === 'rejected',
             'can_cancel' => $status === 'pending',
