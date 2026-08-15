@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Models\Page;
 use App\Models\PageCategory;
-use App\Models\PageSubCategory;
 use App\Helpers\CommentVisibilityHelper;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -84,21 +83,6 @@ class PagesController extends BaseController
                 }
             }
 
-            // Get page sub category value and name if available
-            // Access sub_category directly from attributes since it's not in fillable
-            $subCategoryValue = '';
-            if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
-                $subCategoryValue = $page->getAttributes()['sub_category'] ?? '';
-            }
-            
-            $subCategoryName = '';
-            if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
-                $subCategory = PageSubCategory::find($subCategoryValue);
-                if ($subCategory) {
-                    $subCategoryName = $subCategory->name;
-                }
-            }
-
             $pageData = [
                 'page_id' => $page->page_id,
                 'page_name' => $page->page_name,
@@ -106,8 +90,6 @@ class PagesController extends BaseController
                 'description' => $page->page_description,
                 'category' => $page->page_category ?? 0,
                 'category_name' => $categoryName,
-                'sub_category' => $subCategoryValue,
-                'sub_category_name' => $subCategoryName,
                 'verified' => $this->isPageVerified($page->verified ?? 0),
                 'gov_registered' => Schema::hasColumn('Wo_Pages', 'gov_registered')
                     ? $this->isTruthyFlag($page->gov_registered ?? 0)
@@ -208,56 +190,10 @@ class PagesController extends BaseController
                 'name' => $c->name,
             ]);
 
-        $categoryId = request()->query('category_id');
-        $subsQuery = PageSubCategory::query();
-        if (!empty($categoryId)) {
-            $subsQuery->where('category_id', (int) $categoryId);
-        }
-        $subCategories = $subsQuery
-            ->orderBy('id')
-            ->get()
-            ->map(fn (PageSubCategory $s) => [
-                'id' => $s->id,
-                'category_id' => $s->category_id,
-                'name' => $s->name,
-            ]);
-
-        // Call to action options (matching WoWonder call_action array)
-        // These are the text labels that map to integer IDs stored in call_action_type column
-        $callToActions = [
-            ['id' => 0, 'label' => ''],
-            ['id' => 1, 'label' => 'Read more'],
-            ['id' => 2, 'label' => 'Shop now'],
-            ['id' => 3, 'label' => 'View now'],
-            ['id' => 4, 'label' => 'Visit now'],
-            ['id' => 5, 'label' => 'Book now'],
-            ['id' => 6, 'label' => 'Learn more'],
-            ['id' => 7, 'label' => 'Play now'],
-            ['id' => 8, 'label' => 'Bet now'],
-            ['id' => 9, 'label' => 'Donate'],
-            ['id' => 10, 'label' => 'Apply here'],
-            ['id' => 11, 'label' => 'Quote here'],
-            ['id' => 12, 'label' => 'Order now'],
-            ['id' => 13, 'label' => 'Book tickets'],
-            ['id' => 14, 'label' => 'Enroll now'],
-            ['id' => 15, 'label' => 'Find a card'],
-            ['id' => 16, 'label' => 'Get a quote'],
-            ['id' => 17, 'label' => 'Get tickets'],
-            ['id' => 18, 'label' => 'Locate a dealer'],
-            ['id' => 19, 'label' => 'Order online'],
-            ['id' => 20, 'label' => 'Preorder now'],
-            ['id' => 21, 'label' => 'Schedule now'],
-            ['id' => 22, 'label' => 'Sign up now'],
-            ['id' => 23, 'label' => 'Subscribe'],
-            ['id' => 24, 'label' => 'Register now'],
-        ];
-
         return response()->json([
             'ok' => true,
             'data' => [
                 'categories' => $categories,
-                'sub_categories' => $subCategories,
-                'call_to_actions' => $callToActions,
             ],
         ]);
     }
@@ -281,8 +217,6 @@ class PagesController extends BaseController
         $pageTitle = $request->input('page_title');
         $pageCategory = $request->input('page_category', 1); // Default to 1 if empty
         $pageDescription = $request->input('page_description', $request->input('about', ''));
-        $subCategory = $request->input('sub_category', '');
-        $pageSubCategory = $request->input('page_sub_category', ''); // Alternative parameter name
         $agreementAccepted = $request->input('agreement_accepted', $request->input('agreed_to_terms', false));
 
         // Validate page_name and page_title are not empty
@@ -326,26 +260,6 @@ class PagesController extends BaseController
         DB::beginTransaction();
 
         try {
-            // Validate and set sub_category if provided
-            $subCategoryValue = '';
-            if (!empty($subCategory) || !empty($pageSubCategory)) {
-                $subCategoryInput = !empty($subCategory) ? $subCategory : $pageSubCategory;
-                
-                // Validate sub_category belongs to the selected category
-                if (Schema::hasTable('Wo_Sub_Categories')) {
-                    $subCategoryExists = DB::table('Wo_Sub_Categories')
-                        ->where('id', $subCategoryInput)
-                        ->where('category_id', $pageCategory)
-                        ->where('type', 'page')
-                        ->exists();
-                    
-                    if ($subCategoryExists) {
-                        $subCategoryValue = $subCategoryInput;
-                    }
-                    // If sub_category doesn't exist or doesn't belong to category, leave it empty
-                }
-            }
-
             // Create the page
             $page = new Page();
             $page->page_name = $pageName;
@@ -387,10 +301,10 @@ class PagesController extends BaseController
                 );
                 $page->setAttribute('gov_registered', $govRegistered === true ? 1 : 0);
             }
-            
-            // Set sub_category directly on attributes since it's not in fillable
-            if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
-                $page->setAttribute('sub_category', $subCategoryValue);
+
+            // Default: allow visitor posts on new pages (setting UI removed).
+            if (Schema::hasColumn('Wo_Pages', 'users_post')) {
+                $page->setAttribute('users_post', 1);
             }
             
             $page->save();
@@ -414,15 +328,6 @@ class PagesController extends BaseController
                     ->update($imageUpdateData);
             }
 
-            // Get sub category name if available
-            $subCategoryName = '';
-            if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
-                $subCategoryModel = PageSubCategory::find($subCategoryValue);
-                if ($subCategoryModel) {
-                    $subCategoryName = $subCategoryModel->name;
-                }
-            }
-
             // Commit transaction if everything is successful
             DB::commit();
 
@@ -433,8 +338,6 @@ class PagesController extends BaseController
                 'api_version' => '1.0',
                 'page_name' => $page->page_name,
                 'page_id' => $page->page_id,
-                'sub_category' => $subCategoryValue,
-                'sub_category_name' => $subCategoryName,
                 'agreement_accepted' => true,
             ], 200);
 
@@ -541,38 +444,6 @@ class PagesController extends BaseController
                 $pageCategory = $request->input('page_category');
                 if (is_numeric($pageCategory)) {
                     $updateData['page_category'] = (int) $pageCategory;
-                }
-            }
-
-            // Update sub_category if provided
-            if ($request->has('sub_category') && Schema::hasColumn('Wo_Pages', 'sub_category')) {
-                $subCategory = $request->input('sub_category');
-                
-                // Validate sub_category belongs to the selected category if both are provided
-                if (!empty($subCategory) && is_numeric($subCategory)) {
-                    $currentCategory = $updateData['page_category'] ?? $page->page_category;
-                    
-                    if (!empty($currentCategory) && Schema::hasTable('Wo_Sub_Categories')) {
-                        // Validate sub_category belongs to the selected category
-                        $subCategoryExists = DB::table('Wo_Sub_Categories')
-                            ->where('id', $subCategory)
-                            ->where('category_id', $currentCategory)
-                            ->where('type', 'page')
-                            ->exists();
-                        
-                        if ($subCategoryExists) {
-                            // Add to updateData for DB::table update
-                            $updateData['sub_category'] = (string) $subCategory;
-                        } else {
-                            $errors[] = 'Sub category does not belong to the selected category';
-                        }
-                    } else {
-                        // If no category validation needed, just set the sub_category
-                        $updateData['sub_category'] = (string) $subCategory;
-                    }
-                } elseif (empty($subCategory) || $subCategory === '' || $subCategory === null) {
-                    // Allow clearing sub_category by setting it to empty string
-                    $updateData['sub_category'] = '';
                 }
             }
 
@@ -690,44 +561,7 @@ class PagesController extends BaseController
                 }
             }
 
-            // Update page call-to-action settings using WoWonder's original columns
-            // DB columns: call_action_type (int), call_action_type_url (string), users_post (int 0/1)
-            // Accept both old parameter names and the new ones you are using
-            if ($request->has('call_action_type') || $request->has('call_to_action')) {
-                $callAction = $request->input('call_action_type', $request->input('call_to_action'));
-                $updateData['call_action_type'] = is_numeric($callAction) ? (int) $callAction : 0;
-            }
-
-            if ($request->has('call_action_type_url') || $request->has('call_to_target_url')) {
-                $callActionUrl = $request->input('call_action_type_url', $request->input('call_to_target_url'));
-                // Validate URL if provided (not empty)
-                if (!empty($callActionUrl)) {
-                    if (!filter_var($callActionUrl, FILTER_VALIDATE_URL)) {
-                        $errors[] = 'Call to action URL is invalid';
-                    } else {
-                        $updateData['call_action_type_url'] = $callActionUrl;
-                    }
-                } else {
-                    // Allow empty string to clear the URL
-                    $updateData['call_action_type_url'] = '';
-                }
-            }
-
-            if ($request->has('users_post') || $request->has('can_post')) {
-                $canPost = $request->input('users_post', $request->input('can_post'));
-
-                // Map string values like 'enable' / 'disable' to 1 / 0, otherwise cast to int
-                if (is_string($canPost)) {
-                    $normalized = strtolower($canPost);
-                    if (in_array($normalized, ['enable', 'enabled', 'yes', 'true', '1'], true)) {
-                        $updateData['users_post'] = 1;
-                    } elseif (in_array($normalized, ['disable', 'disabled', 'no', 'false', '0'], true)) {
-                        $updateData['users_post'] = 0;
-                    }
-                } elseif (is_numeric($canPost)) {
-                    $updateData['users_post'] = (int) $canPost ? 1 : 0;
-                }
-            }
+            // Call to Action / Allow Posts settings removed from product — ignore those request fields.
 
             // Handle verification status/request
             // Accepts: 'verified' (1), 'notVerified' (0), 'pending', 'request'
@@ -851,21 +685,6 @@ class PagesController extends BaseController
             $avatarPath = $pageData->avatar ?? $page->avatar ?? '';
             $coverPath = $pageData->cover ?? $page->cover ?? '';
             
-            // Get sub_category from database query result
-            $subCategoryValue = '';
-            if ($pageData && Schema::hasColumn('Wo_Pages', 'sub_category')) {
-                $subCategoryValue = $pageData->sub_category ?? '';
-            }
-            
-            // Get sub category name if available
-            $subCategoryName = '';
-            if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
-                $subCategory = PageSubCategory::find($subCategoryValue);
-                if ($subCategory) {
-                    $subCategoryName = $subCategory->name;
-                }
-            }
-            
             // Get social media links if columns exist
             $socialLinks = [];
             if (Schema::hasColumn('Wo_Pages', 'facebook')) {
@@ -899,8 +718,6 @@ class PagesController extends BaseController
                     'page_description' => $page->page_description ?? '',
                     'about' => $page->page_description ?? '', // 'about' is mapped to page_description since column doesn't exist
                     'category' => $page->page_category ?? 0,
-                    'sub_category' => $subCategoryValue,
-                    'sub_category_name' => $subCategoryName,
                     'website' => $page->website ?? '',
                     'phone' => $page->phone ?? '',
                     'address' => $page->address ?? '',
@@ -918,9 +735,6 @@ class PagesController extends BaseController
                     'twitter' => $socialLinks['twitter'] ?? '',
                     'youtube' => $socialLinks['youtube'] ?? '',
                     'vkontakte' => $socialLinks['vkontakte'] ?? '',
-                    'call_to_action' => $page->call_action_type ?? 0,
-                    'call_to_target_url' => $page->call_action_type_url ?? '',
-                    'can_post' => isset($page->users_post) ? (int) $page->users_post : 0,
                     'verified' => (bool) ($page->verified ?? false),
                     'verification_status' => $verificationStatus, // 'not_verified', 'pending', or 'verified'
                     'verification_request_status' => $verificationRequestStatus,
@@ -1243,28 +1057,9 @@ class PagesController extends BaseController
                     ->count();
             }
 
-            // Get page data directly from database to ensure we get all columns including sub_category
             $pageData = DB::table('Wo_Pages')
                 ->where('page_id', $id)
                 ->first();
-            
-            // Get page sub category value and name if available
-            // Get sub_category directly from database query to ensure it's retrieved
-            $subCategoryValue = '';
-            if ($pageData && Schema::hasColumn('Wo_Pages', 'sub_category')) {
-                $subCategoryValue = $pageData->sub_category ?? '';
-            } elseif (Schema::hasColumn('Wo_Pages', 'sub_category')) {
-                // Fallback to model attributes if database query didn't work
-                $subCategoryValue = $page->getAttributes()['sub_category'] ?? '';
-            }
-            
-            $subCategoryName = '';
-            if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
-                $subCategory = PageSubCategory::find($subCategoryValue);
-                if ($subCategory) {
-                    $subCategoryName = $subCategory->name;
-                }
-            }
             
             $socialLinks = [];
             if ($pageData) {
@@ -1325,12 +1120,6 @@ class PagesController extends BaseController
                     'twitter' => $socialLinks['twitter'] ?? '',
                     'youtube' => $socialLinks['youtube'] ?? '',
                     'vkontakte' => $socialLinks['vkontakte'] ?? '',
-                    'sub_category' => $subCategoryValue,
-                    'sub_category_name' => $subCategoryName,
-                    // Expose legacy WoWonder columns under clearer API field names
-                    'call_to_action' => $page->call_action_type ?? 0,
-                    'call_to_target_url' => $page->call_action_type_url ?? '',
-                    'can_post' => isset($page->users_post) ? (int) $page->users_post : 0,
                     'url' => $page->url ?? url('/page/' . ($page->page_name ?? '')),
                     'likes_count' => $likesCount,
                     'posts_count' => $postsCount,
@@ -1459,21 +1248,6 @@ class PagesController extends BaseController
                     }
                 }
 
-                // Get sub category name if available
-                // Access sub_category directly from attributes since it's not in fillable
-                $subCategoryValue = '';
-                if (Schema::hasColumn('Wo_Pages', 'sub_category')) {
-                    $subCategoryValue = $pageItem->getAttributes()['sub_category'] ?? '';
-                }
-                
-                $subCategoryName = '';
-                if (!empty($subCategoryValue) && Schema::hasTable('Wo_Sub_Categories')) {
-                    $subCategory = PageSubCategory::find($subCategoryValue);
-                    if ($subCategory) {
-                        $subCategoryName = $subCategory->name;
-                    }
-                }
-
                 $pages[] = [
                     'page_id' => $pageItem->page_id,
                     'page_name' => $pageItem->page_name ?? '',
@@ -1481,8 +1255,6 @@ class PagesController extends BaseController
                     'page_description' => $pageItem->page_description ?? '',
                     'category' => $pageItem->page_category ?? 0,
                     'category_name' => $categoryName,
-                    'sub_category' => $subCategoryValue,
-                    'sub_category_name' => $subCategoryName,
                     'verified' => (bool) ($pageItem->verified ?? false),
                     'avatar' => $pageItem->getAttributes()['avatar'] ?? '',
                     'avatar_url' => $this->getFileUrl($pageItem->getAttributes()['avatar'] ?? ''),
