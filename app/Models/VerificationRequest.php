@@ -61,6 +61,7 @@ class VerificationRequest extends Model
         'seen',
         // New fields for badge verification
         'id_proof_type',
+        'relationship_type',
         'id_proof_number',
         'id_proof_front_image',
         'id_proof_back_image',

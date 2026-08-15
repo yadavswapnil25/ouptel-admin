@@ -2477,6 +2477,7 @@ class PagesController extends BaseController
 
         $rules = [
             'id_proof_type'        => ['required', 'string', 'max:50'],
+            'relationship_type'    => ['required', 'string', 'in:owner,authorized_representative,director,employee,other'],
             'id_proof_number'      => ['nullable', 'string', 'max:50'],
             'id_proof_front_image' => ['required', 'file', 'mimes:jpeg,jpg,png,gif,webp', 'max:5120'],
             'id_proof_back_image'  => [$backRequired ? 'required' : 'nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp', 'max:5120'],
@@ -2537,7 +2538,7 @@ class PagesController extends BaseController
             ) ?: '';
         }
 
-        DB::table('Wo_Verification_Requests')->insert([
+        $insertData = [
             'page_id'              => (int) $id,
             'user_id'              => (int) $auth['user_id'],
             'user_name'            => $page->page_title ?? $page->page_name ?? '',
@@ -2559,7 +2560,18 @@ class PagesController extends BaseController
             'submitted_at'         => now(),
             'created_at'           => now(),
             'updated_at'           => now(),
-        ]);
+        ];
+
+        if (Schema::hasColumn('Wo_Verification_Requests', 'relationship_type')) {
+            $insertData['relationship_type'] = $validated['relationship_type'];
+        } else {
+            // Fallback if migration has not been run yet.
+            $relLabel = $validated['relationship_type'];
+            $msg = trim((string) ($insertData['message'] ?? ''));
+            $insertData['message'] = trim('[Relationship: ' . $relLabel . ']' . ($msg !== '' ? "\n" . $msg : ''));
+        }
+
+        DB::table('Wo_Verification_Requests')->insert($insertData);
 
         return response()->json([
             'api_status' => 200,
@@ -2698,6 +2710,7 @@ class PagesController extends BaseController
                 'id' => $latestRequest->id,
                 'status' => $latestRequest->status ?? 'pending',
                 'message' => $latestRequest->message ?? '',
+                'relationship_type' => $latestRequest->relationship_type ?? null,
                 'submitted_at' => $latestRequest->submitted_at ?? $latestRequest->created_at ?? null,
                 'reviewed_at' => $latestRequest->reviewed_at ?? null,
                 'rejection_reason' => $latestRequest->rejection_reason ?? null,
