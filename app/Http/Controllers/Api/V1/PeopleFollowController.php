@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
+use App\Models\Event;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -794,6 +795,8 @@ class PeopleFollowController extends Controller
                     'badge' => $this->getUserBadge($post->user_id),
                     'badge_type' => $this->getUserBadgeType($post->user_id),
                 ],
+                'event_id' => !empty($post->event_id) ? (int) $post->event_id : null,
+                'event' => Event::feedPayloadForId($post->event_id ?? 0),
                 
                 // Timestamps
                 'created_at' => $post->time ? date('c', $post->time) : null,
@@ -1254,6 +1257,7 @@ class PeopleFollowController extends Controller
         
         if (!empty($post->job_id) && $post->job_id > 0) return 'job';
         if (!empty($post->blog_id) && $post->blog_id > 0) return 'blog';
+        if (!empty($post->event_id) && $post->event_id > 0) return 'event';
         if (!empty($post->postPhoto)) return 'photo';
         if (!empty($post->postYoutube) || !empty($post->postVimeo) || !empty($post->postFacebook)) return 'video';
         if (!empty($post->postFile)) return 'file';

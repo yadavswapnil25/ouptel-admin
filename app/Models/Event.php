@@ -109,6 +109,53 @@ class Event extends Model
         return ImageHelper::getPlaceholder('event');
     }
 
+    /**
+     * Payload used when this event is shown as a newsfeed / profile post.
+     */
+    public function toFeedCard(): array
+    {
+        $frontendBase = rtrim((string) env('FRONTEND_URL', config('app.url')), '/');
+        $formatDate = static function ($value): string {
+            if ($value instanceof \Carbon\Carbon) {
+                return $value->format('Y-m-d');
+            }
+            return (string) ($value ?? '');
+        };
+        $formatTime = static function ($value): string {
+            if ($value instanceof \Carbon\Carbon) {
+                return $value->format('H:i');
+            }
+            $raw = trim((string) ($value ?? ''));
+            return $raw !== '' ? substr($raw, 0, 5) : '';
+        };
+
+        return [
+            'id' => (int) $this->id,
+            'name' => (string) ($this->name ?? ''),
+            'description' => (string) ($this->description ?? ''),
+            'location' => (string) ($this->location ?? ''),
+            'start_date' => $formatDate($this->start_date),
+            'start_time' => $formatTime($this->start_time),
+            'end_date' => $formatDate($this->end_date),
+            'end_time' => $formatTime($this->end_time),
+            'cover' => (string) ($this->cover ?? ''),
+            'cover_url' => $this->cover_url,
+            'url' => "{$frontendBase}/events/{$this->id}",
+        ];
+    }
+
+    public static function feedPayloadForId($eventId): ?array
+    {
+        $id = (int) $eventId;
+        if ($id <= 0) {
+            return null;
+        }
+
+        $event = static::query()->find($id);
+
+        return $event ? $event->toFeedCard() : null;
+    }
+
     public function getStartDateTimeAttribute()
     {
         return Carbon::parse($this->start_date . ' ' . $this->start_time);

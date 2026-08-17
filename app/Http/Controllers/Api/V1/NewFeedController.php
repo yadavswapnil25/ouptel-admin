@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Helpers\PostMediaHelper;
 use App\Helpers\CommentVisibilityHelper;
 use App\Http\Controllers\Controller;
+use App\Models\Event;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -764,6 +765,7 @@ class NewFeedController extends Controller
                 'group_id' => $post->group_id ?? null,
                 'group' => $group,
                 'event_id' => $post->event_id ?? null,
+                'event' => Event::feedPayloadForId($post->event_id ?? 0),
 
                 // Blog / article linked from Wo_Blog via blog_id
                 'blog_id' => !empty($post->blog_id) ? (int) $post->blog_id : null,
@@ -883,6 +885,10 @@ class NewFeedController extends Controller
             return $post->postType;
         }
         
+        if (!empty($post->event_id) && $post->event_id > 0) {
+            return 'event';
+        }
+
         // Check for job_id
         if (!empty($post->job_id) && $post->job_id > 0) {
             return 'job';

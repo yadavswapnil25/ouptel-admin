@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
+use App\Models\Event;
 use App\Models\Message;
 use App\Models\User;
 use App\Services\ProfileInterestService;
@@ -2043,6 +2044,13 @@ class ProfileController extends Controller
             }
 
             if (
+                (!empty($post->event_id) && (int) $post->event_id > 0)
+                || strtolower((string) ($post->postType ?? '')) === 'event'
+            ) {
+                $postType = 'event';
+            }
+
+            if (
                 (!empty($post->blog_id) && (int) $post->blog_id > 0)
                 || strtolower((string) ($post->postType ?? '')) === 'blog'
             ) {
@@ -2228,6 +2236,8 @@ class ProfileController extends Controller
                 'group' => $group,
                 'blog_id' => !empty($post->blog_id) ? (int) $post->blog_id : null,
                 'blog' => $this->getBlogDataForPost($post),
+                'event_id' => !empty($post->event_id) ? (int) $post->event_id : null,
+                'event' => Event::feedPayloadForId($post->event_id ?? 0),
             ];
         }
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
+use App\Models\Event;
 use App\Models\Post;
 use App\Services\FriendActivityNotificationService;
 use App\Models\PostReaction;
@@ -1958,13 +1959,18 @@ class PostController extends Controller
         }
 
         $postType = $post->postType ?? 'text';
-        if ($colorId > 0) {
+        if (
+            (!empty($post->event_id) && (int) $post->event_id > 0)
+            || strtolower((string) $postType) === 'event'
+        ) {
+            $postType = 'event';
+        } elseif ($colorId > 0) {
             $postType = 'colored';
         }
-        if (!empty($post->postMap) && $postType !== 'colored') {
+        if ($postType !== 'event' && !empty($post->postMap) && $postType !== 'colored') {
             $postType = 'location';
         }
-        if (!empty($post->postLink) && $postType !== 'colored' && empty($post->postMap)) {
+        if ($postType !== 'event' && !empty($post->postLink) && $postType !== 'colored' && empty($post->postMap)) {
             $postType = 'link';
         }
 
@@ -2406,24 +2412,7 @@ class PostController extends Controller
         }
 
         // Get event data if exists
-        $event = null;
-        if ($post->event_id) {
-            $eventData = DB::table('Wo_Events')->where('id', $post->event_id)->first();
-            if ($eventData) {
-                $eventUser = DB::table('Wo_Users')->where('user_id', $eventData->user_id)->first();
-                $event = [
-                    'id' => $eventData->id,
-                    'name' => $eventData->name ?? '',
-                    'location' => $eventData->location ?? '',
-                    'start_date' => $eventData->start_date ?? '',
-                    'user_data' => $eventUser ? [
-                        'user_id' => $eventUser->user_id,
-                        'username' => $eventUser->username ?? 'Unknown',
-                        'name' => $eventUser->name ?? $eventUser->username ?? 'Unknown User',
-                    ] : null,
-                ];
-            }
-        }
+        $event = Event::feedPayloadForId($post->event_id ?? 0);
 
         // Use post_id when set; 0/null must fall back to id (shared posts often missed post_id)
         $postIdForReactions = (int) ($post->post_id ?: $post->id);

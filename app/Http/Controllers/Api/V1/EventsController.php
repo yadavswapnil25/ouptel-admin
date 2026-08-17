@@ -9,7 +9,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 
 class EventsController extends BaseController
 {
@@ -257,7 +259,11 @@ class EventsController extends BaseController
         
         $event->save();
 
-        FriendActivityNotificationService::notifyFriendsOfNewEvent($event, (string) $userId);
+        $isPublished = (bool) ($event->getAttributes()['published'] ?? true);
+        if ($isPublished) {
+            $this->createEventFeedPost((int) $userId, $event);
+            FriendActivityNotificationService::notifyFriendsOfNewEvent($event, (string) $userId);
+        }
 
         return response()->json([
             'ok' => true,
@@ -804,6 +810,76 @@ class EventsController extends BaseController
             DB::table('Wo_Notifications')->insert($payload);
         } catch (\Exception $e) {
             // Notification failure should not block RSVP.
+        }
+    }
+
+    /**
+     * Create a Wo_Posts row so a published event appears on newsfeed and the author's profile.
+     */
+    private function createEventFeedPost(int $userId, Event $event): ?int
+    {
+        if (!Schema::hasTable('Wo_Posts') || $userId <= 0 || (int) $event->id <= 0) {
+            return null;
+        }
+
+        try {
+            $existingId = DB::table('Wo_Posts')
+                ->where('event_id', $event->id)
+                ->where('user_id', $userId)
+                ->where('postType', 'event')
+                ->value('id');
+            if ($existingId) {
+                return (int) $existingId;
+            }
+
+            $now = time();
+            $isPublic = (bool) ($event->getAttributes()['is_public'] ?? true);
+            $postData = [
+                'user_id' => $userId,
+                'recipient_id' => 0,
+                'postText' => (string) ($event->name ?? ''),
+                'page_id' => 0,
+                'group_id' => 0,
+                'event_id' => (int) $event->id,
+                'postPrivacy' => $isPublic ? '0' : '1',
+                'postType' => 'event',
+                'time' => $now,
+                'registered' => $now,
+                'active' => '1',
+                'postShare' => '0',
+                'boosted' => '0',
+                'comments_status' => '1',
+                'send_notify' => '0',
+            ];
+
+            if (!empty($event->cover) && Schema::hasColumn('Wo_Posts', 'postPhoto')) {
+                $postData['postPhoto'] = $event->cover;
+            }
+            if (Schema::hasColumn('Wo_Posts', 'postLink')) {
+                $postData['postLink'] = '/events/' . $event->id;
+            }
+            if (Schema::hasColumn('Wo_Posts', 'postLinkTitle')) {
+                $postData['postLinkTitle'] = (string) ($event->name ?? '');
+            }
+            if (Schema::hasColumn('Wo_Posts', 'postLinkContent')) {
+                $postData['postLinkContent'] = Str::limit(strip_tags((string) ($event->description ?? '')), 200);
+            }
+            if (!empty($event->cover) && Schema::hasColumn('Wo_Posts', 'postLinkImage')) {
+                $postData['postLinkImage'] = $event->cover;
+            }
+
+            $postId = (int) DB::table('Wo_Posts')->insertGetId($postData);
+            if ($postId > 0 && Schema::hasColumn('Wo_Posts', 'post_id')) {
+                DB::table('Wo_Posts')->where('id', $postId)->update(['post_id' => $postId]);
+            }
+
+            return $postId > 0 ? $postId : null;
+        } catch (\Exception $e) {
+            Log::warning('Failed to publish event to newsfeed: ' . $e->getMessage(), [
+                'event_id' => $event->id,
+                'user_id' => $userId,
+            ]);
+            return null;
         }
     }
 }
