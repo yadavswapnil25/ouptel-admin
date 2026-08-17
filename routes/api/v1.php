@@ -206,6 +206,8 @@ Route::get('/jobs', [JobsController::class, 'index']);
 Route::post('/jobs', [JobsController::class, 'store']);
 Route::get('/jobs/meta', [JobsController::class, 'meta']);
 Route::get('/jobs/{id}', [JobsController::class, 'show']);
+Route::post('/jobs/{id}/update', [JobsController::class, 'update']);
+Route::put('/jobs/{id}', [JobsController::class, 'update']);
 Route::get('/jobs/{id}/applications', [JobsController::class, 'applications']);
 Route::post('/jobs/{id}/apply', [JobsController::class, 'apply']);
 

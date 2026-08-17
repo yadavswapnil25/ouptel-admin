@@ -423,6 +423,118 @@ class JobsController extends Controller
         ], 201);
     }
 
+    public function update(Request $request, $id): JsonResponse
+    {
+        $authHeader = $request->header('Authorization');
+        if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+        $token = substr($authHeader, 7);
+        $userId = DB::table('Wo_AppsSessions')->where('session_id', $token)->value('user_id');
+        if (!$userId) {
+            return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
+        }
+
+        $job = Job::where('id', $id)->first();
+        if (!$job) {
+            return response()->json(['ok' => false, 'message' => 'Job not found'], 404);
+        }
+
+        if (!$this->userOwnsJob($job, $userId)) {
+            return response()->json(['ok' => false, 'message' => 'You can only edit jobs for pages you own'], 403);
+        }
+
+        $validated = $request->validate([
+            'title' => ['required', 'string', 'max:200'],
+            'description' => ['required', 'string', 'max:2000'],
+            'location' => ['required', 'string', 'max:100'],
+            'minimum' => ['nullable', 'numeric', 'min:0'],
+            'maximum' => ['nullable', 'numeric', 'min:0'],
+            'salary_date' => ['nullable', 'string', 'max:50'],
+            'currency' => ['nullable', 'string', 'max:10'],
+            'job_type' => ['nullable', 'string', 'max:50'],
+            'category' => ['nullable', 'integer'],
+            'image' => ['nullable', 'image', 'max:5120'],
+            'question_one' => ['nullable', 'string', 'max:200'],
+            'question_one_type' => ['nullable', 'string', 'max:100'],
+            'question_one_answers' => ['nullable', 'string'],
+            'question_two' => ['nullable', 'string', 'max:200'],
+            'question_two_type' => ['nullable', 'string', 'max:100'],
+            'question_two_answers' => ['nullable', 'string'],
+            'question_three' => ['nullable', 'string', 'max:200'],
+            'question_three_type' => ['nullable', 'string', 'max:100'],
+            'question_three_answers' => ['nullable', 'string'],
+        ]);
+
+        $existingJob = Job::where('title', $validated['title'])->where('id', '!=', $job->id)->first();
+        if ($existingJob) {
+            return response()->json(['ok' => false, 'message' => 'Job title is already taken'], 400);
+        }
+
+        $job->title = $validated['title'];
+        $job->description = $validated['description'];
+        $job->location = $validated['location'];
+
+        if (array_key_exists('minimum', $validated) && Schema::hasColumn('Wo_Job', 'minimum')) {
+            $job->setAttribute('minimum', is_null($validated['minimum']) ? 0 : (float) $validated['minimum']);
+        }
+        if (array_key_exists('maximum', $validated) && Schema::hasColumn('Wo_Job', 'maximum')) {
+            $job->setAttribute('maximum', is_null($validated['maximum']) ? 0 : (float) $validated['maximum']);
+        }
+        if (!empty($validated['salary_date']) && Schema::hasColumn('Wo_Job', 'salary_date')) {
+            $job->setAttribute('salary_date', $validated['salary_date']);
+        }
+        if (!empty($validated['currency']) && Schema::hasColumn('Wo_Job', 'currency')) {
+            $job->setAttribute('currency', $validated['currency']);
+        }
+        if ($request->hasFile('image') && Schema::hasColumn('Wo_Job', 'image')) {
+            try {
+                $path = $request->file('image')->store('jobs', 'public');
+                $job->image = $path;
+            } catch (\Exception $e) {
+                // Keep the existing image if the new upload fails.
+            }
+        }
+        if (!is_null($validated['category'] ?? null) && Schema::hasColumn('Wo_Job', 'category')) {
+            $job->setAttribute('category', (int) $validated['category']);
+        }
+        $jobType = $validated['job_type'] ?? $request->input('type');
+        if (!empty($jobType) && Schema::hasColumn('Wo_Job', 'job_type')) {
+            $job->setAttribute('job_type', (string) $jobType);
+        }
+
+        $questionFields = [
+            'question_one', 'question_one_type', 'question_one_answers',
+            'question_two', 'question_two_type', 'question_two_answers',
+            'question_three', 'question_three_type', 'question_three_answers',
+        ];
+        foreach ($questionFields as $field) {
+            if (!Schema::hasColumn('Wo_Job', $field) || !$request->exists($field)) {
+                continue;
+            }
+            $job->setAttribute($field, (string) $request->input($field, ''));
+        }
+
+        $job->save();
+
+        $pageInfo = $this->resolveJobPageInfo($job->page_id ?? null);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Job updated successfully',
+            'data' => [
+                'id' => $job->id,
+                'title' => $job->title,
+                'description' => $job->description,
+                'location' => $job->location,
+                'page_id' => $pageInfo['page_id'] ?? ($job->page_id ?? null),
+                'page' => $pageInfo,
+                'is_owner' => true,
+                'status' => $job->status,
+            ],
+        ]);
+    }
+
     public function show(Request $request, $id): JsonResponse
     {
         // Auth is optional - public jobs can be viewed without auth
@@ -551,9 +663,9 @@ class JobsController extends Controller
             $isApplied = $job->isAppliedByUser($tokenUserId);
         }
         
-        // Check if user is the owner
+        // Check if user is the owner (posted the job) or owns the page
         $ownerUserId = $job->user_id ?? $job->user ?? null;
-        $isOwner = $ownerUserId && (string) $ownerUserId === (string) $tokenUserId;
+        $isOwner = $this->userOwnsJob($job, $tokenUserId);
         
         // Get owner details
         $owner = $this->buildJobOwnerPayload($ownerUserId);
@@ -1053,6 +1165,31 @@ class JobsController extends Controller
         }
 
         return $maps;
+    }
+
+    private function userOwnsJob(Job $job, $userId): bool
+    {
+        if (!$userId) {
+            return false;
+        }
+
+        $ownerUserId = $job->user_id ?? $job->user ?? null;
+        if ($ownerUserId && (string) $ownerUserId === (string) $userId) {
+            return true;
+        }
+
+        $pageId = $job->page_id ?? null;
+        if (!$pageId || !Schema::hasTable('Wo_Pages')) {
+            return false;
+        }
+
+        try {
+            $pageOwnerId = DB::table('Wo_Pages')->where('page_id', $pageId)->value('user_id');
+        } catch (\Throwable $e) {
+            return false;
+        }
+
+        return $pageOwnerId && (string) $pageOwnerId === (string) $userId;
     }
 
     private function resolveJobPageInfo($pageId): ?array
