@@ -379,6 +379,7 @@ class AccountVerificationController extends Controller
 
         // Get user's current verification badge status
         $isVerified = $user->hasVerifiedBadge();
+        $isEmailVerified = $user->isVerified();
         
         // Determine badge type from user table (if verified)
         // Note: You may need to add a 'badge_type' column to Wo_Users table
@@ -392,8 +393,10 @@ class AccountVerificationController extends Controller
             'api_text' => 'success',
             'data' => [
                 'is_verified' => $isVerified,
+                'email_verified' => $isEmailVerified,
                 'verified_badge_at' => $user->verified_badge_at?->toIso8601String(),
                 'current_badge_type' => $currentBadgeType,
+                'has_pending' => $verification && $verification->status === VerificationRequest::STATUS_PENDING,
                 'verification_request' => null,
             ]
         ];
