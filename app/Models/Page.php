@@ -30,6 +30,7 @@ class Page extends Model
         'agreed_to_terms',
         'agreement_accepted_at',
         'gov_registered',
+        'registration_type',
         'active',
     ];
 

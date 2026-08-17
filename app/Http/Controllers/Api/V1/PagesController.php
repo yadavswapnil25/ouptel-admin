@@ -94,6 +94,9 @@ class PagesController extends BaseController
                 'gov_registered' => Schema::hasColumn('Wo_Pages', 'gov_registered')
                     ? $this->isTruthyFlag($page->gov_registered ?? 0)
                     : false,
+                'registration_type' => Schema::hasColumn('Wo_Pages', 'registration_type')
+                    ? ($page->registration_type ?? null)
+                    : null,
                 'avatar' => $page->getAttributes()['avatar'] ?? '',
                 'cover' => $page->getAttributes()['cover'] ?? '',
                 'avatar_url' => $this->getFileUrl($page->getAttributes()['avatar'] ?? ''),
@@ -293,13 +296,8 @@ class PagesController extends BaseController
                 $page->setAttribute('agreement_accepted_at', now());
             }
 
-            if (Schema::hasColumn('Wo_Pages', 'gov_registered')) {
-                $govRegistered = filter_var(
-                    $request->input('gov_registered', $request->input('is_gov_registered', false)),
-                    FILTER_VALIDATE_BOOLEAN,
-                    FILTER_NULL_ON_FAILURE
-                );
-                $page->setAttribute('gov_registered', $govRegistered === true ? 1 : 0);
+            if (Schema::hasColumn('Wo_Pages', 'gov_registered') || Schema::hasColumn('Wo_Pages', 'registration_type')) {
+                $this->applyPageRegistrationFromRequest($request, $page);
             }
 
             // Default: allow visitor posts on new pages (setting UI removed).
@@ -1098,6 +1096,9 @@ class PagesController extends BaseController
                     'gov_registered' => Schema::hasColumn('Wo_Pages', 'gov_registered')
                         ? $this->isTruthyFlag($pageData->gov_registered ?? ($page->gov_registered ?? 0))
                         : false,
+                    'registration_type' => Schema::hasColumn('Wo_Pages', 'registration_type')
+                        ? ($pageData->registration_type ?? ($page->registration_type ?? null))
+                        : null,
                     'active' => $page->active ?? '1',
                     'avatar' => $page->avatar ?? '',
                     'avatar_url' => $this->getFileUrl($page->avatar ?? ''),
@@ -2690,6 +2691,9 @@ class PagesController extends BaseController
             'gov_registered' => Schema::hasColumn('Wo_Pages', 'gov_registered')
                 ? $this->isTruthyFlag($page->gov_registered ?? 0)
                 : false,
+            'registration_type' => Schema::hasColumn('Wo_Pages', 'registration_type')
+                ? ($page->registration_type ?? null)
+                : null,
             'verification_status' => $status,
             'can_request' => $status === 'not_verified' || $status === 'rejected',
             'can_cancel' => $status === 'pending',
@@ -2952,6 +2956,60 @@ class PagesController extends BaseController
         } catch (\Throwable $e) {
             // ignore
         }
+    }
+
+    private function applyPageRegistrationFromRequest(Request $request, Page $page): void
+    {
+        $rawType = $request->input('registration_type');
+        $registrationType = $this->normalizePageRegistrationType($rawType);
+
+        if ($registrationType === null) {
+            $legacyGov = filter_var(
+                $request->input('gov_registered', $request->input('is_gov_registered', false)),
+                FILTER_VALIDATE_BOOLEAN,
+                FILTER_NULL_ON_FAILURE
+            );
+            $registrationType = $legacyGov === true ? 'government_register' : ($legacyGov === false ? 'unregistered' : null);
+        }
+
+        if (Schema::hasColumn('Wo_Pages', 'registration_type') && $registrationType) {
+            $page->setAttribute('registration_type', $registrationType);
+        }
+
+        if (Schema::hasColumn('Wo_Pages', 'gov_registered')) {
+            $page->setAttribute(
+                'gov_registered',
+                $this->isGovEligibleRegistrationType($registrationType) ? 1 : 0
+            );
+        }
+    }
+
+    private function normalizePageRegistrationType(mixed $value): ?string
+    {
+        $type = strtolower(trim((string) $value));
+        $allowed = [
+            'personal_name_page',
+            'government_register',
+            'organization',
+            'government_official',
+            'unregistered',
+        ];
+        if (in_array($type, $allowed, true)) {
+            return $type;
+        }
+        if (in_array($type, ['yes', '1', 'true'], true)) {
+            return 'government_register';
+        }
+        if (in_array($type, ['no', '0', 'false'], true)) {
+            return 'unregistered';
+        }
+
+        return null;
+    }
+
+    private function isGovEligibleRegistrationType(?string $type): bool
+    {
+        return in_array($type, ['government_register', 'government_official'], true);
     }
 
     private function isPageVerified(mixed $verified): bool
