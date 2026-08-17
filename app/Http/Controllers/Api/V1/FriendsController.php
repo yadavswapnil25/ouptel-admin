@@ -1191,56 +1191,45 @@ class FriendsController extends Controller
         try {
             DB::beginTransaction();
 
-            // Check if following relationship exists (matching old API: Wo_IsFollowing or Wo_IsFollowRequested)
-            $isFollowing = DB::table('Wo_Followers')
-                ->where('follower_id', $followerId)
-                ->where('following_id', $followingId)
-                ->where('active', '1')
-                ->exists();
+            // Unfriend = remove Wo_Friends (accepted or pending). Follow is optional cleanup.
+            $friendRemoved = $this->deleteWoFriendsBetween($followerId, $followingId) > 0;
 
-            $isFollowRequested = DB::table('Wo_Followers')
-                ->where('follower_id', $followerId)
-                ->where('following_id', $followingId)
-                ->where('active', '0')
-                ->exists();
-
-            if (!$isFollowing && !$isFollowRequested) {
-                return response()->json([
-                    'api_status' => 400,
-                    'errors' => [
-                        'error_id' => 6,
-                        'error_text' => 'Not following this user'
-                    ]
-                ], 404);
-            }
-
-            // Delete follow relationship (matching old API: Wo_DeleteFollow)
-            $deleted = DB::table('Wo_Followers')
-                ->where('follower_id', $followerId)
-                ->where('following_id', $followingId)
+            $followDeleted = DB::table('Wo_Followers')
+                ->where(function ($query) use ($followerId, $followingId) {
+                    $query->where('follower_id', $followerId)
+                        ->where('following_id', $followingId);
+                })
+                ->orWhere(function ($query) use ($followerId, $followingId) {
+                    $query->where('follower_id', $followingId)
+                        ->where('following_id', $followerId);
+                })
                 ->delete();
 
-            if ($deleted) {
-                // Update follow counts
+            if ($followDeleted > 0) {
                 $this->updateFollowCounts($followerId, $followingId);
+            }
 
+            $this->removeFriendRequestNotifications((string) $followerId, (string) $followingId);
+            $this->removeFriendRequestNotifications((string) $followingId, (string) $followerId);
+
+            if ($friendRemoved || $followDeleted > 0) {
                 DB::commit();
 
-                // Return response matching old API format
                 return response()->json([
                     'api_status' => 200,
-                    'message' => 'Friend removed successfully'
+                    'message' => 'Friend removed successfully',
                 ]);
-            } else {
-                DB::rollBack();
-                return response()->json([
-                    'api_status' => 400,
-                    'errors' => [
-                        'error_id' => 500,
-                        'error_text' => 'Failed to remove friend'
-                    ]
-                ], 500);
             }
+
+            DB::rollBack();
+
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 6,
+                    'error_text' => 'Not friends with this user',
+                ],
+            ], 404);
 
         } catch (\Exception $e) {
             DB::rollBack();
@@ -2748,6 +2737,46 @@ class FriendsController extends Controller
         }
 
         return false;
+    }
+
+    /**
+     * Remove all Wo_Friends rows between two users (any status / direction).
+     */
+    private function deleteWoFriendsBetween(string $userId1, string $userId2): int
+    {
+        if (! Schema::hasTable('Wo_Friends')) {
+            return 0;
+        }
+
+        try {
+            if (Schema::hasColumn('Wo_Friends', 'user_id') && Schema::hasColumn('Wo_Friends', 'friend_id')) {
+                return DB::table('Wo_Friends')
+                    ->where(function ($query) use ($userId1, $userId2) {
+                        $query->where(function ($q) use ($userId1, $userId2) {
+                            $q->where('user_id', $userId1)->where('friend_id', $userId2);
+                        })->orWhere(function ($q) use ($userId1, $userId2) {
+                            $q->where('user_id', $userId2)->where('friend_id', $userId1);
+                        });
+                    })
+                    ->delete();
+            }
+
+            if (Schema::hasColumn('Wo_Friends', 'from_id') && Schema::hasColumn('Wo_Friends', 'to_id')) {
+                return DB::table('Wo_Friends')
+                    ->where(function ($query) use ($userId1, $userId2) {
+                        $query->where(function ($q) use ($userId1, $userId2) {
+                            $q->where('from_id', $userId1)->where('to_id', $userId2);
+                        })->orWhere(function ($q) use ($userId1, $userId2) {
+                            $q->where('from_id', $userId2)->where('to_id', $userId1);
+                        });
+                    })
+                    ->delete();
+            }
+        } catch (\Exception $e) {
+            return 0;
+        }
+
+        return 0;
     }
 
     private function removeFriendRequestNotifications(string $notifierId, string $recipientId): void
