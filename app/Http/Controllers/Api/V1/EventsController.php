@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Models\Event;
 use App\Models\User;
+use App\Services\FriendActivityNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
@@ -255,6 +256,8 @@ class EventsController extends BaseController
         }
         
         $event->save();
+
+        FriendActivityNotificationService::notifyFriendsOfNewEvent($event, (string) $userId);
 
         return response()->json([
             'ok' => true,

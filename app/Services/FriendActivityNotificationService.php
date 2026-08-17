@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Event;
 use App\Models\Post;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -59,6 +60,48 @@ class FriendActivityNotificationService
             );
         } catch (\Throwable $e) {
             Log::warning('notifyFriendsOfNewPost failed: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Notify the author's friends about a newly published event.
+     */
+    public static function notifyFriendsOfNewEvent(Event $event, string $authorId): void
+    {
+        try {
+            if (!Schema::hasTable('Wo_Notifications') || !self::isGlobalNotifyEnabled('notify_new_event')) {
+                return;
+            }
+
+            if (!(bool) ($event->getAttributes()['published'] ?? true)) {
+                return;
+            }
+
+            $friendIds = self::getFriendIds($authorId);
+            if ($friendIds === []) {
+                return;
+            }
+
+            $friendIds = self::filterRecipientsAllowingAuthorNotifications($authorId, $friendIds);
+            if ($friendIds === []) {
+                return;
+            }
+
+            self::insertFriendNotifications(
+                notifierId: (int) $authorId,
+                recipientIds: $friendIds,
+                type: 'created_event',
+                url: '/events/' . $event->id,
+                extra: [
+                    'post_id' => 0,
+                    'page_id' => 0,
+                    'group_id' => 0,
+                    'event_id' => (int) $event->id,
+                    'text' => self::truncateText((string) ($event->name ?? '')),
+                ],
+            );
+        } catch (\Throwable $e) {
+            Log::warning('notifyFriendsOfNewEvent failed: ' . $e->getMessage());
         }
     }
 

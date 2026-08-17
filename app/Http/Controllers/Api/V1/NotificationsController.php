@@ -823,6 +823,19 @@ class NotificationsController extends Controller
                 $notification['type_text'] = 'reacted to your story';
                 $notification['icon'] = 'thumbs-up';
                 break;
+            case 'created_event':
+                $eventName = 'a new event';
+                if (!empty($notification['event_id'])) {
+                    $eventRow = DB::table('Wo_Events')->where('id', $notification['event_id'])->value('name');
+                    if ($eventRow) {
+                        $eventName = $eventRow;
+                    }
+                } elseif (!empty($notification['text'])) {
+                    $eventName = $notification['text'];
+                }
+                $notification['type_text'] = 'created ' . $eventName;
+                $notification['icon'] = 'calendar';
+                break;
             case 'interested_event':
                 $eventName = 'your event';
                 if (!empty($notification['event_id'])) {
