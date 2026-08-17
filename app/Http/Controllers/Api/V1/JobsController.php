@@ -16,7 +16,6 @@ class JobsController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        // Auth via Wo_AppsSessions
         $authHeader = $request->header('Authorization');
         if (!$authHeader || !str_starts_with($authHeader, 'Bearer ')) {
             return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
@@ -27,179 +26,139 @@ class JobsController extends Controller
             return response()->json(['ok' => false, 'message' => 'Invalid token'], 401);
         }
 
-        $type = $request->query('type', 'all');
+        $type = strtolower(trim((string) $request->query('type', 'all')));
+        if ($type === 'applied') {
+            $type = 'applied_jobs';
+        }
+
         $perPage = (int) ($request->query('per_page', 12));
         $perPage = max(1, min($perPage, 50));
 
-        $query = Job::query();
+        $query = Job::query()->select($this->jobListColumns());
+        $tokenUserIdStr = (string) $tokenUserId;
+        $tokenUserIdInt = (int) $tokenUserId;
+
+        $applyMeta = $this->jobApplyTableMeta();
+        $appliedJobIds = [];
+        if ($applyMeta) {
+            $appliedJobIds = DB::table($applyMeta['table'])
+                ->where(function ($q) use ($applyMeta, $tokenUserIdStr, $tokenUserIdInt) {
+                    $q->where($applyMeta['user_id'], $tokenUserIdStr)
+                      ->orWhere($applyMeta['user_id'], $tokenUserIdInt);
+                })
+                ->pluck($applyMeta['job_id'])
+                ->map(fn ($id) => (int) $id)
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+        }
 
         if ($type === 'my_jobs') {
-            // Filter jobs by the authenticated user
-            // Check if user_id or user column exists
-            // Handle both string and integer types
-            $tokenUserIdStr = (string) $tokenUserId;
-            $tokenUserIdInt = (int) $tokenUserId;
-            
             if (Schema::hasColumn('Wo_Job', 'user_id')) {
-                // Try both string and integer matching (handle type mismatch)
                 $query->where(function ($q) use ($tokenUserIdStr, $tokenUserIdInt) {
                     $q->where('user_id', $tokenUserIdStr)
                       ->orWhere('user_id', $tokenUserIdInt);
                 });
             } elseif (Schema::hasColumn('Wo_Job', 'user')) {
-                // Try both string and integer matching (handle type mismatch)
                 $query->where(function ($q) use ($tokenUserIdStr, $tokenUserIdInt) {
                     $q->where('user', $tokenUserIdStr)
                       ->orWhere('user', $tokenUserIdInt);
                 });
             } else {
-                // If neither column exists, return empty results
                 $query->where('id', 0);
             }
         } elseif ($type === 'applied_jobs') {
-            // Filter jobs that the user has applied to
-            if (Schema::hasTable('Wo_Job_Apply') || Schema::hasTable('Wo_JobApplications')) {
-                $applyTable = Schema::hasTable('Wo_Job_Apply') ? 'Wo_Job_Apply' : 'Wo_JobApplications';
-                $jobIdColumn = Schema::hasColumn($applyTable, 'job_id') ? 'job_id' : 'job';
-                $userIdColumn = Schema::hasColumn($applyTable, 'user_id') ? 'user_id' : 'user';
-                
-                $appliedJobIds = DB::table($applyTable)
-                    ->where($userIdColumn, $tokenUserId)
-                    ->pluck($jobIdColumn)
-                    ->toArray();
-                
-                if (!empty($appliedJobIds)) {
-                    $query->whereIn('id', $appliedJobIds);
-                } else {
-                    // User hasn't applied to any jobs
-                    $query->where('id', 0);
-                }
-            } else {
-                // Table doesn't exist, return empty results
+            if ($appliedJobIds === []) {
                 $query->where('id', 0);
+            } else {
+                $query->whereIn('id', $appliedJobIds);
             }
         } elseif ($type === 'saved_jobs') {
-            // Note: Wo_JobApplication table might not exist
-            // Return empty results for now
-            $query->where('id', 0); // This will return no results
-        } else {
-            // Return all jobs
+            $query->where('id', 0);
+        } elseif ($appliedJobIds !== []) {
+            $query->whereNotIn('id', $appliedJobIds);
         }
 
-        // Filter by page_id if provided
         if ($request->filled('page_id') && Schema::hasColumn('Wo_Job', 'page_id')) {
             $query->where('page_id', (int) $request->query('page_id'));
         }
 
-        // Filter by job_type if column exists
         if ($request->filled('job_type') && Schema::hasColumn('Wo_Job', 'job_type')) {
             $query->where('job_type', $request->query('job_type'));
         }
 
-        // Filter by category if column exists
         if ($request->filled('category_id') && Schema::hasColumn('Wo_Job', 'category')) {
             $query->where('category', (int) $request->query('category_id'));
         }
-
-        // Note: category column might not exist in Wo_Jobs table
-        // if ($request->filled('category')) {
-        //     $query->where('category_id', $request->query('category'));
-        // }
-
-        // Note: type column might not exist in Wo_Job table
-        // if ($request->filled('type')) {
-        //     $query->where('type', (string) $request->query('type'));
-        // }
 
         if ($request->filled('location')) {
             $query->where('location', 'like', '%' . $request->query('location') . '%');
         }
 
-        // Note: salary column doesn't exist in Wo_Job table
-        // if ($request->filled('salary_min')) {
-        //     $query->where('salary', '>=', $request->query('salary_min'));
-        // }
-
-        // if ($request->filled('salary_max')) {
-        //     $query->where('salary', '<=', $request->query('salary_max'));
-        // }
-
         if ($request->filled('term')) {
-            $like = '%' . str_replace('%', '\\%', $request->query('term')) . '%';
-            $query->where(function ($q) use ($like) {
+            $like = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $request->query('term')) . '%';
+            $canSearchPages = Schema::hasTable('Wo_Pages') && Schema::hasColumn('Wo_Job', 'page_id');
+            $query->where(function ($q) use ($like, $canSearchPages) {
                 $q->where('title', 'like', $like)
-                  ->orWhere('description', 'like', $like);
-                // Note: company column doesn't exist in Wo_Job table
+                  ->orWhere('location', 'like', $like);
+                if ($canSearchPages) {
+                    $q->orWhereExists(function ($sub) use ($like) {
+                        $sub->selectRaw('1')
+                            ->from('Wo_Pages')
+                            ->whereColumn('Wo_Pages.page_id', 'Wo_Job.page_id')
+                            ->where(function ($pageQuery) use ($like) {
+                                $pageQuery->where('page_title', 'like', $like)
+                                    ->orWhere('page_name', 'like', $like);
+                            });
+                    });
+                }
             });
         }
 
         $paginator = $query->orderByDesc('id')->paginate($perPage);
+        $jobs = $paginator->getCollection();
 
-        $data = $paginator->getCollection()->map(function (Job $job) use ($tokenUserId) {
-            // Get owner user_id from job attributes
+        $pageIds = $jobs->map(fn (Job $job) => (int) ($job->page_id ?? 0))->filter()->unique()->values()->all();
+        $pagesById = $this->resolveJobPagesByIds($pageIds);
+
+        $listCols = $this->jobListColumns();
+        $hasImageCol = in_array('image', $listCols, true);
+        $hasSalaryDate = in_array('salary_date', $listCols, true);
+        $hasCurrency = in_array('currency', $listCols, true);
+        $hasJobType = in_array('job_type', $listCols, true);
+        $categoryMaps = $this->categoryMap();
+        $appliedLookup = array_fill_keys($appliedJobIds, true);
+
+        $data = $jobs->map(function (Job $job) use (
+            $tokenUserIdStr,
+            $pagesById,
+            $hasImageCol,
+            $hasSalaryDate,
+            $hasCurrency,
+            $hasJobType,
+            $categoryMaps,
+            $appliedLookup
+        ) {
             $ownerUserId = $job->user_id ?? $job->user ?? null;
-            $isOwner = $ownerUserId && (string) $ownerUserId === (string) $tokenUserId;
-            
-            // Get owner details if user_id exists
-            $owner = $this->buildJobOwnerPayload($ownerUserId);
+            $pageInfo = $pagesById[(int) ($job->page_id ?? 0)] ?? null;
+            $pageOwnerId = $pageInfo['user_id'] ?? null;
+            $publicPage = $pageInfo ? array_diff_key($pageInfo, ['user_id' => true]) : null;
 
-            // Determine if current authenticated user has applied to this job
-            $isApplied = false;
-            if ($tokenUserId) {
-                // Check both possible application table/column names (WoWonder compatibility)
-                if (Schema::hasTable('Wo_Job_Apply')) {
-                    $applyTable = 'Wo_Job_Apply';
-                } elseif (Schema::hasTable('Wo_JobApplications')) {
-                    $applyTable = 'Wo_JobApplications';
-                } else {
-                    $applyTable = null;
-                }
+            $isOwner = ($ownerUserId && (string) $ownerUserId === $tokenUserIdStr)
+                || ($pageOwnerId && (string) $pageOwnerId === $tokenUserIdStr);
 
-                if ($applyTable) {
-                    $jobIdColumn = Schema::hasColumn($applyTable, 'job_id') ? 'job_id' : 'job';
-                    $userIdColumn = Schema::hasColumn($applyTable, 'user_id') ? 'user_id' : 'user';
-
-                    $userIdStr = (string) $tokenUserId;
-                    $isApplied = DB::table($applyTable)
-                        ->where($jobIdColumn, $job->id)
-                        ->where(function ($query) use ($userIdColumn, $userIdStr) {
-                            $query->where($userIdColumn, $userIdStr)
-                                  ->orWhere($userIdColumn, (int) $userIdStr);
-                        })
-                        ->exists();
-                }
-            }
-            
             $image = null;
-            if (Schema::hasColumn('Wo_Job', 'image') && $job->image) {
+            if ($hasImageCol && $job->image) {
                 $image = (str_starts_with($job->image, 'http://') || str_starts_with($job->image, 'https://'))
                     ? $job->image
                     : asset('storage/' . $job->image);
             }
 
-            // Salary information from minimum/maximum/salary_date/currency columns (if they exist)
-            $salaryPeriod = null;
-            $currency = null;
-            if (Schema::hasColumn('Wo_Job', 'salary_date')) {
-                $salaryPeriod = $job->attributes['salary_date'] ?? null;
-            }
-            if (Schema::hasColumn('Wo_Job', 'currency')) {
-                $currency = $job->attributes['currency'] ?? null;
-            }
-
-            // Job type from job_type column if it exists
-            $jobType = 'full_time';
-            if (Schema::hasColumn('Wo_Job', 'job_type')) {
-                $jobType = (string) ($job->job_type ?? 'full_time');
-            }
-
-            // Wo_Job.category may store either the job category ID or the lang_key;
-            // resolve to the English label via Wo_Job_Categories + Wo_Langs.
             $rawCategory = $job->category ?? null;
             $categoryId = $rawCategory !== null && $rawCategory !== '' ? (int) $rawCategory : null;
             $categoryName = null;
             if ($rawCategory !== null && $rawCategory !== '') {
-                $categoryMaps = $this->categoryMap();
                 if ($categoryId && isset($categoryMaps['by_id'][$categoryId])) {
                     $categoryName = $categoryMaps['by_id'][$categoryId];
                 } elseif (isset($categoryMaps['by_lang_key'][(string) $rawCategory])) {
@@ -207,30 +166,31 @@ class JobsController extends Controller
                 }
             }
 
-            $pageInfo = $this->resolveJobPageInfo($job->page_id ?? null);
+            $description = trim((string) preg_replace('/\s+/', ' ', strip_tags((string) ($job->description ?? ''))));
+            if (mb_strlen($description) > 180) {
+                $description = mb_substr($description, 0, 177) . '...';
+            }
 
             return [
                 'id' => $job->id,
                 'title' => $job->title,
-                'description' => $job->description,
+                'description' => $description,
                 'image' => $image,
                 'location' => $job->location,
                 'min_salary' => $job->minimum ?? 0,
                 'max_salary' => $job->maximum ?? 0,
-                'salary_period' => $salaryPeriod,
-                'currency' => $currency,
-                'job_type' => $jobType,
+                'salary_period' => $hasSalaryDate ? ($job->attributes['salary_date'] ?? null) : null,
+                'currency' => $hasCurrency ? ($job->attributes['currency'] ?? null) : null,
+                'job_type' => $hasJobType ? (string) ($job->job_type ?? 'full_time') : 'full_time',
                 'category_id' => $job->category ?? null,
                 'category_name' => $categoryName,
                 'status' => $job->status,
-                'applications_count' => $job->applications_count,
-                'is_applied' => $isApplied,
+                'is_applied' => isset($appliedLookup[(int) $job->id]),
                 'is_owner' => $isOwner,
-                'owner' => $owner,
-                'page_id' => $pageInfo['page_id'] ?? ($job->page_id ?? null),
-                'page' => $pageInfo,
-                'company_name' => $pageInfo['page_title'] ?? null,
-                'company_logo' => $pageInfo['avatar_url'] ?? null,
+                'page_id' => $publicPage['page_id'] ?? ($job->page_id ?? null),
+                'page' => $publicPage,
+                'company_name' => $publicPage['page_title'] ?? null,
+                'company_logo' => $publicPage['avatar_url'] ?? null,
                 'created_at' => $job->time ? date('c', $job->time_as_timestamp) : null,
             ];
         });
@@ -1192,31 +1152,95 @@ class JobsController extends Controller
         return $pageOwnerId && (string) $pageOwnerId === (string) $userId;
     }
 
-    private function resolveJobPageInfo($pageId): ?array
+    private function jobListColumns(): array
     {
-        if (empty($pageId) || !Schema::hasTable('Wo_Pages')) {
-            return null;
+        static $columns = null;
+        if ($columns !== null) {
+            return $columns;
+        }
+
+        $columns = ['id', 'title', 'description', 'location', 'time'];
+        foreach ([
+            'page_id',
+            'user_id',
+            'user',
+            'minimum',
+            'maximum',
+            'category',
+            'status',
+            'image',
+            'salary_date',
+            'currency',
+            'job_type',
+        ] as $column) {
+            if (Schema::hasColumn('Wo_Job', $column)) {
+                $columns[] = $column;
+            }
+        }
+
+        return $columns;
+    }
+
+    private function jobApplyTableMeta(): ?array
+    {
+        static $meta = false;
+        if ($meta !== false) {
+            return $meta;
+        }
+
+        if (Schema::hasTable('Wo_Job_Apply')) {
+            $table = 'Wo_Job_Apply';
+        } elseif (Schema::hasTable('Wo_JobApplications')) {
+            $table = 'Wo_JobApplications';
+        } else {
+            $meta = null;
+            return $meta;
+        }
+
+        $meta = [
+            'table' => $table,
+            'job_id' => Schema::hasColumn($table, 'job_id') ? 'job_id' : 'job',
+            'user_id' => Schema::hasColumn($table, 'user_id') ? 'user_id' : 'user',
+        ];
+
+        return $meta;
+    }
+
+    private function resolveJobPagesByIds(array $pageIds): array
+    {
+        if ($pageIds === [] || !Schema::hasTable('Wo_Pages')) {
+            return [];
         }
 
         try {
-            $page = DB::table('Wo_Pages')->where('page_id', $pageId)->first();
+            $pages = DB::table('Wo_Pages')->whereIn('page_id', $pageIds)->get();
         } catch (\Throwable $e) {
-            return null;
+            return [];
         }
 
-        if (!$page) {
-            return null;
+        $mapped = [];
+        foreach ($pages as $page) {
+            $payload = $this->mapJobPageRow($page);
+            $mapped[(int) $payload['page_id']] = $payload;
         }
 
+        return $mapped;
+    }
+
+    private function mapJobPageRow(object $page): array
+    {
         $verifiedRaw = $page->verified ?? 0;
         $isVerified = $verifiedRaw === 1
             || $verifiedRaw === '1'
             || $verifiedRaw === true
             || $verifiedRaw === 'true';
 
-        $govRegisteredRaw = Schema::hasColumn('Wo_Pages', 'gov_registered')
-            ? ($page->gov_registered ?? 0)
-            : 0;
+        static $hasGovRegistered = null;
+        if ($hasGovRegistered === null) {
+            $hasGovRegistered = Schema::hasColumn('Wo_Pages', 'gov_registered');
+        }
+
+        $govRegisteredRaw = $hasGovRegistered ? ($page->gov_registered ?? 0) : 0;
         $isGovRegistered = $govRegisteredRaw === 1
             || $govRegisteredRaw === '1'
             || $govRegisteredRaw === true
@@ -1235,12 +1259,35 @@ class JobsController extends Controller
 
         return [
             'page_id' => (int) $page->page_id,
+            'user_id' => $page->user_id ?? null,
             'page_name' => $pageName,
             'page_title' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
             'verified' => $isVerified,
             'gov_registered' => $isGovRegistered,
             'avatar_url' => $avatarUrl,
         ];
+    }
+
+    private function resolveJobPageInfo($pageId): ?array
+    {
+        if (empty($pageId) || !Schema::hasTable('Wo_Pages')) {
+            return null;
+        }
+
+        try {
+            $page = DB::table('Wo_Pages')->where('page_id', $pageId)->first();
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        if (!$page) {
+            return null;
+        }
+
+        $payload = $this->mapJobPageRow($page);
+        unset($payload['user_id']);
+
+        return $payload;
     }
 
     private function buildJobOwnerPayload($ownerUserId): array
