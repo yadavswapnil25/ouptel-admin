@@ -544,6 +544,13 @@ class EventsController extends BaseController
             ->where('user_id', $userId)
             ->exists();
 
+        if (!$isGoing) {
+            $mobileError = $this->mobileRequiredResponse((int) $userId);
+            if ($mobileError) {
+                return $mobileError;
+            }
+        }
+
         $goStatus = 'invalid';
 
         if ($isGoing) {
@@ -645,6 +652,13 @@ class EventsController extends BaseController
             ->where('user_id', $userId)
             ->exists();
 
+        if (!$isInterested) {
+            $mobileError = $this->mobileRequiredResponse((int) $userId);
+            if ($mobileError) {
+                return $mobileError;
+            }
+        }
+
         if ($isInterested) {
             DB::table('Wo_Einterested')
                 ->where('event_id', $eventId)
@@ -716,6 +730,50 @@ class EventsController extends BaseController
         }
 
         return $payload;
+    }
+
+    private function userHasMobileNumber(int $userId): bool
+    {
+        $query = DB::table('Wo_Users')->where('user_id', $userId);
+        $columns = ['phone_number'];
+        if (Schema::hasColumn('Wo_Users', 'phone')) {
+            $columns[] = 'phone';
+        }
+        if (Schema::hasColumn('Wo_Users', 'mobile')) {
+            $columns[] = 'mobile';
+        }
+        $user = $query->first($columns);
+        if (!$user) {
+            return false;
+        }
+
+        foreach ($columns as $field) {
+            if (trim((string) ($user->{$field} ?? '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function mobileRequiredResponse(int $userId): ?JsonResponse
+    {
+        if ($this->userHasMobileNumber($userId)) {
+            return null;
+        }
+
+        $message = 'Update your mobile number, then you can join any event.';
+
+        return response()->json([
+            'ok' => false,
+            'api_status' => 400,
+            'code' => 'mobile_required',
+            'message' => $message,
+            'errors' => [
+                'error_id' => 'mobile_required',
+                'error_text' => $message,
+            ],
+        ], 400);
     }
 
     private function notifyEventHost(Event $event, int $actorUserId, string $type): void
