@@ -9,6 +9,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Form;
 use Filament\Pages\Page;
 use Filament\Actions\Action;
@@ -16,6 +17,7 @@ use Filament\Notifications\Notification;
 use App\Models\Setting;
 use App\Helpers\SponsoredAdsHelper;
 use App\Helpers\BlogAdsHelper;
+use App\Helpers\SeasonalAdsHelper;
 use App\Filament\Admin\Concerns\HasPageAccess;
 
 class GeneralSettings extends Page
@@ -59,6 +61,8 @@ class GeneralSettings extends Page
             'sidebar_ad_image' => Setting::get('sidebar_ad_image', ''),
             'sidebar_ad_image_upload' => Setting::get('sidebar_ad_image_upload', ''),
             'sidebar_ad_url' => Setting::get('sidebar_ad_url', ''),
+            'seasonal_ads_enabled' => Setting::get('seasonal_ads_enabled', '1') !== '0',
+            'seasonal_ad_items' => SeasonalAdsHelper::loadForForm(),
             'sponsored_items' => SponsoredAdsHelper::loadForForm(),
             'blog_ad_items' => BlogAdsHelper::loadForForm(),
         ]);
@@ -205,7 +209,70 @@ class GeneralSettings extends Page
                     ])
                     ->columns(1),
 
+                Section::make('Seasonal Advertisement')
+                    ->description('Managed ads for the profile left sidebar (above Your Groups) and the home sidebar. The first matching active ad is shown. If none match, Sidebar Advertisement below is used.')
+                    ->schema([
+                        Toggle::make('seasonal_ads_enabled')
+                            ->label('Enable Seasonal Ads')
+                            ->helperText('Turn off to hide all seasonal ads without deleting them.'),
+                        Repeater::make('seasonal_ad_items')
+                            ->label('Seasonal Ads')
+                            ->schema([
+                                Toggle::make('enabled')
+                                    ->label('Active')
+                                    ->default(true)
+                                    ->columnSpan(2),
+                                TextInput::make('name')
+                                    ->label('Ad Name')
+                                    ->placeholder('Summer Sale')
+                                    ->columnSpan(1),
+                                TextInput::make('url')
+                                    ->label('Click URL')
+                                    ->url()
+                                    ->placeholder('https://example.com')
+                                    ->columnSpan(1),
+                                FileUpload::make('image_upload')
+                                    ->label('Image Upload')
+                                    ->image()
+                                    ->disk('public')
+                                    ->directory('ads/seasonal')
+                                    ->visibility('public')
+                                    ->columnSpan(1),
+                                TextInput::make('image_url')
+                                    ->label('Image URL (fallback)')
+                                    ->placeholder('https://example.com/seasonal.jpg')
+                                    ->helperText('Used if no uploaded image is set.')
+                                    ->columnSpan(1),
+                                Toggle::make('show_on_profile')
+                                    ->label('Show on Profile')
+                                    ->default(true)
+                                    ->helperText('Profile left sidebar, above Your Groups.')
+                                    ->columnSpan(1),
+                                Toggle::make('show_on_home')
+                                    ->label('Show on Home')
+                                    ->default(true)
+                                    ->helperText('Home page left sidebar advertisement box.')
+                                    ->columnSpan(1),
+                                DatePicker::make('start_date')
+                                    ->label('Start Date (optional)')
+                                    ->native(false)
+                                    ->columnSpan(1),
+                                DatePicker::make('end_date')
+                                    ->label('End Date (optional)')
+                                    ->native(false)
+                                    ->columnSpan(1),
+                            ])
+                            ->columns(2)
+                            ->defaultItems(0)
+                            ->addActionLabel('Add seasonal ad')
+                            ->reorderable()
+                            ->collapsible()
+                            ->itemLabel(fn (array $state): ?string => $state['name'] ?? null),
+                    ])
+                    ->columns(1),
+
                 Section::make('Sidebar Advertisement')
+                    ->description('Fallback banner used when no seasonal ad matches the page.')
                     ->schema([
                         FileUpload::make('sidebar_ad_image_upload')
                             ->label('Upload Sidebar Ad Image')
@@ -346,6 +413,15 @@ class GeneralSettings extends Page
             if (array_key_exists('blog_ad_items', $data)) {
                 BlogAdsHelper::saveFromForm(is_array($data['blog_ad_items']) ? $data['blog_ad_items'] : []);
                 unset($data['blog_ad_items']);
+            }
+
+            if (array_key_exists('seasonal_ad_items', $data)) {
+                SeasonalAdsHelper::saveFromForm(is_array($data['seasonal_ad_items']) ? $data['seasonal_ad_items'] : []);
+                unset($data['seasonal_ad_items']);
+            }
+
+            if (array_key_exists('sidebar_ad_image_upload', $data)) {
+                $data['sidebar_ad_image_upload'] = SeasonalAdsHelper::normalizeUploadPath($data['sidebar_ad_image_upload']);
             }
 
             foreach ($data as $name => $value) {

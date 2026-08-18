@@ -507,6 +507,7 @@ Route::get('/hashtags/{hashtag}/posts', [HashtagController::class, 'getHashtagPo
 
 // Ads routes
 Route::get('/ads/sidebar', [AdsController::class, 'sidebar']);
+Route::get('/ads/seasonal', [AdsController::class, 'seasonal']);
 Route::get('/ads/sponsored', [AdsController::class, 'sponsored']);
 Route::get('/ads/blog', [AdsController::class, 'blog']);
 

@@ -4,9 +4,11 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Helpers\SponsoredAdsHelper;
 use App\Helpers\BlogAdsHelper;
+use App\Helpers\SeasonalAdsHelper;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -14,14 +16,34 @@ class AdsController extends Controller
 {
     /**
      * Return left sidebar ad config for web clients.
+     * Prefers an active seasonal ad for the requested placement.
      */
-    public function sidebar(): JsonResponse
+    public function sidebar(Request $request): JsonResponse
     {
         try {
+            $placement = $this->resolvePlacement($request->query('placement'));
+            $seasonal = SeasonalAdsHelper::firstForPlacement($placement);
+            if ($seasonal !== []) {
+                return response()->json([
+                    'api_status' => '200',
+                    'api_text' => 'success',
+                    'api_version' => '1.0',
+                    'data' => [
+                        'placement' => $placement,
+                        'source' => 'seasonal',
+                        'name' => $seasonal['name'] ?? 'Advertisement',
+                        'image_url' => $seasonal['image_url'] ?? '',
+                        'link_url' => $seasonal['url'] ?? '#',
+                    ],
+                ]);
+            }
+
             $config = DB::table('Wo_Config')->pluck('value', 'name');
             // Filament settings UI writes to Setting model keys.
             $settings = [
-                'sidebar_ad_image_upload' => Setting::get('sidebar_ad_image_upload', ''),
+                'sidebar_ad_image_upload' => SeasonalAdsHelper::normalizeUploadPath(
+                    Setting::get('sidebar_ad_image_upload', '')
+                ),
                 'sidebar_ad_image' => Setting::get('sidebar_ad_image', ''),
                 'sidebar_ad_url' => Setting::get('sidebar_ad_url', ''),
             ];
@@ -35,7 +57,7 @@ class AdsController extends Controller
                 'ads_image',
                 'sidebar_ad',
             ]);
-            if ($imageUrl === '' && !empty($settings['sidebar_ad_image_upload'])) {
+            if ($imageUrl === '' && $settings['sidebar_ad_image_upload'] !== '') {
                 $imageUrl = $settings['sidebar_ad_image_upload'];
             }
             if ($imageUrl === '' && !empty($settings['sidebar_ad_image'])) {
@@ -60,7 +82,8 @@ class AdsController extends Controller
                 'api_text' => 'success',
                 'api_version' => '1.0',
                 'data' => [
-                    'placement' => 'left_sidebar',
+                    'placement' => $placement,
+                    'source' => 'sidebar',
                     'image_url' => $imageUrl,
                     'link_url' => $linkUrl,
                 ],
@@ -106,6 +129,34 @@ class AdsController extends Controller
     }
 
     /**
+     * Return active seasonal ads for a placement (profile or home).
+     */
+    public function seasonal(Request $request): JsonResponse
+    {
+        try {
+            $placement = $this->resolvePlacement($request->query('placement', 'profile'));
+            $items = SeasonalAdsHelper::getForApi($placement);
+
+            return response()->json([
+                'api_status' => '200',
+                'api_text' => 'success',
+                'api_version' => '1.0',
+                'data' => $items,
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'api_status' => '500',
+                'api_text' => 'failed',
+                'api_version' => '1.0',
+                'errors' => [
+                    'error_id' => 'seasonal_ads_500',
+                    'error_text' => 'Failed to load seasonal advertisements.',
+                ],
+            ], 500);
+        }
+    }
+
+    /**
      * Return blog page advertisement items (multiple).
      */
     public function blog(): JsonResponse
@@ -130,6 +181,11 @@ class AdsController extends Controller
                 ],
             ], 500);
         }
+    }
+
+    private function resolvePlacement(mixed $placement): string
+    {
+        return $placement === 'profile' ? 'profile' : 'home';
     }
 
     /**
