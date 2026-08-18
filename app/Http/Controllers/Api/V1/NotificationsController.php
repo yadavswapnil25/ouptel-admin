@@ -833,7 +833,7 @@ class NotificationsController extends Controller
                 } elseif (!empty($notification['text'])) {
                     $eventName = $notification['text'];
                 }
-                $notification['type_text'] = 'created ' . $eventName;
+                $notification['type_text'] = 'created New Event ' . $eventName;
                 $notification['icon'] = 'calendar';
                 break;
             case 'interested_event':
