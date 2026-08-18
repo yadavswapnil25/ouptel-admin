@@ -111,6 +111,7 @@ class EventsController extends BaseController
             'status' => $event->status_text,
             'is_going' => $isGoing,
             'is_interested' => $isInterested,
+            'is_owner' => $userId !== null && (int) $event->poster_id === (int) $userId,
             'counts' => [
                 'going' => $event->going_count,
                 'interested' => $event->interested_count,
@@ -440,6 +441,45 @@ class EventsController extends BaseController
         $data['is_owner'] = $currentUserId !== null && (int) $event->poster_id === (int) $currentUserId;
 
         return response()->json(['data' => $data]);
+    }
+
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        $userId = $this->resolveUserId($request);
+        if (!$userId) {
+            return response()->json(['ok' => false, 'message' => 'Unauthorized'], 401);
+        }
+
+        $event = Event::find($id);
+        if (!$event) {
+            return response()->json(['ok' => false, 'message' => 'Event not found'], 404);
+        }
+
+        if ((int) $event->poster_id !== (int) $userId) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Only the event owner can delete this event',
+            ], 403);
+        }
+
+        try {
+            DB::transaction(function () use ($event) {
+                $this->deleteRelatedEventRows((int) $event->id);
+                $event->delete();
+            });
+        } catch (\Exception $e) {
+            Log::warning('Failed to delete event: ' . $e->getMessage(), [
+                'event_id' => $id,
+                'user_id' => $userId,
+            ]);
+
+            return response()->json([
+                'ok' => false,
+                'message' => 'Unable to delete this event. Please try again.',
+            ], 500);
+        }
+
+        return response()->json(['ok' => true, 'message' => 'Event deleted']);
     }
 
     public function guests(Request $request, int $id): JsonResponse
@@ -810,6 +850,41 @@ class EventsController extends BaseController
             DB::table('Wo_Notifications')->insert($payload);
         } catch (\Exception $e) {
             // Notification failure should not block RSVP.
+        }
+    }
+
+    private function deleteRelatedEventRows(int $eventId): void
+    {
+        $tables = [
+            'Wo_Egoing',
+            'Wo_Einterested',
+            'Wo_Einvited',
+            'Wo_Event_Comments',
+            'Wo_Event_Comment_Replies',
+            'Wo_Event_Reaction',
+        ];
+
+        foreach ($tables as $table) {
+            if (Schema::hasTable($table) && Schema::hasColumn($table, 'event_id')) {
+                DB::table($table)->where('event_id', $eventId)->delete();
+            }
+        }
+
+        if (Schema::hasTable('Wo_Posts') && Schema::hasColumn('Wo_Posts', 'event_id')) {
+            $postIds = DB::table('Wo_Posts')->where('event_id', $eventId)->pluck('id');
+            if ($postIds->isNotEmpty()) {
+                if (Schema::hasTable('Wo_Comments') && Schema::hasColumn('Wo_Comments', 'post_id')) {
+                    DB::table('Wo_Comments')->whereIn('post_id', $postIds)->delete();
+                }
+                if (Schema::hasTable('Wo_Reactions') && Schema::hasColumn('Wo_Reactions', 'post_id')) {
+                    DB::table('Wo_Reactions')->whereIn('post_id', $postIds)->delete();
+                }
+                DB::table('Wo_Posts')->whereIn('id', $postIds)->delete();
+            }
+        }
+
+        if (Schema::hasTable('Wo_Notifications') && Schema::hasColumn('Wo_Notifications', 'event_id')) {
+            DB::table('Wo_Notifications')->where('event_id', $eventId)->delete();
         }
     }
 
