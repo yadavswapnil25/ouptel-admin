@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Services\ChatService;
 use App\Services\FriendActivityNotificationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -87,13 +88,42 @@ class ShareController extends Controller
             $newPostId = null;
             $recipientUserId = null;
 
+            if ($s === 'send') {
+                DB::rollBack();
+
+                return $this->sharePostWithUser(
+                    (int) $tokenUserId,
+                    $typeId,
+                    $originalPost,
+                    $internalPostId,
+                    $notificationPostId,
+                    $text
+                );
+            }
+
             if ($s === 'timeline' || $s === 'user') {
-                // Share on user timeline
-                $userId = $typeId > 0 ? $typeId : $tokenUserId;
+                // Sharing to another person's profile sends it to them (friend or not).
+                // Never create a post as another user.
+                if ($typeId > 0 && $typeId !== (int) $tokenUserId) {
+                    DB::rollBack();
+
+                    return $this->sharePostWithUser(
+                        (int) $tokenUserId,
+                        $typeId,
+                        $originalPost,
+                        $internalPostId,
+                        $notificationPostId,
+                        $text
+                    );
+                }
+
+                // Share on own timeline
+                $userId = $tokenUserId;
                 
                 // Check if user exists
                 $user = DB::table('Wo_Users')->where('user_id', $userId)->first();
                 if (!$user) {
+                    DB::rollBack();
                     return response()->json([
                         'api_status' => 400,
                         'errors' => [
@@ -268,7 +298,7 @@ class ShareController extends Controller
                     'api_status' => 400,
                     'errors' => [
                         'error_id' => 10,
-                        'error_text' => 'Invalid share type. Use: timeline, page, group, or story'
+                        'error_text' => 'Invalid share type. Use: timeline, send, page, group, or story'
                     ]
                 ], 400);
             }
@@ -326,6 +356,163 @@ class ShareController extends Controller
                     'error_text' => 'Failed to share post: ' . $e->getMessage()
                 ]
             ], 500);
+        }
+    }
+
+    /**
+     * Send a post to any user (friend or not). Respects blocks only.
+     */
+    private function sharePostWithUser(
+        int $senderId,
+        int $recipientId,
+        object $originalPost,
+        int $internalPostId,
+        int $notificationPostId,
+        string $text
+    ): JsonResponse {
+        if ($recipientId <= 0) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 5,
+                    'error_text' => 'Please choose a user to share with',
+                ],
+            ], 400);
+        }
+
+        if ($recipientId === $senderId) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 5,
+                    'error_text' => 'You cannot share a post with yourself',
+                ],
+            ], 400);
+        }
+
+        $recipient = DB::table('Wo_Users')->where('user_id', $recipientId)->first();
+        if (!$recipient || in_array((string) ($recipient->active ?? '1'), ['0', '2'], true)) {
+            return response()->json([
+                'api_status' => 400,
+                'errors' => [
+                    'error_id' => 5,
+                    'error_text' => 'User not found',
+                ],
+            ], 404);
+        }
+
+        if (Schema::hasTable('Wo_Blocks')) {
+            $blocked = DB::table('Wo_Blocks')
+                ->where(function ($query) use ($senderId, $recipientId) {
+                    $query->where('blocker', $senderId)->where('blocked', $recipientId);
+                })
+                ->orWhere(function ($query) use ($senderId, $recipientId) {
+                    $query->where('blocker', $recipientId)->where('blocked', $senderId);
+                })
+                ->exists();
+            if ($blocked) {
+                return response()->json([
+                    'api_status' => 400,
+                    'errors' => [
+                        'error_id' => 7,
+                        'error_text' => 'You cannot share a post with this user',
+                    ],
+                ], 403);
+            }
+        }
+
+        $frontendBase = rtrim((string) env('FRONTEND_URL', config('app.url')), '/');
+        $postUrl = $frontendBase . '/post/' . $notificationPostId;
+        $recipientName = trim(implode(' ', array_filter([
+            $recipient->first_name ?? null,
+            $recipient->last_name ?? null,
+        ])));
+        if ($recipientName === '') {
+            $recipientName = trim((string) ($recipient->name ?? $recipient->username ?? 'user'));
+        }
+        $sentViaChat = false;
+        $conversationId = null;
+
+        try {
+            $chat = app(ChatService::class);
+            $conversation = $chat->findOrCreateDirectConversation($senderId, $recipientId);
+            $caption = trim($text);
+            $messageText = ($caption !== '' ? $caption . "\n" : "Shared a post with you\n") . $postUrl;
+            $chat->sendTextMessage($conversation, $senderId, $recipientId, $messageText);
+            $sentViaChat = true;
+            $conversationId = (int) $conversation->id;
+        } catch (\Throwable $e) {
+            Log::warning('Share-to-user chat failed: ' . $e->getMessage(), [
+                'sender_id' => $senderId,
+                'recipient_id' => $recipientId,
+                'post_id' => $internalPostId,
+            ]);
+        }
+
+        $this->insertShareNotification([
+            'recipient_id' => $recipientId,
+            'notifier_id' => $senderId,
+            'post_id' => $notificationPostId,
+            'type' => 'shared_post_with_you',
+            'text' => $text,
+            'url' => '/post/' . $notificationPostId,
+        ]);
+
+        $originalOwnerId = (int) ($originalPost->user_id ?? 0);
+        if ($originalOwnerId > 0 && $originalOwnerId !== $senderId && $originalOwnerId !== $recipientId) {
+            $this->insertShareNotification([
+                'recipient_id' => $originalOwnerId,
+                'notifier_id' => $senderId,
+                'post_id' => $notificationPostId,
+                'type' => 'shared_your_post',
+                'text' => '',
+                'url' => '/post/' . $notificationPostId,
+            ]);
+        }
+
+        if (Schema::hasColumn('Wo_Posts', 'postShare')) {
+            DB::table('Wo_Posts')->where('id', $internalPostId)->increment('postShare');
+        }
+
+        return response()->json([
+            'api_status' => 200,
+            'ok' => true,
+            'message' => 'Shared with ' . $recipientName,
+            'sent_via_chat' => $sentViaChat,
+            'conversation_id' => $conversationId,
+            'user_id' => $recipientId,
+        ]);
+    }
+
+    private function insertShareNotification(array $payload): void
+    {
+        if (!Schema::hasTable('Wo_Notifications')) {
+            return;
+        }
+
+        try {
+            $row = [
+                'recipient_id' => (int) $payload['recipient_id'],
+                'notifier_id' => (int) $payload['notifier_id'],
+                'type' => $payload['type'],
+                'url' => $payload['url'] ?? '',
+                'time' => time(),
+                'seen' => 0,
+            ];
+            foreach (['post_id', 'type2', 'text', 'page_id', 'group_id', 'event_id'] as $col) {
+                if (!array_key_exists($col, $payload) || !Schema::hasColumn('Wo_Notifications', $col)) {
+                    continue;
+                }
+                $row[$col] = $payload[$col];
+            }
+            foreach (['post_id', 'page_id', 'group_id', 'event_id'] as $requiredNumeric) {
+                if (Schema::hasColumn('Wo_Notifications', $requiredNumeric) && !array_key_exists($requiredNumeric, $row)) {
+                    $row[$requiredNumeric] = 0;
+                }
+            }
+            DB::table('Wo_Notifications')->insert($row);
+        } catch (\Throwable $e) {
+            Log::warning('Share notification failed: ' . $e->getMessage());
         }
     }
 

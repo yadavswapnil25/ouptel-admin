@@ -705,7 +705,16 @@ class NotificationsController extends Controller
                 $notification['icon'] = 'wonder';
                 break;
             case 'share_post':
+            case 'shared_your_post':
                 $notification['type_text'] = 'shared your ' . $type2Label . ($notificationText ? ' ' . $notificationText : '');
+                $notification['icon'] = 'share';
+                break;
+            case 'shared_post_with_you':
+                $notification['type_text'] = 'shared a post with you';
+                $notification['icon'] = 'share';
+                break;
+            case 'shared_a_post_in_timeline':
+                $notification['type_text'] = 'shared a post on your timeline';
                 $notification['icon'] = 'share';
                 break;
             case 'comment':
