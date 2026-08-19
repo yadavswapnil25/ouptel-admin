@@ -1789,16 +1789,27 @@ class PostController extends Controller
                 ]);
             }
 
-            // Get posts with pagination
+            // Omit posts from deleted/inactive accounts (WoWonder leftover name: "Delete user data")
             $query = Post::with('user')
                 ->whereIn('id', $savedPostIds)
+                ->whereHas('user', function ($q) {
+                    $q->where('active', '1')
+                        ->whereRaw(
+                            "LOWER(TRIM(CONCAT(IFNULL(first_name, ''), ' ', IFNULL(last_name, '')))) NOT IN (?, ?)",
+                            ['delete user data', 'deleted user']
+                        );
+                })
                 ->orderByRaw('FIELD(id, ' . $savedPostIds->implode(',') . ')');
 
             $posts = $query->paginate($perPage);
 
             $formattedPosts = $posts->map(function ($post) use ($tokenUserId) {
                 return $this->formatSavedPostData($post, $tokenUserId);
-            });
+            })->filter(function ($formatted) {
+                $authorName = strtolower(trim((string) ($formatted['author']['name'] ?? '')));
+                return $authorName !== ''
+                    && !in_array($authorName, ['delete user data', 'deleted user', 'unknown user'], true);
+            })->values();
 
             return response()->json([
                 'ok' => true,
@@ -1976,8 +1987,9 @@ class PostController extends Controller
 
         $authorUser = $post->user;
         $authorName = $authorUser
-            ? (trim(($authorUser->first_name ?? '') . ' ' . ($authorUser->last_name ?? '')) ?: ($authorUser->name ?? 'Unknown User'))
-            : 'Unknown User';
+            ? (trim(($authorUser->first_name ?? '') . ' ' . ($authorUser->last_name ?? ''))
+                ?: ($authorUser->username ?? $authorUser->name ?? ''))
+            : '';
 
         return [
             'id' => $post->id,
