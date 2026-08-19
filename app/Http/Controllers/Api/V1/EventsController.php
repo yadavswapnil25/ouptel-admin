@@ -142,6 +142,11 @@ class EventsController extends BaseController
             } elseif ($status === 'past') {
                 $query->where('end_date', '<', now()->toDateString());
             }
+        } elseif ($request->query('exclude') === 'past') {
+            $query->where(function ($q) {
+                $q->whereDate('end_date', '>=', now()->toDateString())
+                    ->orWhereNull('end_date');
+            });
         }
 
         if ($request->filled('term')) {
