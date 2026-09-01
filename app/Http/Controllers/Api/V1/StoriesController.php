@@ -914,15 +914,35 @@ class StoriesController extends Controller
             ->first();
 
         if ($existingReaction) {
-            // Remove reaction
+            // Tapping the same emoji again clears it; picking a different one
+            // switches to it rather than removing the old reaction.
+            if ((int) $existingReaction->reaction === $reaction) {
+                DB::table('Wo_Reactions')
+                    ->where('story_id', $storyId)
+                    ->where('user_id', $tokenUserId)
+                    ->delete();
+
+                return response()->json([
+                    'api_status' => 200,
+                    'message' => 'reaction removed',
+                    'reaction' => null,
+                ]);
+            }
+
+            $reactionUpdateData = ['reaction' => $reaction];
+            if (Schema::hasColumn('Wo_Reactions', 'time')) {
+                $reactionUpdateData['time'] = time();
+            }
+
             DB::table('Wo_Reactions')
                 ->where('story_id', $storyId)
                 ->where('user_id', $tokenUserId)
-                ->delete();
+                ->update($reactionUpdateData);
 
             return response()->json([
                 'api_status' => 200,
-                'message' => 'reaction removed'
+                'message' => 'reaction updated',
+                'reaction' => $reaction,
             ]);
         } else {
             // Add reaction (matching old API: no time column)
@@ -960,7 +980,8 @@ class StoriesController extends Controller
 
             return response()->json([
                 'api_status' => 200,
-                'message' => 'story reacted'
+                'message' => 'story reacted',
+                'reaction' => $reaction,
             ]);
         }
     }
