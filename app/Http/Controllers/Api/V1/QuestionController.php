@@ -10,6 +10,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class QuestionController extends Controller
 {
@@ -43,6 +44,7 @@ class QuestionController extends Controller
             'group_id' => 'nullable|integer',
             'event_id' => 'nullable|integer',
             'recipient_id' => 'nullable|integer',
+            'postPhoto' => 'nullable|image|mimes:jpeg,png,jpg,gif,webp|max:10240',
         ]);
 
         if ($validator->fails()) {
@@ -72,12 +74,22 @@ class QuestionController extends Controller
 
         try {
             $publicPostId = $this->generatePublicPostId();
+
+            // Questions may carry a photo, stored exactly like a normal post's.
+            $postPhotoPath = '';
+            if ($request->hasFile('postPhoto')) {
+                $photo = $request->file('postPhoto');
+                $filename = time() . '_' . Str::random(10) . '.' . $photo->getClientOriginalExtension();
+                $postPhotoPath = $photo->storeAs('posts/photos', $filename, 'public') ?: '';
+            }
+
             $insertData = [
                 'post_id' => $publicPostId,
                 'user_id' => $tokenUserId,
                 'postText' => $postText,
                 'postPrivacy' => $request->input('postPrivacy'),
                 'postType' => 'question',
+                'postPhoto' => $postPhotoPath,
                 'parent_id' => 0,
                 'page_id' => $request->input('page_id', 0),
                 'group_id' => $request->input('group_id', 0),
@@ -372,6 +384,19 @@ class QuestionController extends Controller
         return $postId;
     }
 
+    /** Absolute URL for a question's photo, or null when it has none. */
+    private function questionPhotoUrl($post): ?string
+    {
+        $photo = $post->postPhoto ?? '';
+        if ($photo === '' || $photo === null) {
+            return null;
+        }
+
+        return filter_var($photo, FILTER_VALIDATE_URL) !== false
+            ? $photo
+            : asset('storage/' . $photo);
+    }
+
     private function formatAnswerOrQuestion($post, $user, int $answerCount = 0, array $answerPreviews = []): array
     {
         $publicPostId = $post->post_id ?? $post->id;
@@ -388,6 +413,8 @@ class QuestionController extends Controller
             'postText' => $post->postText ?? '',
             'post_type' => $post->postType ?? 'text',
             'postType' => $post->postType ?? 'text',
+            'post_photo' => $this->questionPhotoUrl($post),
+            'postPhoto' => $this->questionPhotoUrl($post),
             'post_privacy' => $post->postPrivacy ?? '0',
             'parent_id' => (int) ($post->parent_id ?? 0),
             'answer_count' => $answerCount,
