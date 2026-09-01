@@ -694,7 +694,9 @@ class PeopleFollowController extends Controller
             }
 
             // Get post reactions count
-            $postIdForReactions = $post->post_id ?? $post->id;
+            // `?:` not `??`, matching how reactions are written and read
+            // elsewhere - a post_id of 0 must fall back to the row id.
+            $postIdForReactions = (int) ($post->post_id ?: $post->id);
             $reactionsCount = $this->getPostReactionsCount($postIdForReactions);
             
             // Get post comments count
@@ -774,12 +776,18 @@ class PeopleFollowController extends Controller
                 
                 // Engagement metrics
                 'reactions_count' => $reactionsCount,
+                'total_reactions' => $reactionsCount,
+                'reaction_counts' => $this->getPostReactionCountsDetailed($postIdForReactions),
                 'comments_count' => $commentsCount,
                 'shares_count' => $post->postShare ?? 0,
                 'views_count' => $post->videoViews ?? 0,
                 
                 // User interaction
                 'is_liked' => $this->isPostLiked($post->id, $userId),
+                // Without these the client cannot tell which reaction the
+                // viewer left, so the Like button always looked un-reacted.
+                'user_reaction' => $this->getUserReactionDetailed($postIdForReactions, $userId),
+                'current_reaction' => $this->getUserReactionDetailed($postIdForReactions, $userId),
                 'is_saved' => $this->isPostSaved($post->id, $userId),
                 'is_owner' => $post->user_id == $userId,
                 'is_boosted' => (bool) ($post->boosted ?? false),
@@ -1033,6 +1041,58 @@ class PeopleFollowController extends Controller
      * @param int $postId
      * @return int
      */
+    /** The viewer's own reaction on a post, or null when they have not reacted. */
+    private function getUserReactionDetailed(int $postId, string $userId): ?int
+    {
+        if (!Schema::hasTable('Wo_Reactions') || !$userId) {
+            return null;
+        }
+
+        try {
+            $reaction = DB::table('Wo_Reactions')
+                ->where('post_id', $postId)
+                ->where('user_id', $userId)
+                ->where(function ($q) {
+                    $q->whereNull('comment_id')->orWhere('comment_id', 0);
+                })
+                ->value('reaction');
+
+            return $reaction === null ? null : (int) $reaction;
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /** Per-type reaction breakdown, keyed 1-6. */
+    private function getPostReactionCountsDetailed(int $postId): array
+    {
+        $counts = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 6 => 0];
+
+        if (!Schema::hasTable('Wo_Reactions')) {
+            return $counts;
+        }
+
+        try {
+            $rows = DB::table('Wo_Reactions')
+                ->where('post_id', $postId)
+                ->where('comment_id', 0)
+                ->selectRaw('reaction, COUNT(*) as count')
+                ->groupBy('reaction')
+                ->get();
+
+            foreach ($rows as $row) {
+                $type = (int) ($row->reaction ?? 0);
+                if (isset($counts[$type])) {
+                    $counts[$type] = (int) $row->count;
+                }
+            }
+        } catch (\Exception $e) {
+            return $counts;
+        }
+
+        return $counts;
+    }
+
     private function getPostReactionsCount(int $postId): int
     {
         if (!Schema::hasTable('Wo_Reactions')) {
