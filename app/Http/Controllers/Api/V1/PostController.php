@@ -1057,7 +1057,14 @@ class PostController extends Controller
                 return false;
             case '3': // Custom
                 return $this->isInCustomList($post->user_id, $userId);
-            case '4': // Group
+            case '4':
+                // '4' is used for both group and page posts. A page post has a
+                // page_id and no group_id, so the group-membership check would
+                // run against a null group and deny everyone - including on
+                // public pages. Page posts follow the visibility of the page.
+                if (!empty($post->page_id)) {
+                    return true;
+                }
                 return $this->isGroupMember($post->group_id, $userId);
             default:
                 return false;

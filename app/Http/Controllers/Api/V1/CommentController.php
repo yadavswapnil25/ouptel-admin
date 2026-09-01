@@ -1246,7 +1246,11 @@ class CommentController extends Controller
             case '3': // Custom
                 return $this->isInCustomList($post->user_id, $userId);
             case '4': // Group
-                return $this->isGroupMember($post->group_id, $userId);
+                // '4' covers group *and* page posts; a page post has no
+                // group_id, so this check would deny everyone on a page.
+                return !empty($post->page_id)
+                    ? true
+                    : $this->isGroupMember($post->group_id, $userId);
             default:
                 return false;
         }
@@ -1274,7 +1278,11 @@ class CommentController extends Controller
             case '3': // Custom
                 return $this->isInCustomList($post->user_id, $userId);
             case '4': // Group
-                return $this->isGroupMember($post->group_id, $userId);
+                // '4' covers group *and* page posts; a page post has no
+                // group_id, so this check would deny everyone on a page.
+                return !empty($post->page_id)
+                    ? true
+                    : $this->isGroupMember($post->group_id, $userId);
             default:
                 return false;
         }
