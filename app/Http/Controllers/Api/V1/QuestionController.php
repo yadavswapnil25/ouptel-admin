@@ -415,6 +415,8 @@ class QuestionController extends Controller
             'postType' => $post->postType ?? 'text',
             'post_photo' => $this->questionPhotoUrl($post),
             'postPhoto' => $this->questionPhotoUrl($post),
+            // The web feed reads post_photo_url when picking a post's image.
+            'post_photo_url' => $this->questionPhotoUrl($post),
             'post_privacy' => $post->postPrivacy ?? '0',
             'parent_id' => (int) ($post->parent_id ?? 0),
             'answer_count' => $answerCount,
