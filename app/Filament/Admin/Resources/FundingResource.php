@@ -20,6 +20,12 @@ class FundingResource extends Resource
     protected static string $permissionKey = 'manage-funding';
     protected static ?string $model = Funding::class;
 
+    // Hidden: several core endpoints (show, update, delete, contribute) are
+    // stubs that unconditionally return 503 "unavailable" - see
+    // FundingsController. Not worth surfacing in the sidebar until the
+    // feature actually works end to end. Flip to true to bring it back.
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static ?string $navigationIcon = 'heroicon-o-currency-dollar';
 
     protected static ?string $navigationLabel = 'Funding';

@@ -22,6 +22,11 @@ class FundingSettings extends Page
 
     protected static ?string $navigationGroup = 'Settings';
 
+    // Hidden: the toggle here has nothing to control - core Funding endpoints
+    // (show, update, delete, contribute) are stubs returning 503, see
+    // FundingsController. Flip to true once the feature is functional.
+    protected static bool $shouldRegisterNavigation = false;
+
     protected static string $view = 'filament.admin.pages.funding-settings';
 
     public ?array $data = [];

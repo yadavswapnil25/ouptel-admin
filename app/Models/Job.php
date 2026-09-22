@@ -18,6 +18,12 @@ class Job extends Model
         'location',
         'status',
         'time',
+        // Filament's EditRecord/CreateRecord save through $record->update($data)
+        // - plain mass assignment - so any form field missing here is silently
+        // dropped before the UPDATE/INSERT runs (no error, value just never
+        // persists). 'image' was missing, which is why uploading a new job
+        // image in /admin/jobs/{id}/edit had no effect.
+        'image',
     ];
 
     protected $casts = [
