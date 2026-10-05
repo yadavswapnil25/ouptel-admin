@@ -1540,6 +1540,11 @@ class PagesController extends BaseController
             'user_reaction' => $userId ? $this->getUserReactionDetailed($postIdForReactions, $userId) : null,
             'current_reaction' => $userId ? $this->getUserReactionDetailed($postIdForReactions, $userId) : null,
             'is_owner' => $userId && $post->user_id == $userId,
+            // Without this, group/page feeds showed every post as unsaved on
+            // reload. savePost stores Wo_Posts.id.
+            'is_saved' => $userId
+                ? DB::table('Wo_SavedPosts')->where('user_id', $userId)->where('post_id', $post->id)->exists()
+                : false,
             'is_boosted' => (bool) ($post->boosted ?? false),
             'comments_disabled' => (bool) ($post->comments_status ?? false),
             
