@@ -773,9 +773,15 @@ class CommentController extends Controller
                         ],
                         'created_at' => date('c', $reply->time),
                         'created_at_human' => $this->getHumanTime($reply->time),
-                        'reactions_count' => $this->getReplyReactionsCount($reply->id),
-                        'total_reactions' => $this->getReplyReactionsCount($reply->id),
-                        'user_reaction' => $this->getUserReplyReaction($reply->id, $tokenUserId),
+                        ...(function () use ($reply, $tokenUserId) {
+                            $counts = $this->getReplyReactionCounts((int) $reply->id);
+                            return [
+                                'reaction_counts' => $counts,
+                                'reactions_count' => array_sum($counts),
+                                'total_reactions' => array_sum($counts),
+                                'user_reaction' => $this->getUserReplyReaction((int) $reply->id, (string) $tokenUserId),
+                            ];
+                        })(),
                     ];
                 })->filter()->values();
             } else {
@@ -838,21 +844,30 @@ class CommentController extends Controller
      */
     private function getReplyReactionsCount(int $replyId): int
     {
-        // Check if Wo_PostReactions table has replay_id column
-        if (!DB::getSchemaBuilder()->hasTable('Wo_PostReactions')) {
-            return 0;
+        return array_sum($this->getReplyReactionCounts($replyId));
+    }
+
+    /**
+     * Per-type reaction counts for a reply. Reply reactions live in
+     * Wo_Reactions keyed by replay_id (comment_id = 0, post_id = 0).
+     */
+    private function getReplyReactionCounts(int $replyId): array
+    {
+        $counts = [1 => 0, 2 => 0, 3 => 0, 4 => 0, 5 => 0, 6 => 0];
+
+        $rows = PostReaction::where('replay_id', $replyId)
+            ->where('post_id', 0)
+            ->selectRaw('reaction, COUNT(*) as count')
+            ->groupBy('reaction')
+            ->get();
+
+        foreach ($rows as $row) {
+            if (isset($counts[(int) $row->reaction])) {
+                $counts[(int) $row->reaction] = (int) $row->count;
+            }
         }
 
-        $hasReplayId = DB::getSchemaBuilder()->hasColumn('Wo_PostReactions', 'replay_id');
-        
-        if ($hasReplayId) {
-            return DB::table('Wo_PostReactions')
-                ->where('replay_id', $replyId)
-                ->where('post_id', 0)
-                ->count();
-        }
-
-        return 0;
+        return $counts;
     }
 
     /**
@@ -864,23 +879,12 @@ class CommentController extends Controller
      */
     private function getUserReplyReaction(int $replyId, string $userId): ?int
     {
-        if (!DB::getSchemaBuilder()->hasTable('Wo_PostReactions')) {
-            return null;
-        }
+        $reaction = PostReaction::where('replay_id', $replyId)
+            ->where('user_id', $userId)
+            ->where('post_id', 0)
+            ->value('reaction');
 
-        $hasReplayId = DB::getSchemaBuilder()->hasColumn('Wo_PostReactions', 'replay_id');
-        
-        if ($hasReplayId) {
-            $reaction = DB::table('Wo_PostReactions')
-                ->where('replay_id', $replyId)
-                ->where('user_id', $userId)
-                ->where('post_id', 0)
-                ->first();
-            
-            return $reaction ? $reaction->reaction : null;
-        }
-
-        return null;
+        return $reaction ? (int) $reaction : null;
     }
 
     /**
@@ -1006,9 +1010,15 @@ class CommentController extends Controller
                     ],
                     'created_at' => date('c', $reply->time),
                     'created_at_human' => $this->getHumanTime($reply->time),
-                    'reactions_count' => $this->getReplyReactionsCount($reply->id),
-                    'total_reactions' => $this->getReplyReactionsCount($reply->id),
-                    'user_reaction' => $this->getUserReplyReaction($reply->id, $userId),
+                    ...(function () use ($reply, $userId) {
+                        $counts = $this->getReplyReactionCounts((int) $reply->id);
+                        return [
+                            'reaction_counts' => $counts,
+                            'reactions_count' => array_sum($counts),
+                            'total_reactions' => array_sum($counts),
+                            'user_reaction' => $this->getUserReplyReaction((int) $reply->id, (string) $userId),
+                        ];
+                    })(),
                 ];
             })->filter()->values()->toArray();
         }
@@ -1084,6 +1094,12 @@ class CommentController extends Controller
                 'message' => 'Validation failed',
                 'errors' => $validator->errors()
             ], 422);
+        }
+
+        // Replies live in Wo_CommentReplies and their ids overlap with
+        // Wo_Comments ids, so the caller must say which one it means.
+        if ($request->input('target') === 'reply') {
+            return $this->registerReplyReaction($commentId, (string) $tokenUserId, (int) $request->input('reaction'));
         }
 
         // Check if comment exists
@@ -1164,8 +1180,66 @@ class CommentController extends Controller
     }
 
     /**
+     * Toggle/switch the current user's reaction on a reply. Stored in
+     * Wo_Reactions with replay_id = reply id (comment_id = 0, post_id = 0).
+     */
+    private function registerReplyReaction(int $replyId, string $userId, int $reactionType): JsonResponse
+    {
+        if (!DB::table('Wo_CommentReplies')->where('id', $replyId)->exists()) {
+            return response()->json(['ok' => false, 'message' => 'Reply not found'], 404);
+        }
+
+        try {
+            $existing = PostReaction::where('replay_id', $replyId)
+                ->where('user_id', $userId)
+                ->where('post_id', 0)
+                ->first();
+
+            if ($existing && (int) $existing->reaction === $reactionType) {
+                $existing->delete();
+                $action = 'removed';
+            } elseif ($existing) {
+                $existing->update(['reaction' => $reactionType]);
+                $action = 'updated';
+            } else {
+                PostReaction::create([
+                    'user_id' => $userId,
+                    'post_id' => 0,
+                    'comment_id' => 0,
+                    'replay_id' => $replyId,
+                    'message_id' => 0,
+                    'story_id' => 0,
+                    'reaction' => $reactionType,
+                ]);
+                $action = 'added';
+            }
+
+            $counts = $this->getReplyReactionCounts($replyId);
+
+            return response()->json([
+                'ok' => true,
+                'message' => 'Reply reaction ' . $action . ' successfully',
+                'data' => [
+                    'reply_id' => $replyId,
+                    'action' => $action,
+                    'reaction_type' => $reactionType,
+                    'reaction_counts' => $counts,
+                    'total_reactions' => array_sum($counts),
+                    'user_reaction' => $action === 'removed' ? null : $reactionType,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'ok' => false,
+                'message' => 'Failed to register reply reaction',
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
      * Handle file upload
-     * 
+     *
      * @param \Illuminate\Http\UploadedFile $file
      * @param string $directory
      * @param string $type
