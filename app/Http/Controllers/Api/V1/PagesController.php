@@ -1358,6 +1358,13 @@ class PagesController extends BaseController
                 ->where('active', '1')
                 ->orderByDesc('time');
 
+            // Posts this user chose to hide (hidePost stores Wo_Posts.id).
+            if ($tokenUserId && Schema::hasTable('Wo_HiddenPosts')) {
+                $query->whereNotIn('id', DB::table('Wo_HiddenPosts')
+                    ->where('user_id', $tokenUserId)
+                    ->select('post_id'));
+            }
+
             // Get total count
             $total = $query->count();
 
