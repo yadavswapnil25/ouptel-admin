@@ -3499,7 +3499,8 @@ class PostController extends Controller
 
             // Check if user owns the group (if post is in a group)
             if ($post->group_id && $post->group_id > 0) {
-                $group = DB::table('Wo_Groups')->where('group_id', $post->group_id)->first();
+                // Wo_Groups' key is `id` (there is no group_id column).
+                $group = DB::table('Wo_Groups')->where('id', $post->group_id)->first();
                 if ($group && $group->user_id == $userId) {
                     $isGroupOwner = true;
                 }
@@ -3540,13 +3541,11 @@ class PostController extends Controller
             $rowId = $post->id ?? $post->post_id ?? $postId;
             $legacyPostId = $post->post_id ?? $postId;
 
-            // Delete post reactions
-            if (DB::getSchemaBuilder()->hasTable('Wo_PostReactions')) {
-                DB::table('Wo_PostReactions')
-                    ->where('post_id', $rowId)
-                    ->orWhere('post_id', $legacyPostId)
-                    ->delete();
-            }
+            // Delete post reactions (stored in Wo_Reactions; Wo_PostReactions doesn't exist)
+            DB::table('Wo_Reactions')
+                ->whereIn('post_id', array_unique([(int) $rowId, (int) $legacyPostId]))
+                ->where('post_id', '>', 0)
+                ->delete();
 
             // Delete post comments
             if (DB::getSchemaBuilder()->hasTable('Wo_Comments')) {
