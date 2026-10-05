@@ -1467,6 +1467,30 @@ class PostController extends Controller
             $reactionCounts = $this->getPostReactionCounts($engagementPostId);
             $userReaction = $this->getUserReaction($engagementPostId, $tokenUserId);
 
+            $likedUsers = DB::table('Wo_Reactions as r')
+                ->join('Wo_Users as u', 'u.user_id', '=', 'r.user_id')
+                ->where('r.post_id', $engagementPostId)
+                ->where(function ($q) {
+                    $q->whereNull('r.comment_id')->orWhere('r.comment_id', 0);
+                })
+                ->orderByDesc('r.id')
+                ->limit(200)
+                ->get(['r.reaction', 'u.user_id', 'u.username', 'u.first_name', 'u.last_name', 'u.avatar', 'u.verified'])
+                ->map(function ($row) {
+                    $name = trim(($row->first_name ?? '') . ' ' . ($row->last_name ?? ''));
+                    return [
+                        'user_id' => $row->user_id,
+                        'username' => $row->username ?? '',
+                        'name' => $name !== '' ? $name : ($row->username ?? 'Unknown User'),
+                        'avatar' => $row->avatar ?? '',
+                        'avatar_url' => $row->avatar ? asset('storage/' . $row->avatar) : null,
+                        'verified' => User::isVerifiedFlag($row->verified ?? null),
+                        'reaction_type' => (int) ($row->reaction ?: 1),
+                    ];
+                })
+                ->values()
+                ->all();
+
             return response()->json([
                 'ok' => true,
                 'data' => [
@@ -1474,6 +1498,7 @@ class PostController extends Controller
                     'reaction_counts' => $reactionCounts,
                     'total_reactions' => array_sum($reactionCounts),
                     'user_reaction' => $userReaction,
+                    'liked_users' => $likedUsers,
                 ]
             ]);
 
