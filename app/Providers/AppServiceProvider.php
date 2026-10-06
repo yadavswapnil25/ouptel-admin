@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Mail\Transport\BirdTransport;
 use App\Providers\Filament\AdminPanelProvider;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -22,7 +24,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        Mail::extend('bird', fn () => new BirdTransport(
+            apiKey: (string) config('services.bird.key'),
+            baseUrl: config('services.bird.base_url') ?: null,
+            fromAddress: config('services.bird.from_address') ?: null,
+            fromName: config('services.bird.from_name') ?: null,
+            timeout: (int) config('services.bird.timeout', 15),
+        ));
     }
 
     /**

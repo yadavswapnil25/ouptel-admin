@@ -18,6 +18,17 @@ return [
         'token' => env('POSTMARK_TOKEN'),
     ],
 
+    'bird' => [
+        'key' => env('BIRD_API_KEY'),
+        // Optional: derived from the key's region (bk_us1_... -> us1.platform.bird.com).
+        'base_url' => env('BIRD_API_URL'),
+        // Optional: override MAIL_FROM_* for Bird, e.g. onboarding@messagebird.dev
+        // until your own sending domain is verified in Bird.
+        'from_address' => env('BIRD_FROM_ADDRESS'),
+        'from_name' => env('BIRD_FROM_NAME'),
+        'timeout' => (int) env('BIRD_TIMEOUT', 15),
+    ],
+
     'resend' => [
         'key' => env('RESEND_KEY'),
     ],

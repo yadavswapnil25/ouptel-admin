@@ -65,6 +65,11 @@ return [
             'transport' => 'resend',
         ],
 
+        // Bird Channels API (email channel). Credentials: config/services.php "bird".
+        'bird' => [
+            'transport' => 'bird',
+        ],
+
         'sendmail' => [
             'transport' => 'sendmail',
             'path' => env('MAIL_SENDMAIL_PATH', '/usr/sbin/sendmail -bs -i'),
