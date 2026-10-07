@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -155,9 +157,9 @@ class SubscriptionsController extends Controller
                 'username' => $user->username ?? 'Unknown',
                 'name' => $fullName,
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 'cover' => $user->cover ?? '',
-                'cover_url' => $user->cover ? asset('storage/' . $user->cover) : null,
+                'cover_url' => $user->cover ? MediaUrl::url($user->cover) : null,
                 'verified' => (bool) ($user->verified ?? false),
                 'subscribed_at' => $user->subscribed_at ? date('c', $user->subscribed_at) : null,
                 'subscribed_at_human' => $user->subscribed_at ? $this->getHumanTime($user->subscribed_at) : null,
@@ -285,9 +287,9 @@ class SubscriptionsController extends Controller
                 'page_title' => $page->page_title ?? '',
                 'page_description' => $page->page_description ?? '',
                 'avatar' => $page->avatar ?? '',
-                'avatar_url' => $page->avatar ? asset('storage/' . $page->avatar) : null,
+                'avatar_url' => $page->avatar ? MediaUrl::url($page->avatar) : null,
                 'cover' => $page->cover ?? '',
-                'cover_url' => $page->cover ? asset('storage/' . $page->cover) : null,
+                'cover_url' => $page->cover ? MediaUrl::url($page->cover) : null,
                 'category' => $categoryId,
                 'category_name' => $categoryName,
                 'likes_count' => $likesCount,
@@ -394,9 +396,9 @@ class SubscriptionsController extends Controller
                 'group_title' => $group->group_title ?? '',
                 'about' => $group->about ?? '',
                 'avatar' => $group->avatar ?? '',
-                'avatar_url' => $group->avatar ? asset('storage/' . $group->avatar) : null,
+                'avatar_url' => $group->avatar ? MediaUrl::url($group->avatar) : null,
                 'cover' => $group->cover ?? '',
-                'cover_url' => $group->cover ? asset('storage/' . $group->cover) : null,
+                'cover_url' => $group->cover ? MediaUrl::url($group->cover) : null,
                 'category' => $categoryId,
                 'category_name' => $categoryName,
                 'privacy' => $group->privacy ?? '0',

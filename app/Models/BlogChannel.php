@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+
+use App\Support\MediaUrl;
 use App\Helpers\ImageHelper;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -130,7 +132,7 @@ class BlogChannel extends Model
             $ownerName = trim(($owner->first_name ?? '') . ' ' . ($owner->last_name ?? ''))
                 ?: ($owner->name ?? $ownerUsername);
             if (!empty($owner->avatar)) {
-                $ownerAvatar = asset('storage/' . ltrim($owner->avatar, '/'));
+                $ownerAvatar = MediaUrl::url(ltrim($owner->avatar, '/'));
             }
         }
 

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
@@ -97,19 +99,12 @@ class StatesController extends BaseController
 
         $photo = ltrim($photo, '/');
 
-        if (str_starts_with($photo, 'storage/')) {
+        // Bundled static images under public/ (not user uploads).
+        if (!str_starts_with($photo, 'storage/') && file_exists(public_path($photo))) {
             return asset($photo);
         }
 
-        if (file_exists(public_path($photo))) {
-            return asset($photo);
-        }
-
-        if (file_exists(public_path('storage/' . $photo))) {
-            return asset('storage/' . $photo);
-        }
-
-        return asset('storage/' . $photo);
+        return MediaUrl::url($photo) ?? '';
     }
 }
 

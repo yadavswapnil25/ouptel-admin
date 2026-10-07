@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -104,8 +106,8 @@ class BlockedUsersController extends Controller
                 // Add formatted fields
                 $userData['profile_picture'] = $user->avatar ?? '';
                 $userData['cover_picture'] = $user->cover ?? '';
-                $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/default-avatar.png');
-                $userData['cover_url'] = $user->cover ? asset('storage/' . $user->cover) : asset('images/default-cover.jpg');
+                $userData['avatar_url'] = $user->avatar ? MediaUrl::url($user->avatar) : asset('images/default-avatar.png');
+                $userData['cover_url'] = $user->cover ? MediaUrl::url($user->cover) : asset('images/default-cover.jpg');
                 $userData['gender_text'] = $user->gender === 'male' ? 'Male' : 'Female';
                 $userData['lastseen_time_text'] = $this->timeElapsedString($user->lastseen ?? time());
                 $userData['lastseen'] = ($user->lastseen ?? 0) > (time() - 60) ? 'on' : 'off';

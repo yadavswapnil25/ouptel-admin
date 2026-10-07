@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
 use App\Models\Event;
@@ -476,7 +478,7 @@ class PostController extends Controller
                             'color_2' => $coloredPost->color_2 ?? '',
                             'text_color' => $coloredPost->text_color ?? '',
                             'image' => $coloredPost->image ?? '',
-                            'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+                            'image_url' => !empty($coloredPost->image) ? MediaUrl::url($coloredPost->image) : null,
                         ];
                     }
                 } catch (\Exception $e) {
@@ -519,7 +521,7 @@ class PostController extends Controller
                     'user_id' => $user->user_id,
                     'username' => $user->username,
                     'name' => $user->name,
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 ]
             ];
 
@@ -598,10 +600,10 @@ class PostController extends Controller
             DB::rollBack();
             
             // Clean up uploaded files if post creation failed
-            if ($postPhotoPath) Storage::delete($postPhotoPath);
-            if ($postFilePath) Storage::delete($postFilePath);
+            if ($postPhotoPath) Storage::disk('public')->delete($postPhotoPath);
+            if ($postFilePath) Storage::disk('public')->delete($postFilePath);
             // Video files are stored in postFile, so they're handled by postFilePath cleanup above
-            if ($postRecordPath) Storage::delete($postRecordPath);
+            if ($postRecordPath) Storage::disk('public')->delete($postRecordPath);
 
             return response()->json([
                 'ok' => false,
@@ -798,7 +800,7 @@ class PostController extends Controller
                 return [
                     'id' => $image->id,
                     'image_path' => $image->image ?? '',
-                    'image_url' => !empty($image->image) ? asset('storage/' . $image->image) : null,
+                    'image_url' => !empty($image->image) ? MediaUrl::url($image->image) : null,
                 ];
             })->toArray();
         } catch (\Exception $e) {
@@ -1145,9 +1147,9 @@ class PostController extends Controller
             'post_photo' => $post->postPhoto,
             'post_photo_url' => $this->getPostPhotoUrl($post),
             'post_file' => $post->postFile,
-            'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
+            'post_file_url' => $post->postFile ? MediaUrl::url($post->postFile) : null,
             'post_video' => ($post->postType === 'video' && !empty($post->postFile)) ? $post->postFile : null,
-            'post_video_url' => ($post->postType === 'video' && !empty($post->postFile)) ? asset('storage/' . $post->postFile) : null,
+            'post_video_url' => ($post->postType === 'video' && !empty($post->postFile)) ? MediaUrl::url($post->postFile) : null,
             'post_youtube' => $post->postYoutube,
             'post_link' => $post->postLink,
             'post_link_title' => $post->postLinkTitle,
@@ -1155,7 +1157,7 @@ class PostController extends Controller
             'post_link_content' => $post->postLinkContent,
             'post_map' => $post->postMap,
             'post_record' => $post->postRecord,
-            'post_record_url' => $post->postRecord ? asset('storage/' . $post->postRecord) : null,
+            'post_record_url' => $post->postRecord ? MediaUrl::url($post->postRecord) : null,
             'post_sticker' => $post->postSticker,
             'album_name' => $post->album_name,
             'multi_image_post' => (bool) $post->multi_image_post,
@@ -1175,7 +1177,7 @@ class PostController extends Controller
                 'user_id' => $post->user->user_id ?? $post->user_id,
                 'username' => $post->user->username ?? 'Unknown',
                 'name' => $post->user->name ?? 'Unknown User',
-                'avatar_url' => $post->user->avatar ? asset('storage/' . $post->user->avatar) : null,
+                'avatar_url' => $post->user->avatar ? MediaUrl::url($post->user->avatar) : null,
             ],
             'page_id' => $post->page_id,
             'group_id' => $post->group_id,
@@ -1483,7 +1485,7 @@ class PostController extends Controller
                         'username' => $row->username ?? '',
                         'name' => $name !== '' ? $name : ($row->username ?? 'Unknown User'),
                         'avatar' => $row->avatar ?? '',
-                        'avatar_url' => $row->avatar ? asset('storage/' . $row->avatar) : null,
+                        'avatar_url' => $row->avatar ? MediaUrl::url($row->avatar) : null,
                         'verified' => User::isVerifiedFlag($row->verified ?? null),
                         'reaction_type' => (int) ($row->reaction ?: 1),
                     ];
@@ -2035,7 +2037,7 @@ class PostController extends Controller
             'post_photo' => $colorId > 0 ? null : $post->postPhoto,
             'post_photo_url' => $colorId > 0 ? null : $this->getPostPhotoUrl($post),
             'post_file' => $post->postFile,
-            'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
+            'post_file_url' => $post->postFile ? MediaUrl::url($post->postFile) : null,
             'post_youtube' => $post->postYoutube,
             'post_link' => $post->postLink,
             'post_link_title' => $post->postLinkTitle,
@@ -2043,7 +2045,7 @@ class PostController extends Controller
             'post_link_content' => $post->postLinkContent,
             'post_map' => $post->postMap,
             'post_record' => $post->postRecord,
-            'post_record_url' => $post->postRecord ? asset('storage/' . $post->postRecord) : null,
+            'post_record_url' => $post->postRecord ? MediaUrl::url($post->postRecord) : null,
             'post_sticker' => $post->postSticker,
             'album_name' => $post->album_name,
             'multi_image_post' => (bool) $post->multi_image_post,
@@ -2055,7 +2057,7 @@ class PostController extends Controller
                 'user_id' => $authorUser->user_id ?? $post->user_id,
                 'username' => $authorUser->username ?? 'Unknown',
                 'name' => $authorName,
-                'avatar_url' => ($authorUser && $authorUser->avatar) ? asset('storage/' . $authorUser->avatar) : null,
+                'avatar_url' => ($authorUser && $authorUser->avatar) ? MediaUrl::url($authorUser->avatar) : null,
                 'verified' => User::isVerifiedFlag($authorUser->verified ?? null),
                 'badge' => $this->getUserBadge($post->user_id),
                 'badge_type' => $this->getUserBadgeType($post->user_id),
@@ -2119,7 +2121,7 @@ class PostController extends Controller
             'color_2' => $coloredPost->color_2 ?? '',
             'text_color' => $coloredPost->text_color ?? '',
             'image' => $coloredPost->image ?? '',
-            'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+            'image_url' => !empty($coloredPost->image) ? MediaUrl::url($coloredPost->image) : null,
         ];
     }
 
@@ -2364,9 +2366,9 @@ class PostController extends Controller
                     'name' => $user->name ?? $user->username ?? 'Unknown User',
                     'email' => $user->email ?? '',
                     'avatar' => $user->avatar ?? '',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                     'cover' => $user->cover ?? '',
-                    'cover_url' => $user->cover ? asset('storage/' . $user->cover) : null,
+                    'cover_url' => $user->cover ? MediaUrl::url($user->cover) : null,
                     'verified' => User::isVerifiedFlag($user->verified ?? null),
                     'is_following' => $this->isFollowing($tokenUserId, $user->user_id),
                 ];
@@ -2383,7 +2385,7 @@ class PostController extends Controller
                     'page_name' => $pageData->page_name ?? '',
                     'page_title' => $pageData->page_title ?? '',
                     'avatar' => $pageData->avatar ?? '',
-                    'avatar_url' => $pageData->avatar ? asset('storage/' . $pageData->avatar) : null,
+                    'avatar_url' => $pageData->avatar ? MediaUrl::url($pageData->avatar) : null,
                     'verified' => User::isVerifiedFlag($pageData->verified ?? null),
                 ];
             }
@@ -2398,7 +2400,7 @@ class PostController extends Controller
                     'id' => $groupData->id,
                     'group_name' => $groupData->group_name ?? '',
                     'avatar' => $groupData->avatar ?? '',
-                    'avatar_url' => $groupData->avatar ? asset('storage/' . $groupData->avatar) : null,
+                    'avatar_url' => $groupData->avatar ? MediaUrl::url($groupData->avatar) : null,
                 ];
             }
         }
@@ -2416,7 +2418,7 @@ class PostController extends Controller
                     'username' => $sharedUser->username ?? 'Unknown',
                     'name' => trim(($sharedUser->first_name ?? '') . ' ' . ($sharedUser->last_name ?? ''))
                         ?: ($sharedUser->name ?? $sharedUser->username ?? 'Unknown User'),
-                    'avatar_url' => $sharedUser->avatar ? asset('storage/' . $sharedUser->avatar) : null,
+                    'avatar_url' => $sharedUser->avatar ? MediaUrl::url($sharedUser->avatar) : null,
                     'verified' => (bool) ($sharedUser->verified ?? false),
                 ] : null;
                 $sharedFrom = [
@@ -2552,7 +2554,7 @@ class PostController extends Controller
                         'user_id' => $answerUser->user_id,
                         'username' => $answerUser->username ?? 'Unknown',
                         'name' => $answerUser->name ?? $answerUser->username ?? 'Unknown User',
-                        'avatar_url' => $answerUser->avatar ? asset('storage/' . $answerUser->avatar) : null,
+                        'avatar_url' => $answerUser->avatar ? MediaUrl::url($answerUser->avatar) : null,
                     ] : null,
                 ];
             }
@@ -2571,12 +2573,12 @@ class PostController extends Controller
             'post_photo' => $post->postPhoto ?? '',
             'post_photo_url' => $this->getPostPhotoUrl($post),
             'post_file' => $post->postFile ?? '',
-            'post_file_url' => $post->postFile ? asset('storage/' . $post->postFile) : null,
-            'post_file_thumb' => $post->postFileThumb ? asset('storage/' . $post->postFileThumb) : null,
+            'post_file_url' => $post->postFile ? MediaUrl::url($post->postFile) : null,
+            'post_file_thumb' => $post->postFileThumb ? MediaUrl::url($post->postFileThumb) : null,
             'post_video' => ($post->postType === 'video' && !empty($post->postFile)) ? $post->postFile : '',
-            'post_video_url' => ($post->postType === 'video' && !empty($post->postFile)) ? asset('storage/' . $post->postFile) : null,
+            'post_video_url' => ($post->postType === 'video' && !empty($post->postFile)) ? MediaUrl::url($post->postFile) : null,
             'post_record' => $post->postRecord ?? '',
-            'post_record_url' => $post->postRecord ? asset('storage/' . $post->postRecord) : null,
+            'post_record_url' => $post->postRecord ? MediaUrl::url($post->postRecord) : null,
             'post_youtube' => $post->postYoutube ?? '',
             'post_vimeo' => $post->postVimeo ?? '',
             'post_playtube' => $post->postPlaytube ?? '',
@@ -2650,8 +2652,8 @@ class PostController extends Controller
             'postText' => $post->postText ?? '',
             'postType' => $postType,
             'postPrivacy' => $post->postPrivacy ?? '0',
-            'postFile' => $post->postFile ? asset('storage/' . $post->postFile) : null,
-            'postFileThumb' => $post->postFileThumb ? asset('storage/' . $post->postFileThumb) : null,
+            'postFile' => $post->postFile ? MediaUrl::url($post->postFile) : null,
+            'postFileThumb' => $post->postFileThumb ? MediaUrl::url($post->postFileThumb) : null,
             'postLink' => $post->postLink ?? '',
             'postLinkTitle' => $post->postLinkTitle ?? '',
             'postLinkImage' => $post->postLinkImage ?? '',
@@ -2694,7 +2696,7 @@ class PostController extends Controller
                     'username' => $commentUser->username ?? 'Unknown',
                     'name' => $commentUser->name ?? $commentUser->username ?? 'Unknown User',
                     'avatar' => $commentUser->avatar ?? '',
-                    'avatar_url' => $commentUser->avatar ? asset('storage/' . $commentUser->avatar) : null,
+                    'avatar_url' => $commentUser->avatar ? MediaUrl::url($commentUser->avatar) : null,
                     'verified' => User::isVerifiedFlag($commentUser->verified ?? null),
                 ] : null,
             ];
@@ -2728,7 +2730,7 @@ class PostController extends Controller
                     'username' => $user->username ?? 'Unknown',
                     'name' => $user->name ?? $user->username ?? 'Unknown User',
                     'avatar' => $user->avatar ?? '',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                     'verified' => User::isVerifiedFlag($user->verified ?? null),
                 ];
             }
@@ -2762,7 +2764,7 @@ class PostController extends Controller
                     'username' => $user->username ?? 'Unknown',
                     'name' => $user->name ?? $user->username ?? 'Unknown User',
                     'avatar' => $user->avatar ?? '',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                     'verified' => User::isVerifiedFlag($user->verified ?? null),
                 ];
             }
@@ -3093,7 +3095,7 @@ class PostController extends Controller
                             'color_2' => $coloredPost->color_2 ?? '',
                             'text_color' => $coloredPost->text_color ?? '',
                             'image' => $coloredPost->image ?? '',
-                            'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+                            'image_url' => !empty($coloredPost->image) ? MediaUrl::url($coloredPost->image) : null,
                             'time' => $coloredPost->time ?? '',
                         ];
                     });
@@ -3204,7 +3206,7 @@ class PostController extends Controller
         }
         
         // Otherwise, it's a storage path - prepend storage URL
-        return asset('storage/' . $postPhoto);
+        return MediaUrl::url($postPhoto);
     }
 
     /**
@@ -3323,14 +3325,14 @@ class PostController extends Controller
             if ($hasNewPhoto) {
                 // Delete old stored photo (skip external URLs like GIFs)
                 if (!empty($post->postPhoto) && !filter_var($post->postPhoto, FILTER_VALIDATE_URL)) {
-                    $oldPath = 'public/' . ltrim($post->postPhoto, '/');
-                    if (Storage::exists($oldPath)) Storage::delete($oldPath);
+                    $oldPath = ltrim($post->postPhoto, '/');
+                    if (Storage::disk('public')->exists($oldPath)) Storage::disk('public')->delete($oldPath);
                 }
                 $newPhotoPath            = $this->handleFileUpload($request->file('postPhoto'), 'posts/photos', 'photo');
                 $updateData['postPhoto'] = $newPhotoPath;
                 $updateData['postType']  = 'photo';
                 if ($hasVideoColumn) $updateData['postVideo'] = '';
-                $newPhotoUrl             = asset('storage/' . $newPhotoPath);
+                $newPhotoUrl             = MediaUrl::url($newPhotoPath);
 
             } elseif ($hasNewVideo) {
                 if (!$hasVideoColumn) {
@@ -3341,14 +3343,14 @@ class PostController extends Controller
                 }
                 // Delete old stored video
                 if (!empty($post->postVideo) && !filter_var($post->postVideo, FILTER_VALIDATE_URL)) {
-                    $oldVideoPath = 'public/' . ltrim($post->postVideo, '/');
-                    if (Storage::exists($oldVideoPath)) Storage::delete($oldVideoPath);
+                    $oldVideoPath = ltrim($post->postVideo, '/');
+                    if (Storage::disk('public')->exists($oldVideoPath)) Storage::disk('public')->delete($oldVideoPath);
                 }
                 $newVideoPath            = $this->handleFileUpload($request->file('postVideo'), 'posts/videos', 'video');
                 $updateData['postVideo'] = $newVideoPath;
                 $updateData['postPhoto'] = '';
                 $updateData['postType']  = 'video';
-                $newVideoUrl             = asset('storage/' . $newVideoPath);
+                $newVideoUrl             = MediaUrl::url($newVideoPath);
 
             } elseif ($hasGif) {
                 $updateData['postPhoto'] = $newGifUrl;
@@ -3375,12 +3377,12 @@ class PostController extends Controller
 
             } elseif ($removePhoto) {
                 if (!empty($post->postPhoto) && !filter_var($post->postPhoto, FILTER_VALIDATE_URL)) {
-                    $oldPath = 'public/' . ltrim($post->postPhoto, '/');
-                    if (Storage::exists($oldPath)) Storage::delete($oldPath);
+                    $oldPath = ltrim($post->postPhoto, '/');
+                    if (Storage::disk('public')->exists($oldPath)) Storage::disk('public')->delete($oldPath);
                 }
                 if ($hasVideoColumn && !empty($post->postVideo) && !filter_var($post->postVideo, FILTER_VALIDATE_URL)) {
-                    $oldVideoPath = 'public/' . ltrim($post->postVideo, '/');
-                    if (Storage::exists($oldVideoPath)) Storage::delete($oldVideoPath);
+                    $oldVideoPath = ltrim($post->postVideo, '/');
+                    if (Storage::disk('public')->exists($oldVideoPath)) Storage::disk('public')->delete($oldVideoPath);
                 }
                 $updateData['postPhoto'] = '';
                 $updateData['postType']  = 'text';
@@ -3518,23 +3520,23 @@ class PostController extends Controller
 
             // Delete post images/files if they exist
             if (!empty($post->postFile)) {
-                $filePath = 'public/' . $post->postFile;
-                if (Storage::exists($filePath)) {
-                    Storage::delete($filePath);
+                $filePath = $post->postFile;
+                if (Storage::disk('public')->exists($filePath)) {
+                    Storage::disk('public')->delete($filePath);
                 }
             }
 
             if (!empty($post->postPhoto)) {
-                $photoPath = 'public/' . $post->postPhoto;
-                if (Storage::exists($photoPath)) {
-                    Storage::delete($photoPath);
+                $photoPath = $post->postPhoto;
+                if (Storage::disk('public')->exists($photoPath)) {
+                    Storage::disk('public')->delete($photoPath);
                 }
             }
 
             if (!empty($post->postRecord)) {
-                $recordPath = 'public/' . $post->postRecord;
-                if (Storage::exists($recordPath)) {
-                    Storage::delete($recordPath);
+                $recordPath = $post->postRecord;
+                if (Storage::disk('public')->exists($recordPath)) {
+                    Storage::disk('public')->delete($recordPath);
                 }
             }
 
@@ -3712,7 +3714,7 @@ class PostController extends Controller
                             'first_name' => $user->first_name ?? '',
                             'last_name' => $user->last_name ?? '',
                             'avatar' => $user->avatar ?? '',
-                            'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                            'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                             'verified' => User::isVerifiedFlag($user->verified ?? null),
                             'is_following' => $isFollowing,
                             'liked_at' => $like->time ?? null ? date('c', $like->time) : null,

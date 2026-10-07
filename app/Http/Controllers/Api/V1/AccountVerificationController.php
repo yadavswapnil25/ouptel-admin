@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Models\VerificationRequest;
@@ -134,14 +136,14 @@ class AccountVerificationController extends Controller
             // Upload front image
             $frontImage = $request->file('id_proof_front_image');
             $frontFilename = 'verification_front_' . $tokenUserId . '_' . time() . '.' . $frontImage->getClientOriginalExtension();
-            $frontPath = $frontImage->storeAs('upload/verification/' . date('Y/m'), $frontFilename, 'public');
+            $frontPath = $frontImage->storeAs('upload/verification/' . date('Y/m'), $frontFilename, MediaUrl::storeOptions('upload/verification/'));
 
             // Upload back image (optional for PAN Card)
             $backPath = null;
             if ($request->hasFile('id_proof_back_image')) {
                 $backImage = $request->file('id_proof_back_image');
                 $backFilename = 'verification_back_' . $tokenUserId . '_' . time() . '.' . $backImage->getClientOriginalExtension();
-                $backPath = $backImage->storeAs('upload/verification/' . date('Y/m'), $backFilename, 'public');
+                $backPath = $backImage->storeAs('upload/verification/' . date('Y/m'), $backFilename, MediaUrl::storeOptions('upload/verification/'));
             }
 
             // Create verification request
@@ -273,20 +275,20 @@ class AccountVerificationController extends Controller
             // Upload front image
             $frontImage = $request->file('id_proof_front_image');
             $frontFilename = 'verification_front_' . $tokenUserId . '_' . time() . '.' . $frontImage->getClientOriginalExtension();
-            $frontPath = $frontImage->storeAs('upload/verification/' . date('Y/m'), $frontFilename, 'public');
+            $frontPath = $frontImage->storeAs('upload/verification/' . date('Y/m'), $frontFilename, MediaUrl::storeOptions('upload/verification/'));
 
             // Upload back image (optional for PAN Card)
             $backPath = null;
             if ($request->hasFile('id_proof_back_image')) {
                 $backImage = $request->file('id_proof_back_image');
                 $backFilename = 'verification_back_' . $tokenUserId . '_' . time() . '.' . $backImage->getClientOriginalExtension();
-                $backPath = $backImage->storeAs('upload/verification/' . date('Y/m'), $backFilename, 'public');
+                $backPath = $backImage->storeAs('upload/verification/' . date('Y/m'), $backFilename, MediaUrl::storeOptions('upload/verification/'));
             }
 
             // Upload verification video
             $video = $request->file('verification_video');
             $videoFilename = 'verification_video_' . $tokenUserId . '_' . time() . '.' . $video->getClientOriginalExtension();
-            $videoPath = $video->storeAs('upload/verification/videos/' . date('Y/m'), $videoFilename, 'public');
+            $videoPath = $video->storeAs('upload/verification/videos/' . date('Y/m'), $videoFilename, MediaUrl::storeOptions('upload/verification/videos/'));
             
             // Get video file size and duration (basic info)
             $videoSize = $video->getSize();

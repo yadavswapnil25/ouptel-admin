@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
 use App\Models\Event;
@@ -375,8 +377,8 @@ class ProfileController extends Controller
         }
 
         // Add profile and cover URLs
-        $userData['avatar_url'] = $user->avatar ? asset('storage/' . $user->avatar) : asset('images/placeholders/user-avatar.svg');
-        $userData['cover_url'] = $user->cover ? asset('storage/' . $user->cover) : asset('images/default-cover.jpg');
+        $userData['avatar_url'] = $user->avatar ? MediaUrl::url($user->avatar) : asset('images/placeholders/user-avatar.svg');
+        $userData['cover_url'] = $user->cover ? MediaUrl::url($user->cover) : asset('images/default-cover.jpg');
 
         // Badge only when approved verification exists and verified_badge_at is set on user
         $verifiedBadgeAt = Schema::hasColumn('Wo_Users', 'verified_badge_at')
@@ -461,7 +463,7 @@ class ProfileController extends Controller
 
                 if ($stateRow && !empty($stateRow->photo)) {
                     $photoPath = ltrim((string) $stateRow->photo, '/');
-                    $userData['state_background_url'] = asset('storage/' . $photoPath);
+                    $userData['state_background_url'] = MediaUrl::url($photoPath);
                     $userData['location_background_name'] = $stateRow->name ?? null;
                 }
             } catch (\Exception $e) {
@@ -616,7 +618,7 @@ class ProfileController extends Controller
                 ->exists();
             $followerData['is_following'] = $isFollowing ? 1 : 0;
 
-            $followerData['avatar_url'] = $follower->avatar ? asset('storage/' . $follower->avatar) : asset('images/placeholders/user-avatar.svg');
+            $followerData['avatar_url'] = $follower->avatar ? MediaUrl::url($follower->avatar) : asset('images/placeholders/user-avatar.svg');
 
             $result[] = $followerData;
         }
@@ -653,7 +655,7 @@ class ProfileController extends Controller
                 ->exists();
             $followData['is_following'] = $isFollowing ? 1 : 0;
 
-            $followData['avatar_url'] = $follow->avatar ? asset('storage/' . $follow->avatar) : asset('images/placeholders/user-avatar.svg');
+            $followData['avatar_url'] = $follow->avatar ? MediaUrl::url($follow->avatar) : asset('images/placeholders/user-avatar.svg');
 
             $result[] = $followData;
         }
@@ -800,7 +802,7 @@ class ProfileController extends Controller
                     $images[] = [
                         'id' => $image->id,
                         'image_path' => $image->image ?? '',
-                        'image_url' => $image->image ? asset('storage/' . $image->image) : null,
+                        'image_url' => $image->image ? MediaUrl::url($image->image) : null,
                     ];
                 }
 
@@ -809,7 +811,7 @@ class ProfileController extends Controller
                 if (!empty($images)) {
                     $coverImage = $images[0]['image_url'];
                 } elseif (!empty($album->postPhoto)) {
-                    $coverImage = asset('storage/' . $album->postPhoto);
+                    $coverImage = MediaUrl::url($album->postPhoto);
                 }
 
                 $result[] = [
@@ -2069,7 +2071,7 @@ class ProfileController extends Controller
                         'username' => $sharedUser->username ?? 'Unknown',
                         'name' => trim(($sharedUser->first_name ?? '') . ' ' . ($sharedUser->last_name ?? ''))
                             ?: ($sharedUser->name ?? $sharedUser->username ?? 'Unknown User'),
-                        'avatar_url' => $sharedUser->avatar ? asset('storage/' . $sharedUser->avatar) : null,
+                        'avatar_url' => $sharedUser->avatar ? MediaUrl::url($sharedUser->avatar) : null,
                         'verified' => (bool) ($sharedUser->verified ?? false),
                     ] : null;
                     $photo = $sharedPost->postPhoto ?? '';
@@ -2080,7 +2082,7 @@ class ProfileController extends Controller
                         'post_text' => $sharedPost->postText ?? '',
                         'postType' => $sharedPost->postType ?? 'post',
                         'post_type' => $sharedPost->postType ?? 'post',
-                        'post_photo_url' => $photo !== '' ? asset('storage/' . ltrim($photo, '/')) : null,
+                        'post_photo_url' => $photo !== '' ? MediaUrl::url(ltrim($photo, '/')) : null,
                         'time' => $sharedPost->time ?? null,
                         'created_at' => !empty($sharedPost->time) ? date('c', $sharedPost->time) : null,
                         'publisher' => $sharedPublisher,
@@ -2100,7 +2102,7 @@ class ProfileController extends Controller
                             ?: ($recipientUser->name ?? $recipientUser->username ?? 'Unknown User'),
                         'first_name' => $recipientUser->first_name ?? '',
                         'last_name' => $recipientUser->last_name ?? '',
-                        'avatar_url' => ($recipientUser->avatar) ? asset('storage/' . $recipientUser->avatar) : null,
+                        'avatar_url' => ($recipientUser->avatar) ? MediaUrl::url($recipientUser->avatar) : null,
                     ];
                 }
             }
@@ -2126,7 +2128,7 @@ class ProfileController extends Controller
                 'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->name ?? $user->username ?? ''),
                 'username' => $user->username ?? '',
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 'verified' => User::isVerifiedFlag($user->verified ?? null),
                 'badge' => $this->getUserBadge($post->user_id),
                 'badge_type' => $this->getUserBadgeType($post->user_id),
@@ -2144,7 +2146,7 @@ class ProfileController extends Controller
                         'page_title' => $pageTitle !== '' ? $pageTitle : $pageName,
                         'name' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
                         'avatar' => $pageRow->avatar ?? '',
-                        'avatar_url' => !empty($pageRow->avatar) ? asset('storage/' . $pageRow->avatar) : null,
+                        'avatar_url' => !empty($pageRow->avatar) ? MediaUrl::url($pageRow->avatar) : null,
                         'verified' => User::isVerifiedFlag($pageRow->verified ?? null),
                     ];
                 }
@@ -2162,7 +2164,7 @@ class ProfileController extends Controller
                         'group_title' => $groupTitle !== '' ? $groupTitle : $groupName,
                         'name' => $groupTitle !== '' ? $groupTitle : ($groupName !== '' ? $groupName : 'Group'),
                         'avatar' => $groupRow->avatar ?? '',
-                        'avatar_url' => !empty($groupRow->avatar) ? asset('storage/' . $groupRow->avatar) : null,
+                        'avatar_url' => !empty($groupRow->avatar) ? MediaUrl::url($groupRow->avatar) : null,
                     ];
                 }
             }
@@ -2186,11 +2188,11 @@ class ProfileController extends Controller
                 'shared_from' => $sharedFrom,
                 'postPrivacy' => $post->postPrivacy ?? '0',
                 'postPhoto' => $post->postPhoto ?? '',
-                'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
+                'post_photo_url' => $post->postPhoto ? MediaUrl::url($post->postPhoto) : null,
                 'postFile' => isset($post->postFile) ? $post->postFile : '',
-                'post_file_url' => (isset($post->postFile) && !empty($post->postFile)) ? asset('storage/' . $post->postFile) : null,
+                'post_file_url' => (isset($post->postFile) && !empty($post->postFile)) ? MediaUrl::url($post->postFile) : null,
                 'postVideo' => (($post->postType ?? '') === 'video' && !empty($post->postFile)) ? $post->postFile : '',
-                'post_video_url' => (($post->postType ?? '') === 'video' && !empty($post->postFile)) ? asset('storage/' . $post->postFile) : null,
+                'post_video_url' => (($post->postType ?? '') === 'video' && !empty($post->postFile)) ? MediaUrl::url($post->postFile) : null,
                 'postYoutube' => $post->postYoutube ?? '',
                 'postVimeo' => $post->postVimeo ?? '',
                 'postLink' => $post->postLink ?? '',
@@ -2290,7 +2292,7 @@ class ProfileController extends Controller
                 'name' => $displayName !== '' ? $displayName : ($u->username ?? 'User'),
                 'first_name' => $u->first_name ?? '',
                 'last_name' => $u->last_name ?? '',
-                'avatar_url' => ($u->avatar ?? '') ? asset('storage/' . $u->avatar) : null,
+                'avatar_url' => ($u->avatar ?? '') ? MediaUrl::url($u->avatar) : null,
             ];
             if (count($result) >= 8) {
                 break;
@@ -2329,7 +2331,7 @@ class ProfileController extends Controller
                 return [
                     'id' => $image->id,
                     'image_path' => $image->image,
-                    'image_url' => asset('storage/' . $image->image),
+                    'image_url' => MediaUrl::url($image->image),
                 ];
             })->filter()->toArray(); // Filter out nulls if image is empty
         } catch (\Exception $e) {
@@ -2391,9 +2393,9 @@ class ProfileController extends Controller
             'last_name' => $user->last_name ?? '',
             'email' => $isOwner ? ($user->email ?? '') : '',
             'avatar' => $user->avatar ?? '',
-            'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+            'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
             'cover' => $user->cover ?? '',
-            'cover_url' => $user->cover ? asset('storage/' . $user->cover) : null,
+            'cover_url' => $user->cover ? MediaUrl::url($user->cover) : null,
             'about' => $user->about ?? '',
             'verified' => (bool) ($user->verified ?? false),
             'is_following' => $isFollowing ? 1 : 0,
@@ -2651,7 +2653,7 @@ class ProfileController extends Controller
                 'color_2' => $coloredPost->color_2 ?? '',
                 'text_color' => $coloredPost->text_color ?? '',
                 'image' => $coloredPost->image ?? '',
-                'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+                'image_url' => !empty($coloredPost->image) ? MediaUrl::url($coloredPost->image) : null,
             ];
         } catch (\Exception $e) {
             return null;

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1\News;
 
+
+use App\Support\MediaUrl;
 use App\Models\NewsArticle;
 use App\Models\NewsArticleComment;
 use App\Models\User;
@@ -152,7 +154,7 @@ class NewsCommentController extends Controller
         $author = null;
 
         if ($user instanceof User) {
-            $avatarUrl = $user->avatar ? asset('storage/' . $user->avatar) : null;
+            $avatarUrl = $user->avatar ? MediaUrl::url($user->avatar) : null;
 
             $author = [
                 'user_id' => $user->user_id,

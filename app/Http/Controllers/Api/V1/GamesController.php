@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Models\Game;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -365,7 +367,7 @@ class GamesController extends BaseController
             'game_name' => $game->game_name ?? '',
             'game_link' => $gameLink,
             'game_avatar' => $avatar,
-            'game_avatar_url' => !empty($avatar) ? asset('storage/' . $avatar) : null,
+            'game_avatar_url' => !empty($avatar) ? MediaUrl::url($avatar) : null,
             'game_description' => $game->game_description ?? '',
             'players' => $playersCount,
             'active_players' => $activePlayersCount,

@@ -2,6 +2,8 @@
 
 namespace App\Filament\Admin\Resources;
 
+
+use App\Support\MediaUrl;
 use App\Filament\Admin\Resources\UserManagementResource\Pages;
 use App\Filament\Admin\Concerns\HasPanelAccess;
 use App\Http\Controllers\Api\V1\CountriesController;
@@ -230,19 +232,7 @@ class UserManagementResource extends Resource
                             if (filter_var($avatar, FILTER_VALIDATE_URL)) {
                                 $resolved = $avatar;
                             } else {
-                                $avatar = ltrim($avatar, '/');
-
-                                // Public path in project root (e.g. images/..., upload/...)
-                                if (file_exists(public_path($avatar))) {
-                                    $resolved = asset($avatar);
-                                }
-                                // Storage-served path (e.g. upload/photos/... under storage/app/public)
-                                elseif (file_exists(public_path('storage/' . $avatar))) {
-                                    $resolved = asset('storage/' . $avatar);
-                                } else {
-                                    // Last resort: still try rendering as public asset path
-                                    $resolved = asset($avatar);
-                                }
+                                $resolved = \App\Helpers\ImageHelper::getImageUrl($avatar, 'user');
                             }
                         }
 

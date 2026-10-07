@@ -2,6 +2,8 @@
 
 namespace App\Filament\Admin\Resources;
 
+
+use App\Support\MediaUrl;
 use App\Filament\Admin\Resources\VerificationRequestsResource\Pages;
 use App\Models\VerificationRequest;
 use Filament\Forms;
@@ -149,7 +151,7 @@ class VerificationRequestsResource extends Resource
                             ->label('Front Image')
                             ->content(function ($record) {
                                 if ($record?->id_proof_front_image) {
-                                    $url = asset('storage/' . $record->id_proof_front_image);
+                                    $url = MediaUrl::forPath($record->id_proof_front_image);
                                     return new \Illuminate\Support\HtmlString(
                                         "<a href='{$url}' target='_blank'><img src='{$url}' class='max-w-md max-h-64 rounded-lg shadow-lg cursor-pointer hover:opacity-80' /></a>"
                                     );
@@ -161,7 +163,7 @@ class VerificationRequestsResource extends Resource
                             ->label('Back Image')
                             ->content(function ($record) {
                                 if ($record?->id_proof_back_image) {
-                                    $url = asset('storage/' . $record->id_proof_back_image);
+                                    $url = MediaUrl::forPath($record->id_proof_back_image);
                                     return new \Illuminate\Support\HtmlString(
                                         "<a href='{$url}' target='_blank'><img src='{$url}' class='max-w-md max-h-64 rounded-lg shadow-lg cursor-pointer hover:opacity-80' /></a>"
                                     );
@@ -206,7 +208,7 @@ class VerificationRequestsResource extends Resource
                             ->label('ID Front Image')
                             ->content(function ($record) {
                                 if ($record?->id_proof_front_image) {
-                                    $url = asset('storage/' . ltrim($record->id_proof_front_image, '/'));
+                                    $url = MediaUrl::forPath(ltrim($record->id_proof_front_image, '/'));
                                     return new \Illuminate\Support\HtmlString(
                                         "<a href='{$url}' target='_blank' rel='noopener'><img src='{$url}' alt='ID front' class='max-w-md max-h-64 rounded-lg shadow-lg cursor-pointer hover:opacity-80' /></a>"
                                     );
@@ -218,7 +220,7 @@ class VerificationRequestsResource extends Resource
                             ->label('ID Back Image')
                             ->content(function ($record) {
                                 if ($record?->id_proof_back_image) {
-                                    $url = asset('storage/' . ltrim($record->id_proof_back_image, '/'));
+                                    $url = MediaUrl::forPath(ltrim($record->id_proof_back_image, '/'));
                                     return new \Illuminate\Support\HtmlString(
                                         "<a href='{$url}' target='_blank' rel='noopener'><img src='{$url}' alt='ID back' class='max-w-md max-h-64 rounded-lg shadow-lg cursor-pointer hover:opacity-80' /></a>"
                                     );
@@ -231,7 +233,7 @@ class VerificationRequestsResource extends Resource
                             ->content(function ($record) {
                                 $path = trim((string) ($record?->photo ?? ''));
                                 if ($path !== '') {
-                                    $url = asset('storage/' . ltrim($path, '/'));
+                                    $url = MediaUrl::forPath(ltrim($path, '/'));
                                     return new \Illuminate\Support\HtmlString(
                                         "<a href='{$url}' target='_blank' rel='noopener'><img src='{$url}' alt='Live photo' class='max-w-md max-h-64 rounded-lg shadow-lg cursor-pointer hover:opacity-80' /></a>"
                                     );
@@ -247,7 +249,7 @@ class VerificationRequestsResource extends Resource
                                 if (!$path) {
                                     return 'No document uploaded';
                                 }
-                                $url = asset('storage/' . ltrim($path, '/'));
+                                $url = MediaUrl::forPath(ltrim($path, '/'));
                                 $lower = strtolower($path);
                                 if (str_ends_with($lower, '.pdf')) {
                                     return new \Illuminate\Support\HtmlString(
@@ -541,13 +543,13 @@ class VerificationRequestsResource extends Resource
                         $record?->isPageVerification() ? 'Page Verification Photos' : 'ID Proof Images')
                     ->modalContent(function ($record) {
                         $frontUrl = $record->id_proof_front_image
-                            ? asset('storage/' . ltrim($record->id_proof_front_image, '/'))
+                            ? MediaUrl::forPath(ltrim($record->id_proof_front_image, '/'))
                             : null;
                         $backUrl = $record->id_proof_back_image
-                            ? asset('storage/' . ltrim($record->id_proof_back_image, '/'))
+                            ? MediaUrl::forPath(ltrim($record->id_proof_back_image, '/'))
                             : null;
                         $livePhotoUrl = $record->photo
-                            ? asset('storage/' . ltrim($record->photo, '/'))
+                            ? MediaUrl::forPath(ltrim($record->photo, '/'))
                             : null;
 
                         return view('filament.modals.verification-images', [

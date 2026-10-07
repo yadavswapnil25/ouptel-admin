@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Models\Group;
 use App\Models\GroupMember;
 use Illuminate\Http\JsonResponse;
@@ -391,7 +393,7 @@ class GroupsController extends BaseController
                 'username' => $group->user->username ?? 'Unknown',
                 'name' => $group->user->name ?? $group->user->username ?? 'Unknown User',
                 'avatar' => $group->user->avatar ?? '',
-                'avatar_url' => $group->user->avatar ? asset('storage/' . $group->user->avatar) : null,
+                'avatar_url' => $group->user->avatar ? MediaUrl::url($group->user->avatar) : null,
                 'verified' => (bool) ($group->user->verified ?? false),
             ];
         }
@@ -860,7 +862,7 @@ class GroupsController extends BaseController
                     ?: ($user->username ?? 'Unknown User'),
                 'first_name' => $user->first_name ?? '',
                 'last_name' => $user->last_name ?? '',
-                'avatar_url' => !empty($user->avatar) ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => !empty($user->avatar) ? MediaUrl::url($user->avatar) : null,
                 'joined_at' => is_numeric($row->time) ? (int) $row->time : null,
                 'is_owner' => $userIdStr === $ownerId,
                 'is_admin' => in_array($userIdStr, $adminIds, true) || $userIdStr === $ownerId,

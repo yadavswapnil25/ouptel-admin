@@ -71,8 +71,13 @@ class Gender extends Model
 
     public function getImageUrlAttribute(): string
     {
-        if ($this->image && file_exists(public_path('upload/photos/' . $this->image))) {
-            return asset('upload/photos/' . $this->image);
+        if ($this->image) {
+            if (\App\Support\MediaUrl::onS3()) {
+                return \App\Support\MediaUrl::url('upload/photos/' . $this->image);
+            }
+            if (file_exists(public_path('upload/photos/' . $this->image))) {
+                return asset('upload/photos/' . $this->image);
+            }
         }
 
         return asset('images/placeholders/gender-default.svg');

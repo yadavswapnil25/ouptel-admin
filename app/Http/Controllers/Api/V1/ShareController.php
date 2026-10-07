@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Services\ChatService;
 use App\Services\FriendActivityNotificationService;
@@ -934,7 +936,7 @@ class ShareController extends Controller
                     'username' => $user->username ?? 'Unknown',
                     'name' => $user->name ?? $user->username ?? 'Unknown User',
                     'avatar' => $user->avatar ?? '',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                     'verified' => (bool) ($user->verified ?? false),
                 ];
             }
@@ -954,7 +956,7 @@ class ShareController extends Controller
                         'user_id' => $sharedUser->user_id,
                         'username' => $sharedUser->username ?? 'Unknown',
                         'name' => $sharedUser->name ?? $sharedUser->username ?? 'Unknown User',
-                        'avatar_url' => $sharedUser->avatar ? asset('storage/' . $sharedUser->avatar) : null,
+                        'avatar_url' => $sharedUser->avatar ? MediaUrl::url($sharedUser->avatar) : null,
                     ] : null,
                 ];
             }
@@ -975,8 +977,8 @@ class ShareController extends Controller
             'publisher' => $publisher,
             'user_data' => $publisher,
             'shared_info' => $sharedInfo,
-            'postFile' => $post->postFile ? asset('storage/' . $post->postFile) : null,
-            'postFileThumb' => $post->postFileThumb ? asset('storage/' . $post->postFileThumb) : null,
+            'postFile' => $post->postFile ? MediaUrl::url($post->postFile) : null,
+            'postFileThumb' => $post->postFileThumb ? MediaUrl::url($post->postFileThumb) : null,
             'postLink' => $post->postLink ?? '',
             'postYoutube' => $post->postYoutube ?? '',
             'postPlaytube' => $post->postPlaytube ?? '',

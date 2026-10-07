@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Models\Event;
 use App\Models\User;
 use App\Services\FriendActivityNotificationService;
@@ -106,7 +108,7 @@ class EventsController extends BaseController
             'end_date' => $event->end_date?->format('d-m-Y'), // Format: DD-MM-YYYY
             'end_time' => $event->end_time ? $this->formatTimeWithAmPm($event->end_time) : null, // Format: hh:mm AM/PM
             'cover_url' => $event->cover_url,
-            'image_url' => $isImagePath ? asset('storage/' . $event->cover) : null,
+            'image_url' => $isImagePath ? MediaUrl::url($event->cover) : null,
             'cover_image_url' => null, // Since we store only one image in cover field
             'status' => $event->status_text,
             'is_going' => $isGoing,
@@ -283,8 +285,8 @@ class EventsController extends BaseController
                 'start_time' => $event->start_time ? $this->formatTimeWithAmPm($event->start_time) : null, // Format: hh:mm AM/PM
                 'end_date' => $event->end_date?->format('d-m-Y'), // Format: DD-MM-YYYY
                 'end_time' => $event->end_time ? $this->formatTimeWithAmPm($event->end_time) : null, // Format: hh:mm AM/PM
-                'image_url' => $imagePath ? asset('storage/' . $imagePath) : null,
-                'cover_image_url' => $coverImagePath ? asset('storage/' . $coverImagePath) : null,
+                'image_url' => $imagePath ? MediaUrl::url($imagePath) : null,
+                'cover_image_url' => $coverImagePath ? MediaUrl::url($coverImagePath) : null,
                 'cover_url' => $event->cover_url,
                 'status' => $event->status_text,
                 'is_owner' => true,
@@ -762,7 +764,7 @@ class EventsController extends BaseController
             'user_id' => $user->user_id,
             'username' => $user->username ?? '',
             'name' => $name,
-            'avatar_url' => !empty($user->avatar) ? asset('storage/' . $user->avatar) : null,
+            'avatar_url' => !empty($user->avatar) ? MediaUrl::url($user->avatar) : null,
         ];
 
         if ($includeContact) {

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
 use App\Models\Setting;
@@ -394,7 +396,7 @@ class QuestionController extends Controller
 
         return filter_var($photo, FILTER_VALIDATE_URL) !== false
             ? $photo
-            : asset('storage/' . $photo);
+            : MediaUrl::url($photo);
     }
 
     private function formatAnswerOrQuestion($post, $user, int $answerCount = 0, array $answerPreviews = []): array
@@ -429,7 +431,7 @@ class QuestionController extends Controller
                 'user_id' => $user->user_id,
                 'username' => $user->username ?? 'Unknown',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
             ] : null,
             'publisher' => $user ? [
                 'user_id' => $user->user_id,

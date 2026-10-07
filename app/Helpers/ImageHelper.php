@@ -2,6 +2,8 @@
 
 namespace App\Helpers;
 
+use App\Support\MediaUrl;
+
 class ImageHelper
 {
     /**
@@ -31,26 +33,7 @@ class ImageHelper
      */
     public static function getImageUrl(?string $imagePath, string $type = 'default'): string
     {
-        $resolved = null;
-
-        if ($imagePath) {
-            $normalized = ltrim($imagePath, '/');
-
-            // Direct public path (e.g. images/..., upload/...)
-            if (file_exists(public_path($normalized))) {
-                $resolved = asset($normalized);
-            }
-            // Storage symlink path (e.g. blog/... saved on public disk → public/storage/blog/...)
-            elseif (file_exists(public_path('storage/' . $normalized))) {
-                $resolved = asset('storage/' . $normalized);
-            }
-            // If already a full URL, just return it
-            elseif (filter_var($imagePath, FILTER_VALIDATE_URL)) {
-                $resolved = $imagePath;
-            }
-        }
-
-        return $resolved ?? self::getPlaceholder($type);
+        return self::resolve($imagePath) ?? self::getPlaceholder($type);
     }
 
     /**
@@ -58,23 +41,35 @@ class ImageHelper
      */
     public static function getCoverUrl(?string $coverPath): string
     {
-        if ($coverPath) {
-            $normalized = ltrim($coverPath, '/');
+        return self::resolve($coverPath) ?? asset('images/placeholders/group-cover.svg');
+    }
 
-            // Direct public path (e.g. upload/photos/... served from web root)
+    /**
+     * Stored path -> URL. On local disk, missing files fall back to the
+     * placeholder (as before). On S3 there is no existence check: that would
+     * be a network round-trip per image, and migrated files keep their paths.
+     */
+    private static function resolve(?string $path): ?string
+    {
+        $path = trim((string) $path);
+        if ($path === '') {
+            return null;
+        }
+        if (filter_var($path, FILTER_VALIDATE_URL)) {
+            return $path;
+        }
+
+        $normalized = ltrim($path, '/');
+
+        if (!MediaUrl::onS3()) {
+            // Legacy files served straight from public/ (e.g. public/upload/...).
             if (file_exists(public_path($normalized))) {
                 return asset($normalized);
             }
-            // Storage symlink path (files saved on the public disk → public/storage/...)
-            if (file_exists(public_path('storage/' . $normalized))) {
-                return asset('storage/' . $normalized);
-            }
-            // Already a full URL
-            if (filter_var($coverPath, FILTER_VALIDATE_URL)) {
-                return $coverPath;
-            }
+            $storagePath = str_starts_with($normalized, 'storage/') ? substr($normalized, 8) : $normalized;
+            return file_exists(public_path('storage/' . $storagePath)) ? MediaUrl::url($storagePath) : null;
         }
 
-        return asset('images/placeholders/group-cover.svg');
+        return MediaUrl::url($normalized);
     }
 }

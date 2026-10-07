@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -341,7 +343,7 @@ class MyInformationController extends Controller
             $filePath = "{$dir}/{$filename}";
 
             // Save HTML file
-            Storage::disk('public')->put($filePath, $html);
+            Storage::disk('public')->put($filePath, $html, MediaUrl::storeOptions($dir)['visibility']);
 
             // Delete old info file if exists
             $user = User::where('user_id', $tokenUserId)->first();
@@ -359,7 +361,7 @@ class MyInformationController extends Controller
                 'api_text' => 'success',
                 'api_version' => '1.0',
                 'message' => 'Your information file is ready for download',
-                'link' => asset('storage/' . $filePath),
+                'link' => MediaUrl::forPath($filePath),
                 'file_path' => $filePath
             ]);
 

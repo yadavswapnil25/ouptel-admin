@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -571,7 +573,7 @@ class PollController extends Controller
                 'page_name' => $page->page_name ?? '',
                 'page_title' => $page->page_title ?? ($page->page_name ?? ''),
                 'avatar' => $avatar,
-                'avatar_url' => $avatar !== '' ? asset('storage/' . ltrim($avatar, '/')) : null,
+                'avatar_url' => $avatar !== '' ? MediaUrl::url(ltrim($avatar, '/')) : null,
             ];
         }
 

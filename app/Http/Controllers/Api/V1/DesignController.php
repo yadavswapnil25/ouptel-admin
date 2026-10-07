@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -102,7 +104,7 @@ class DesignController extends Controller
                 'api_text' => 'success',
                 'api_version' => '1.0',
                 'message' => 'Avatar updated successfully',
-                'avatar' => asset('storage/' . $path),
+                'avatar' => MediaUrl::url($path),
                 'avatar_path' => $path,
                 'post_id' => $newPostId,
             ]);
@@ -207,7 +209,7 @@ class DesignController extends Controller
                 'api_text' => 'success',
                 'api_version' => '1.0',
                 'message' => 'Cover photo updated successfully',
-                'cover' => asset('storage/' . $path),
+                'cover' => MediaUrl::url($path),
                 'cover_path' => $path,
                 'post_id' => $newPostId,
             ]);
@@ -293,7 +295,7 @@ class DesignController extends Controller
                 'api_text' => 'success',
                 'api_version' => '1.0',
                 'message' => 'Avatar reset to default successfully',
-                'avatar' => asset('storage/' . $defaultAvatar),
+                'avatar' => MediaUrl::url($defaultAvatar),
                 'avatar_path' => $defaultAvatar
             ]);
 
@@ -378,7 +380,7 @@ class DesignController extends Controller
                 'api_text' => 'success',
                 'api_version' => '1.0',
                 'message' => 'Cover photo reset to default successfully',
-                'cover' => asset('storage/' . $defaultCover),
+                'cover' => MediaUrl::url($defaultCover),
                 'cover_path' => $defaultCover
             ]);
 
@@ -454,9 +456,9 @@ class DesignController extends Controller
                 'api_text' => 'success',
                 'api_version' => '1.0',
                 'design_settings' => [
-                    'avatar' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                     'avatar_path' => $user->avatar ?? '',
-                    'cover' => $user->cover ? asset('storage/' . $user->cover) : null,
+                    'cover' => $user->cover ? MediaUrl::url($user->cover) : null,
                     'cover_path' => $user->cover ?? '',
                     'is_avatar_default' => str_contains($user->avatar ?? '', 'd-avatar') || str_contains($user->avatar ?? '', 'f-avatar'),
                     'is_cover_default' => str_contains($user->cover ?? '', 'cover.jpg')
@@ -704,8 +706,8 @@ class DesignController extends Controller
                     'api_text' => 'success',
                     'api_version' => '1.0',
                     'message' => 'Avatar updated successfully',
-                    'avatar' => asset('storage/' . $destPath),
-                    'avatar_url' => asset('storage/' . $destPath),
+                    'avatar' => MediaUrl::url($destPath),
+                    'avatar_url' => MediaUrl::url($destPath),
                     'avatar_path' => $destPath,
                 ]);
             }
@@ -723,8 +725,8 @@ class DesignController extends Controller
                 'api_text' => 'success',
                 'api_version' => '1.0',
                 'message' => 'Cover photo updated successfully',
-                'cover' => asset('storage/' . $destPath),
-                'cover_url' => asset('storage/' . $destPath),
+                'cover' => MediaUrl::url($destPath),
+                'cover_url' => MediaUrl::url($destPath),
                 'cover_path' => $destPath,
             ]);
         } catch (\Exception $e) {

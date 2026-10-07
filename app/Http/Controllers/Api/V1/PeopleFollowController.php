@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
 use App\Models\Event;
@@ -679,7 +681,7 @@ class PeopleFollowController extends Controller
                         'user_id' => (int) $recipientUser->user_id,
                         'username' => $recipientUser->username ?? 'Unknown',
                         'name' => $this->getUserName($recipientUser),
-                        'avatar_url' => ($recipientUser->avatar) ? asset('storage/' . $recipientUser->avatar) : null,
+                        'avatar_url' => ($recipientUser->avatar) ? MediaUrl::url($recipientUser->avatar) : null,
                     ];
                 }
             }
@@ -742,9 +744,9 @@ class PeopleFollowController extends Controller
                 'post_photo' => $post->postPhoto ?? '',
                 'post_photo_url' => $this->getPostPhotoUrl($post),
                 'post_file' => $post->postFile ?? '',
-                'post_file_url' => ($post->postFile ?? '') ? asset('storage/' . $post->postFile) : null,
+                'post_file_url' => ($post->postFile ?? '') ? MediaUrl::url($post->postFile) : null,
                 'post_record' => $post->postRecord ?? '',
-                'post_record_url' => ($post->postRecord ?? '') ? asset('storage/' . $post->postRecord) : null,
+                'post_record_url' => ($post->postRecord ?? '') ? MediaUrl::url($post->postRecord) : null,
                 'post_youtube' => $post->postYoutube ?? '',
                 'post_vimeo' => $post->postVimeo ?? '',
                 'post_dailymotion' => $post->postDailymotion ?? '',
@@ -798,7 +800,7 @@ class PeopleFollowController extends Controller
                     'user_id' => $post->user_id,
                     'username' => $user?->username ?? 'Unknown',
                     'name' => $this->getUserName($user),
-                    'avatar_url' => ($user?->avatar) ? asset('storage/' . $user?->avatar) : null,
+                    'avatar_url' => ($user?->avatar) ? MediaUrl::url($user?->avatar) : null,
                     'verified' => User::isVerifiedFlag($user?->verified ?? null),
                     'badge' => $this->getUserBadge($post->user_id),
                     'badge_type' => $this->getUserBadgeType($post->user_id),
@@ -883,9 +885,9 @@ class PeopleFollowController extends Controller
                     'first_name' => $user->first_name ?? '',
                     'last_name' => $user->last_name ?? '',
                     'avatar' => $user->avatar ?? '',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                     'cover' => $user->cover ?? '',
-                    'cover_url' => $user->cover ? asset('storage/' . $user->cover) : null,
+                    'cover_url' => $user->cover ? MediaUrl::url($user->cover) : null,
                     'verified' => User::isVerifiedFlag($user->verified ?? null),
                 ];
             })->toArray();
@@ -1149,7 +1151,7 @@ class PeopleFollowController extends Controller
                 return [
                     'id' => $image->id,
                     'image_path' => $image->image,
-                    'image_url' => asset('storage/' . $image->image),
+                    'image_url' => MediaUrl::url($image->image),
                 ];
             })->toArray();
         } catch (\Exception $e) {
@@ -1262,7 +1264,7 @@ class PeopleFollowController extends Controller
                 'page_name' => $page->page_name ?? '',
                 'page_title' => $page->page_title ?? ($page->page_name ?? ''),
                 'avatar' => $avatar,
-                'avatar_url' => $avatar !== '' ? asset('storage/' . ltrim($avatar, '/')) : null,
+                'avatar_url' => $avatar !== '' ? MediaUrl::url(ltrim($avatar, '/')) : null,
             ];
         }
 
@@ -1296,7 +1298,7 @@ class PeopleFollowController extends Controller
                 'color_2' => $coloredPost->color_2 ?? '',
                 'text_color' => $coloredPost->text_color ?? '',
                 'image' => $coloredPost->image ?? '',
-                'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+                'image_url' => !empty($coloredPost->image) ? MediaUrl::url($coloredPost->image) : null,
             ];
         } catch (\Exception $e) {
             return null;
@@ -1368,7 +1370,7 @@ class PeopleFollowController extends Controller
                 'user_id' => (int) $u->user_id,
                 'username' => $u->username ?? '',
                 'name' => $displayName !== '' ? $displayName : ($u->username ?? 'User'),
-                'avatar_url' => ($u->avatar ?? '') ? asset('storage/' . $u->avatar) : null,
+                'avatar_url' => ($u->avatar ?? '') ? MediaUrl::url($u->avatar) : null,
             ];
             if (count($result) >= 8) {
                 break;
@@ -1416,7 +1418,7 @@ class PeopleFollowController extends Controller
             return preg_replace('#([^:])//+#', '$1/', $postPhoto);
         }
         
-        return asset('storage/' . $postPhoto);
+        return MediaUrl::url($postPhoto);
     }
 
     /**

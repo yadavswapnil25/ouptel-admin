@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Models\Job;
 use App\Models\Page;
@@ -152,7 +154,7 @@ class JobsController extends Controller
             if ($hasImageCol && $job->image) {
                 $image = (str_starts_with($job->image, 'http://') || str_starts_with($job->image, 'https://'))
                     ? $job->image
-                    : asset('storage/' . $job->image);
+                    : MediaUrl::url($job->image);
             }
 
             $rawCategory = $job->category ?? null;
@@ -352,7 +354,7 @@ class JobsController extends Controller
         if (Schema::hasColumn('Wo_Job', 'image') && $job->image) {
             $image = (str_starts_with($job->image, 'http://') || str_starts_with($job->image, 'https://'))
                 ? $job->image
-                : asset('storage/' . $job->image);
+                : MediaUrl::url($job->image);
         }
 
         $pageInfo = $this->resolveJobPageInfo($job->page_id ?? $validated['page_id'] ?? null);
@@ -579,7 +581,7 @@ class JobsController extends Controller
                             if (str_starts_with($avatar, 'http://') || str_starts_with($avatar, 'https://')) {
                                 $avatarUrl = $avatar;
                             } else {
-                                $avatarUrl = asset('storage/' . ltrim($avatar, '/'));
+                                $avatarUrl = MediaUrl::url(ltrim($avatar, '/'));
                             }
                         }
                     }
@@ -659,7 +661,7 @@ class JobsController extends Controller
         $showImage = null;
         if (!empty($job->attributes['image'])) {
             $img = $job->attributes['image'];
-            $showImage = str_starts_with($img, 'http') ? $img : asset('storage/' . $img);
+            $showImage = str_starts_with($img, 'http') ? $img : MediaUrl::url($img);
         }
 
         $pageInfo = $this->resolveJobPageInfo($job->page_id ?? null);
@@ -813,7 +815,7 @@ class JobsController extends Controller
                 $file = $request->file('resume');
                 $ext = strtolower($file->getClientOriginalExtension() ?: 'pdf');
                 $filename = 'resume_' . $userId . '_' . time() . '.' . $ext;
-                $resumePath = $file->storeAs('upload/resumes/' . date('Y/m'), $filename, 'public');
+                $resumePath = $file->storeAs('upload/resumes/' . date('Y/m'), $filename, MediaUrl::storeOptions('upload/resumes/'));
             } catch (\Exception $e) {
                 return response()->json([
                     'ok' => false,
@@ -932,7 +934,7 @@ class JobsController extends Controller
                 $image = null;
                 if (!empty($job->attributes['image'])) {
                     $img = $job->attributes['image'];
-                    $image = str_starts_with($img, 'http') ? $img : asset('storage/' . $img);
+                    $image = str_starts_with($img, 'http') ? $img : MediaUrl::url($img);
                 }
                 $rawCategory = $job->category ?? null;
                 $catId = $rawCategory !== null && $rawCategory !== '' ? (int) $rawCategory : null;
@@ -1251,7 +1253,7 @@ class JobsController extends Controller
         if ($avatar !== '') {
             $avatarUrl = (str_starts_with($avatar, 'http://') || str_starts_with($avatar, 'https://'))
                 ? $avatar
-                : asset('storage/' . ltrim($avatar, '/'));
+                : MediaUrl::url(ltrim($avatar, '/'));
         }
 
         $pageTitle = trim((string) ($page->page_title ?? ''));
@@ -1323,7 +1325,7 @@ class JobsController extends Controller
 
             $avatar = $ownerUser->avatar ?? '';
             if ($avatar) {
-                $owner['avatar_url'] = asset('storage/' . $avatar);
+                $owner['avatar_url'] = MediaUrl::url($avatar);
             }
         } catch (\Exception $e) {
             // Keep default values
@@ -1360,13 +1362,7 @@ class JobsController extends Controller
         if ($path === '') {
             return '';
         }
-        if (str_starts_with($path, 'http://') || str_starts_with($path, 'https://')) {
-            return $path;
-        }
-        try {
-            return Storage::disk('public')->url(ltrim($path, '/'));
-        } catch (\Throwable $e) {
-            return asset('storage/' . ltrim($path, '/'));
-        }
+        // Resumes are private on S3: forPath() returns a short-lived signed URL.
+        return MediaUrl::forPath($path) ?? '';
     }
 }

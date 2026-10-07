@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
 use Illuminate\Http\JsonResponse;
@@ -347,18 +349,18 @@ class HashtagController extends Controller
                 'name' => trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->name ?? $user->username ?? ''),
                 'username' => $user->username ?? '',
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 'verified' => (bool) ($user->verified ?? false),
             ],
             'postText' => $post->postText ?? '',
             'postType' => $postType,
             'postPrivacy' => $post->postPrivacy ?? '0',
             'postPhoto' => $post->postPhoto ?? '',
-            'post_photo_url' => $post->postPhoto ? asset('storage/' . $post->postPhoto) : null,
+            'post_photo_url' => $post->postPhoto ? MediaUrl::url($post->postPhoto) : null,
             'postFile' => isset($post->postFile) ? $post->postFile : '',
-            'post_file_url' => (isset($post->postFile) && !empty($post->postFile)) ? asset('storage/' . $post->postFile) : null,
+            'post_file_url' => (isset($post->postFile) && !empty($post->postFile)) ? MediaUrl::url($post->postFile) : null,
             'postVideo' => (($post->postType ?? '') === 'video' && !empty($post->postFile)) ? $post->postFile : '',
-            'post_video_url' => (($post->postType ?? '') === 'video' && !empty($post->postFile)) ? asset('storage/' . $post->postFile) : null,
+            'post_video_url' => (($post->postType ?? '') === 'video' && !empty($post->postFile)) ? MediaUrl::url($post->postFile) : null,
             'postYoutube' => $post->postYoutube ?? '',
             'postVimeo' => $post->postVimeo ?? '',
             'postLink' => $post->postLink ?? '',
@@ -468,7 +470,7 @@ class HashtagController extends Controller
             return [
                 'id' => $image->id ?? null,
                 'image' => $image->image ?? '',
-                'image_url' => !empty($image->image) ? asset('storage/' . $image->image) : null,
+                'image_url' => !empty($image->image) ? MediaUrl::url($image->image) : null,
             ];
         })->toArray();
     }

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -381,7 +383,7 @@ class SearchController extends Controller
                     'user_id' => $u->user_id,
                     'username' => $u->username,
                     'name' => $name,
-                    'avatar_url' => $u->avatar ? asset('storage/' . $u->avatar) : null,
+                    'avatar_url' => $u->avatar ? MediaUrl::url($u->avatar) : null,
                     // Align with profile header: tick only when approved badge exists
                     'verified' => $hasBadge,
                     'badge' => $hasBadge ? 1 : null,
@@ -418,7 +420,7 @@ class SearchController extends Controller
                             'page_id' => $p->page_id,
                             'name' => $p->page_title ?? $p->page_name,
                             'slug' => $p->page_name,
-                            'avatar_url' => $p->avatar ? asset('storage/' . $p->avatar) : null,
+                            'avatar_url' => $p->avatar ? MediaUrl::url($p->avatar) : null,
                     'verified' => ($p->verified === true || $p->verified === 1 || $p->verified === '1'),
                         ];
                     })
@@ -451,7 +453,7 @@ class SearchController extends Controller
                         return [
                             'group_id' => $g->id,
                             'name' => $g->group_name,
-                            'avatar_url' => $g->avatar ? asset('storage/' . $g->avatar) : null,
+                            'avatar_url' => $g->avatar ? MediaUrl::url($g->avatar) : null,
                             'privacy' => $g->privacy,
                         ];
                     })
@@ -626,9 +628,9 @@ class SearchController extends Controller
                 'last_name' => $user->last_name ?? '',
                 'email' => $user->email ?? '',
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 'cover' => $user->cover ?? '',
-                'cover_url' => $user->cover ? asset('storage/' . $user->cover) : null,
+                'cover_url' => $user->cover ? MediaUrl::url($user->cover) : null,
                 'verified' => (bool) ($user->verified ?? false),
                 'is_following' => $isFollowing ? 1 : 0,
             ];
@@ -713,9 +715,9 @@ class SearchController extends Controller
                 'name' => $page->page_title ?? $page->page_name ?? '',
                 'about' => $page->about ?? '',
                 'avatar' => $page->avatar ?? '',
-                'avatar_url' => $page->avatar ? asset('storage/' . $page->avatar) : null,
+                'avatar_url' => $page->avatar ? MediaUrl::url($page->avatar) : null,
                 'cover' => $page->cover ?? '',
-                'cover_url' => $page->cover ? asset('storage/' . $page->cover) : null,
+                'cover_url' => $page->cover ? MediaUrl::url($page->cover) : null,
                 'verified' => (bool) ($page->verified ?? false),
                 'likes_count' => $likesCount,
                 'is_liked' => $isLiked ? 'yes' : 'no',
@@ -801,9 +803,9 @@ class SearchController extends Controller
                 'name' => $group->group_title ?? $group->group_name ?? '',
                 'about' => $group->about ?? '',
                 'avatar' => $group->avatar ?? '',
-                'avatar_url' => $group->avatar ? asset('storage/' . $group->avatar) : null,
+                'avatar_url' => $group->avatar ? MediaUrl::url($group->avatar) : null,
                 'cover' => $group->cover ?? '',
-                'cover_url' => $group->cover ? asset('storage/' . $group->cover) : null,
+                'cover_url' => $group->cover ? MediaUrl::url($group->cover) : null,
                 'privacy' => $group->privacy ?? 'public',
                 'join_privacy' => $group->join_privacy ?? 'public',
                 'members_count' => $membersCount,
@@ -872,8 +874,8 @@ class SearchController extends Controller
                 'post_id' => $post->id,
                 'user_id' => $post->user_id,
                 'postText' => $post->postText ?? '',
-                'postFile' => $post->postFile ? asset('storage/' . $post->postFile) : null,
-                'postFileThumb' => $post->postFileThumb ? asset('storage/' . $post->postFileThumb) : null,
+                'postFile' => $post->postFile ? MediaUrl::url($post->postFile) : null,
+                'postFileThumb' => $post->postFileThumb ? MediaUrl::url($post->postFileThumb) : null,
                 'postLink' => $post->postLink ?? '',
                 'postYoutube' => $post->postYoutube ?? '',
                 'postPlaytube' => $post->postPlaytube ?? '',
@@ -884,7 +886,7 @@ class SearchController extends Controller
                     'username' => $user->username ?? 'Unknown',
                     'name' => $this->getUserName($user),
                     'avatar' => $user->avatar ?? '',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                     'verified' => (bool) ($user->verified ?? false),
                 ] : null,
                 'user_data' => null, // Same as publisher

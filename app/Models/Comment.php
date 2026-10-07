@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+
+use App\Support\MediaUrl;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -104,10 +106,10 @@ class Comment extends Model
     public function getFileUrlAttribute(): ?string
     {
         if ($this->c_file) {
-            return asset('storage/' . $this->c_file);
+            return MediaUrl::url($this->c_file);
         }
         if ($this->record) {
-            return asset('storage/' . $this->record);
+            return MediaUrl::url($this->record);
         }
         return null;
     }

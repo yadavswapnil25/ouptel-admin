@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -339,7 +341,7 @@ class FollowController extends Controller
                     'name' => $fullName,
                     'first_name' => $follower->first_name ?? '',
                     'last_name' => $follower->last_name ?? '',
-                    'avatar_url' => $follower->avatar ? asset('storage/' . $follower->avatar) : null,
+                    'avatar_url' => $follower->avatar ? MediaUrl::url($follower->avatar) : null,
                     'verified' => $follower->verified === '1',
                     'badge' => $badgeType ? 1 : null,
                     'badge_type' => $badgeType,
@@ -434,7 +436,7 @@ class FollowController extends Controller
                     'name' => $fullName,
                     'first_name' => $followed->first_name ?? '',
                     'last_name' => $followed->last_name ?? '',
-                    'avatar_url' => $followed->avatar ? asset('storage/' . $followed->avatar) : null,
+                    'avatar_url' => $followed->avatar ? MediaUrl::url($followed->avatar) : null,
                     'verified' => $followed->verified === '1',
                     'followed_at' => date('c', $followed->followed_at),
                     'is_following' => $isFollowing ? 1 : ($isPending ? 2 : 0),
@@ -557,7 +559,7 @@ class FollowController extends Controller
                     'user_id' => $request->user_id,
                     'username' => $request->username,
                     'name' => $fullName,
-                    'avatar_url' => $request->avatar ? asset('storage/' . $request->avatar) : null,
+                    'avatar_url' => $request->avatar ? MediaUrl::url($request->avatar) : null,
                     'verified' => $request->verified === '1',
                     'requested_at' => date('c', $request->requested_at),
                 ];

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1\News;
 
+
+use App\Support\MediaUrl;
 use App\Models\NewsArticle;
 use App\Models\NewsCategory;
 use App\Models\NewsEditor;
@@ -269,7 +271,7 @@ class NewsEditorArticleController extends Controller
             }
             $filename = Str::uuid()->toString() . '.' . $file->getClientOriginalExtension();
             $path = $file->storeAs('news/articles/' . date('Y/m'), $filename, 'public');
-            $urls[] = asset('storage/' . ltrim($path, '/'));
+            $urls[] = MediaUrl::url(ltrim($path, '/'));
         }
 
         return response()->json([

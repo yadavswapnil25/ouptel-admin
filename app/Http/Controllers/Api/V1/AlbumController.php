@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Helpers\ImageHelper;
 use App\Models\Post;
 use App\Models\Comment;
@@ -199,14 +201,14 @@ class AlbumController extends BaseController
                 'id' => $comment->id,
                 'post_id' => $comment->post_id,
                 'text' => $comment->text ?? '',
-                'c_file' => $comment->c_file ? asset('storage/' . $comment->c_file) : null,
-                'record' => $comment->record ? asset('storage/' . $comment->record) : null,
+                'c_file' => $comment->c_file ? MediaUrl::url($comment->c_file) : null,
+                'record' => $comment->record ? MediaUrl::url($comment->record) : null,
                 'replies_count' => $repliesCount,
                 'author' => [
                     'user_id' => $user->user_id ?? $comment->user_id,
                     'username' => $user->username ?? 'Unknown',
                     'name' => $user->name ?? $user->username ?? 'Unknown',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 ],
                 'created_at' => $comment->time ? date('c', $comment->time) : null,
                 'created_at_human' => $comment->time ? $this->getHumanTime($comment->time) : null,

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Helpers\PostMediaHelper;
 use App\Helpers\CommentVisibilityHelper;
 use App\Http\Controllers\Controller;
@@ -489,7 +491,7 @@ class NewFeedController extends Controller
                         'page_title' => $pageTitle !== '' ? $pageTitle : $pageName,
                         'name' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
                         'avatar' => $pageRow->avatar ?? '',
-                        'avatar_url' => !empty($pageRow->avatar) ? asset('storage/' . $pageRow->avatar) : null,
+                        'avatar_url' => !empty($pageRow->avatar) ? MediaUrl::url($pageRow->avatar) : null,
                         'verified' => User::isVerifiedFlag($pageRow->verified ?? null),
                     ];
                 }
@@ -504,7 +506,7 @@ class NewFeedController extends Controller
                         'user_id' => (int) $recipientUser->user_id,
                         'username' => $recipientUser->username ?? 'Unknown',
                         'name' => trim(($recipientUser->first_name ?? '') . ' ' . ($recipientUser->last_name ?? '')) ?: ($recipientUser->name ?? $recipientUser->username ?? 'Unknown User'),
-                        'avatar_url' => ($recipientUser->avatar) ? asset('storage/' . $recipientUser->avatar) : null,
+                        'avatar_url' => ($recipientUser->avatar) ? MediaUrl::url($recipientUser->avatar) : null,
                     ];
                 }
             }
@@ -531,7 +533,7 @@ class NewFeedController extends Controller
                         'group_title' => $groupTitle !== '' ? $groupTitle : $groupName,
                         'name' => $groupTitle !== '' ? $groupTitle : ($groupName !== '' ? $groupName : 'Group'),
                         'avatar' => $groupRow->avatar ?? '',
-                        'avatar_url' => !empty($groupRow->avatar) ? asset('storage/' . $groupRow->avatar) : null,
+                        'avatar_url' => !empty($groupRow->avatar) ? MediaUrl::url($groupRow->avatar) : null,
                     ];
                 }
             }
@@ -596,7 +598,7 @@ class NewFeedController extends Controller
                         'username' => $sharedUser->username ?? 'Unknown',
                         'name' => trim(($sharedUser->first_name ?? '') . ' ' . ($sharedUser->last_name ?? ''))
                             ?: ($sharedUser->name ?? $sharedUser->username ?? 'Unknown User'),
-                        'avatar_url' => $sharedUser->avatar ? asset('storage/' . $sharedUser->avatar) : null,
+                        'avatar_url' => $sharedUser->avatar ? MediaUrl::url($sharedUser->avatar) : null,
                         'verified' => (bool) ($sharedUser->verified ?? false),
                     ] : null;
                     $sharedFrom = [
@@ -647,7 +649,7 @@ class NewFeedController extends Controller
                             'user_id' => $answerAuthor->user_id,
                             'username' => $answerAuthor->username ?? 'Unknown',
                             'name' => $answerAuthor->name ?? $answerAuthor->username ?? 'Unknown User',
-                            'avatar_url' => $answerAuthor->avatar ? asset('storage/' . $answerAuthor->avatar) : null,
+                            'avatar_url' => $answerAuthor->avatar ? MediaUrl::url($answerAuthor->avatar) : null,
                         ] : null,
                     ];
                 }
@@ -752,7 +754,7 @@ class NewFeedController extends Controller
                     'first_name' => $user?->first_name ?? '',
                     'last_name' => $user?->last_name ?? '',
                     'name' => $user?->name ?? $user?->username ?? 'Unknown User',
-                    'avatar_url' => ($user?->avatar) ? asset('storage/' . $user?->avatar) : null,
+                    'avatar_url' => ($user?->avatar) ? MediaUrl::url($user?->avatar) : null,
                     'verified' => User::isVerifiedFlag($user?->verified ?? null),
                     'is_admin' => (bool) ($user?->admin ?? false),
                     'badge' => $this->getUserBadge($post->user_id),
@@ -958,7 +960,7 @@ class NewFeedController extends Controller
                 'user_id' => (int) $u->user_id,
                 'username' => $u->username ?? '',
                 'name' => $displayName !== '' ? $displayName : ($u->username ?? 'User'),
-                'avatar_url' => ($u->avatar ?? '') ? asset('storage/' . $u->avatar) : null,
+                'avatar_url' => ($u->avatar ?? '') ? MediaUrl::url($u->avatar) : null,
             ];
             if (count($result) >= 8) {
                 break;
@@ -1225,7 +1227,7 @@ class NewFeedController extends Controller
             return [
                 'id' => $image->id,
                 'image_path' => $image->image,
-                'image_url' => asset('storage/' . $image->image),
+                'image_url' => MediaUrl::url($image->image),
             ];
         })->toArray();
     }
@@ -1358,7 +1360,7 @@ class NewFeedController extends Controller
                 'page_name' => $page->page_name ?? '',
                 'page_title' => $page->page_title ?? ($page->page_name ?? ''),
                 'avatar' => $avatar,
-                'avatar_url' => $avatar !== '' ? asset('storage/' . ltrim($avatar, '/')) : null,
+                'avatar_url' => $avatar !== '' ? MediaUrl::url(ltrim($avatar, '/')) : null,
             ];
         }
 
@@ -1391,7 +1393,7 @@ class NewFeedController extends Controller
         }
         
         // Otherwise, it's a storage path - prepend storage URL
-        return asset('storage/' . $postPhoto);
+        return MediaUrl::url($postPhoto);
     }
 
     /**
@@ -1417,14 +1419,8 @@ class NewFeedController extends Controller
         $filePath = str_replace('storage/', '', $postFile);
         $filePath = ltrim($filePath, '/');
         
-        // Check if file exists in storage
-        if (Storage::disk('public')->exists($filePath)) {
-            // Use Storage::url() for proper URL generation
-            $url = Storage::disk('public')->url($filePath);
-        } else {
-            // Fallback to asset() if Storage::url() doesn't work
-            $url = asset('storage/' . $filePath);
-        }
+        // No exists() check: on S3 it is a network round-trip per post.
+        $url = MediaUrl::url($filePath);
         
         // Clean up any double slashes
         return preg_replace('#([^:])//+#', '$1/', $url);
@@ -1453,14 +1449,7 @@ class NewFeedController extends Controller
         $videoPath = str_replace('storage/', '', $postVideo);
         $videoPath = ltrim($videoPath, '/');
         
-        // Check if file exists in storage
-        if (Storage::disk('public')->exists($videoPath)) {
-            // Use Storage::url() for proper URL generation
-            $url = Storage::disk('public')->url($videoPath);
-        } else {
-            // Fallback to asset() if Storage::url() doesn't work
-            $url = asset('storage/' . $videoPath);
-        }
+        $url = MediaUrl::url($videoPath);
         
         // Clean up any double slashes
         return preg_replace('#([^:])//+#', '$1/', $url);
@@ -1489,14 +1478,7 @@ class NewFeedController extends Controller
         $recordPath = str_replace('storage/', '', $postRecord);
         $recordPath = ltrim($recordPath, '/');
         
-        // Check if file exists in storage
-        if (Storage::disk('public')->exists($recordPath)) {
-            // Use Storage::url() for proper URL generation
-            $url = Storage::disk('public')->url($recordPath);
-        } else {
-            // Fallback to asset() if Storage::url() doesn't work
-            $url = asset('storage/' . $recordPath);
-        }
+        $url = MediaUrl::url($recordPath);
         
         // Clean up any double slashes
         return preg_replace('#([^:])//+#', '$1/', $url);
@@ -1530,7 +1512,7 @@ class NewFeedController extends Controller
                 'color_2' => $coloredPost->color_2 ?? '',
                 'text_color' => $coloredPost->text_color ?? '',
                 'image' => $coloredPost->image ?? '',
-                'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+                'image_url' => !empty($coloredPost->image) ? MediaUrl::url($coloredPost->image) : null,
             ];
         } catch (\Exception $e) {
             // If query fails, return null
@@ -1689,7 +1671,7 @@ class NewFeedController extends Controller
                         'first_name' => $user->first_name ?? '',
                         'last_name' => $user->last_name ?? '',
                         'avatar' => $user->avatar ?? '',
-                        'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                        'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                         'verified' => User::isVerifiedFlag($user->verified ?? null),
                         'is_following' => $isFollowing ? 1 : 0,
                         'reaction_type' => $reactionType,
@@ -1723,7 +1705,7 @@ class NewFeedController extends Controller
                         'first_name' => $currentUser->first_name ?? '',
                         'last_name' => $currentUser->last_name ?? '',
                         'avatar' => $currentUser->avatar ?? '',
-                        'avatar_url' => $currentUser->avatar ? asset('storage/' . $currentUser->avatar) : null,
+                        'avatar_url' => $currentUser->avatar ? MediaUrl::url($currentUser->avatar) : null,
                         'verified' => User::isVerifiedFlag($currentUser->verified ?? null),
                         'is_following' => 0,
                         'reaction_type' => $cuReactionType,

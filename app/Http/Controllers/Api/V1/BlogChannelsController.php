@@ -34,15 +34,11 @@ class BlogChannelsController extends BaseController
 
     private function uploadImage($file, string $prefix): string
     {
-        $year = date('Y');
-        $month = date('m');
-        $dir = "upload/photos/{$year}/{$month}";
-        if (!is_dir(public_path($dir))) {
-            @mkdir(public_path($dir), 0755, true);
-        }
+        // On the media disk (local storage or S3, per MEDIA_DISK) like every other upload.
+        $dir = 'upload/photos/' . date('Y') . '/' . date('m');
         $filename = uniqid($prefix) . '.' . $file->getClientOriginalExtension();
-        $file->move(public_path($dir), $filename);
-        return "{$dir}/{$filename}";
+
+        return $file->storeAs($dir, $filename, 'public');
     }
 
     private function formatEngagementUser(object $user): array

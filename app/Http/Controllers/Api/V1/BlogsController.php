@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Models\Article;
 use App\Models\BlogCategory;
 use App\Models\BlogChannel;
@@ -261,7 +263,7 @@ class BlogsController extends BaseController
                 'username' => $user->username ?? 'Unknown',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 'verified' => (bool) ($user->verified ?? false),
             ];
         } elseif ($rawUserId) {
@@ -273,7 +275,7 @@ class BlogsController extends BaseController
                     'username' => $userFromDb->username ?? 'Unknown',
                     'name' => $userFromDb->name ?? $userFromDb->username ?? 'Unknown User',
                     'avatar' => $userFromDb->avatar ?? '',
-                    'avatar_url' => $userFromDb->avatar ? asset('storage/' . $userFromDb->avatar) : null,
+                    'avatar_url' => $userFromDb->avatar ? MediaUrl::url($userFromDb->avatar) : null,
                     'verified' => (bool) ($userFromDb->verified ?? false),
                 ];
             }
@@ -838,7 +840,7 @@ class BlogsController extends BaseController
             // onError and the Avatar component falls back to coloured initials.
             // Returning null (when avatar is empty) lets Avatar show initials
             // immediately without any failed image request.
-            $avatarUrl = $user->avatar ? asset('storage/' . $user->avatar) : null;
+            $avatarUrl = $user->avatar ? MediaUrl::url($user->avatar) : null;
 
             $author = [
                 'user_id' => $user->user_id,
@@ -881,7 +883,7 @@ class BlogsController extends BaseController
         $user = $reply->user;
         $author = null;
         if ($user instanceof User) {
-            $avatarUrl = $user->avatar ? asset('storage/' . $user->avatar) : null;
+            $avatarUrl = $user->avatar ? MediaUrl::url($user->avatar) : null;
 
             $author = [
                 'user_id' => $user->user_id,
@@ -1460,17 +1462,11 @@ class BlogsController extends BaseController
 
     private function storeSingleBlogImageFile($file): string
     {
-        $year = date('Y');
-        $month = date('m');
-        $dir = "upload/photos/{$year}/{$month}";
-        $fullDir = public_path($dir);
-        if (!is_dir($fullDir)) {
-            mkdir($fullDir, 0755, true);
-        }
+        // On the media disk (local storage or S3, per MEDIA_DISK) like every other upload.
+        $dir = 'upload/photos/' . date('Y') . '/' . date('m');
         $filename = uniqid('blog_') . '.' . $file->getClientOriginalExtension();
-        $file->move($fullDir, $filename);
 
-        return "{$dir}/{$filename}";
+        return $file->storeAs($dir, $filename, 'public');
     }
 
     /**

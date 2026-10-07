@@ -2,6 +2,8 @@
 
 namespace App\Filament\Admin\Resources;
 
+
+use App\Support\MediaUrl;
 use App\Filament\Admin\Resources\JobResource\Pages;
 use App\Filament\Admin\Resources\JobResource\Widgets;
 use App\Models\Job;
@@ -361,7 +363,7 @@ class JobResource extends Resource
                                 return 'Unknown';
                             }
                             $avatar = $user->avatar ?? '';
-                            $avatarUrl = $avatar ? asset('storage/' . $avatar) : asset('images/default-avatar.png');
+                            $avatarUrl = $avatar ? MediaUrl::url($avatar) : asset('images/default-avatar.png');
                             $name = trim(($user->first_name ?? '') . ' ' . ($user->last_name ?? '')) ?: ($user->name ?? $user->username ?? 'Unknown');
                             
                             return view('filament.admin.resources.job-resource.publisher', [

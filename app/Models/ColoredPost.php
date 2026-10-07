@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+
+use App\Support\MediaUrl;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Storage;
 
@@ -41,7 +43,7 @@ class ColoredPost extends Model
             return $this->image;
         }
 
-        return asset('storage/' . ltrim($this->image, '/'));
+        return MediaUrl::url(ltrim($this->image, '/'));
     }
 
     public function deleteStoredImage(): void

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Services\FriendActivityNotificationService;
 use Illuminate\Http\JsonResponse;
@@ -652,26 +654,26 @@ class StoriesController extends Controller
             'description' => $textFields['description'],
             'posted' => $story->posted,
             'expire' => $story->expire,
-            'thumbnail' => $story->thumbnail ? asset('storage/' . $story->thumbnail) : ($user?->avatar ? asset('storage/' . $user->avatar) : null),
+            'thumbnail' => $story->thumbnail ? MediaUrl::url($story->thumbnail) : ($user?->avatar ? MediaUrl::url($user->avatar) : null),
             'is_owner' => ($story->user_id == $tokenUserId),
             'user_data' => $user ? [
                 'user_id' => $user->user_id,
                 'username' => $user->username ?? 'Unknown',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 'verified' => (bool) ($user->verified ?? false),
             ] : null,
             'images' => $storyImages->map(function($media) {
                 return [
                     'filename' => $media->filename,
-                    'url' => asset('storage/' . $media->filename),
+                    'url' => MediaUrl::url($media->filename),
                 ];
             })->toArray(),
             'videos' => $storyVideos->map(function($media) {
                 return [
                     'filename' => $media->filename,
-                    'url' => asset('storage/' . $media->filename),
+                    'url' => MediaUrl::url($media->filename),
                 ];
             })->toArray(),
         ];
@@ -1498,7 +1500,7 @@ class StoriesController extends Controller
                             'username' => $user->username ?? 'Unknown',
                             'name' => $userName,
                             'avatar' => $user->avatar ?? '',
-                            'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                            'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                             'verified' => (bool) ($user->verified ?? false),
                             'reaction' => isset($viewerReactions[$user->user_id]) ? (int) $viewerReactions[$user->user_id] : null,
                             'offset_id' => $view->id ?? 0,
@@ -1570,7 +1572,7 @@ class StoriesController extends Controller
                                 'username' => $user->username ?? 'Unknown',
                                 'name' => $userName,
                                 'avatar' => $user->avatar ?? '',
-                                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                                'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                                 'verified' => (bool) ($user->verified ?? false),
                                 'reaction' => $viewerReaction !== null ? (int) $viewerReaction : null,
                                 'offset_id' => $view->id,
@@ -1709,7 +1711,7 @@ class StoriesController extends Controller
                     $storyType = $media->type ?? null;
                     // Get media URL
                     if ($media->filename) {
-                        $mediaUrl = asset('storage/' . $media->filename);
+                        $mediaUrl = MediaUrl::url($media->filename);
                     }
                 }
             }
@@ -1731,14 +1733,14 @@ class StoriesController extends Controller
                 'posted' => $story->posted,
                 'expire' => $story->expire,
                 'type' => $storyType ?? 'unknown', // 'image' or 'video'
-                'thumbnail' => $thumbnail ? asset('storage/' . $thumbnail) : null,
+                'thumbnail' => $thumbnail ? MediaUrl::url($thumbnail) : null,
                 'media_url' => $mediaUrl, // Full URL to the image or video file
                 'user_data' => $user ? [
                     'user_id' => $user->user_id,
                     'username' => $user->username ?? 'Unknown',
                     'name' => $user->name ?? $user->username ?? 'Unknown User',
                     'avatar' => $user->avatar ?? '',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                     'verified' => (bool) ($user->verified ?? false),
                 ] : null,
             ], $this->formatStoryMusic($story), $textFields);
@@ -1871,7 +1873,7 @@ class StoriesController extends Controller
                 'last_name' => $user->last_name ?? '',
                 'name' => $user->name ?? $user->username ?? 'Unknown User',
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 'verified' => (bool) ($user->verified ?? false),
                 'stories' => [],
                 'has_unseen' => false,
@@ -1902,7 +1904,7 @@ class StoriesController extends Controller
                         $storyType = $media->type ?? null;
                         // Get media URL
                         if ($media->filename) {
-                            $mediaUrl = asset('storage/' . $media->filename);
+                            $mediaUrl = MediaUrl::url($media->filename);
                         }
                     }
                 }
@@ -1939,7 +1941,7 @@ class StoriesController extends Controller
                     'posted' => $story->posted,
                     'expire' => $story->expire,
                     'type' => $storyType ?? 'unknown', // 'image' or 'video'
-                    'thumbnail' => $thumbnail ? asset('storage/' . $thumbnail) : null,
+                    'thumbnail' => $thumbnail ? MediaUrl::url($thumbnail) : null,
                     'media_url' => $mediaUrl, // Full URL to the image or video file
                     'time_text' => $this->getTimeElapsedString($story->posted),
                     'view_count' => $viewCount,

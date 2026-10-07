@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Models\Page;
 use App\Models\PageCategory;
 use App\Helpers\CommentVisibilityHelper;
@@ -1027,7 +1029,7 @@ class PagesController extends BaseController
                         'username' => $ownerData->username ?? '',
                         'name' => $this->getUserName($ownerData),
                         'avatar' => $ownerData->avatar ?? '',
-                        'avatar_url' => $ownerData->avatar ? asset('storage/' . $ownerData->avatar) : null,
+                        'avatar_url' => $ownerData->avatar ? MediaUrl::url($ownerData->avatar) : null,
                         'verified' => (bool) ($ownerData->verified ?? false),
                     ];
                 }
@@ -1235,7 +1237,7 @@ class PagesController extends BaseController
                             'user_id' => $ownerData->user_id,
                             'username' => $ownerData->username ?? '',
                             'name' => $this->getUserName($ownerData),
-                            'avatar_url' => $ownerData->avatar ? asset('storage/' . $ownerData->avatar) : null,
+                            'avatar_url' => $ownerData->avatar ? MediaUrl::url($ownerData->avatar) : null,
                         ];
                     }
                 }
@@ -1440,7 +1442,7 @@ class PagesController extends BaseController
                     'page_title' => $pageTitle !== '' ? $pageTitle : $pageName,
                     'name' => $pageTitle !== '' ? $pageTitle : ($pageName !== '' ? $pageName : 'Page'),
                     'avatar' => $pageRow->avatar ?? '',
-                    'avatar_url' => !empty($pageRow->avatar) ? asset('storage/' . $pageRow->avatar) : null,
+                    'avatar_url' => !empty($pageRow->avatar) ? MediaUrl::url($pageRow->avatar) : null,
                     'verified' => (bool) ($pageRow->verified ?? false),
                 ];
             }
@@ -1491,9 +1493,9 @@ class PagesController extends BaseController
             'post_photo' => $post->postPhoto ?? '',
             'post_photo_url' => $this->getPostPhotoUrl($post),
             'post_file' => $post->postFile ?? '',
-            'post_file_url' => ($post->postFile ?? '') ? asset('storage/' . $post->postFile) : null,
+            'post_file_url' => ($post->postFile ?? '') ? MediaUrl::url($post->postFile) : null,
             'post_record' => $post->postRecord ?? '',
-            'post_record_url' => ($post->postRecord ?? '') ? asset('storage/' . $post->postRecord) : null,
+            'post_record_url' => ($post->postRecord ?? '') ? MediaUrl::url($post->postRecord) : null,
             'post_youtube' => $post->postYoutube ?? '',
             'post_vimeo' => $post->postVimeo ?? '',
             'post_dailymotion' => $post->postDailymotion ?? '',
@@ -1553,7 +1555,7 @@ class PagesController extends BaseController
                 'user_id' => $post->user_id,
                 'username' => $user?->username ?? 'Unknown',
                 'name' => $this->getUserName($user),
-                'avatar_url' => ($user?->avatar) ? asset('storage/' . $user?->avatar) : null,
+                'avatar_url' => ($user?->avatar) ? MediaUrl::url($user?->avatar) : null,
                 'verified' => (bool) ($user?->verified ?? false),
             ],
             'page_id' => $post->page_id ?? null,
@@ -1677,7 +1679,7 @@ class PagesController extends BaseController
             return [
                 'id' => $image->id,
                 'image_path' => $image->image,
-                'image_url' => asset('storage/' . $image->image),
+                'image_url' => MediaUrl::url($image->image),
             ];
         })->toArray();
     }
@@ -1787,7 +1789,7 @@ class PagesController extends BaseController
                 'page_name' => $page->page_name ?? '',
                 'page_title' => $page->page_title ?? ($page->page_name ?? ''),
                 'avatar' => $avatar,
-                'avatar_url' => $avatar !== '' ? asset('storage/' . ltrim($avatar, '/')) : null,
+                'avatar_url' => $avatar !== '' ? MediaUrl::url(ltrim($avatar, '/')) : null,
             ];
         }
 
@@ -1821,7 +1823,7 @@ class PagesController extends BaseController
                 'color_2' => $coloredPost->color_2 ?? '',
                 'text_color' => $coloredPost->text_color ?? '',
                 'image' => $coloredPost->image ?? '',
-                'image_url' => !empty($coloredPost->image) ? asset('storage/' . $coloredPost->image) : null,
+                'image_url' => !empty($coloredPost->image) ? MediaUrl::url($coloredPost->image) : null,
             ];
         } catch (\Exception $e) {
             return null;
@@ -1892,7 +1894,7 @@ class PagesController extends BaseController
             return preg_replace('#([^:])//+#', '$1/', $postPhoto);
         }
         
-        return asset('storage/' . $postPhoto);
+        return MediaUrl::url($postPhoto);
     }
 
     /**
@@ -2128,7 +2130,7 @@ class PagesController extends BaseController
                             'user_id' => $like->user_id,
                             'username' => $user->username ?? 'Unknown',
                             'name' => $this->getUserName($user),
-                            'avatar_url' => $user && $user->avatar ? asset('storage/' . $user->avatar) : null,
+                            'avatar_url' => $user && $user->avatar ? MediaUrl::url($user->avatar) : null,
                             'liked_at' => $like->time ? date('c', $like->time) : null,
                             'liked_at_human' => $like->time ? $this->getHumanTime($like->time) : null,
                         ];
@@ -2371,7 +2373,7 @@ class PagesController extends BaseController
                             'name' => $userName,
                             'email' => $user->email ?? '',
                             'avatar' => $user->avatar ?? '',
-                            'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                            'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                             'verified' => (bool) ($user->verified ?? false),
                             'is_owner' => ((string) $user->user_id === (string) $page->user_id),
                             'added_at' => isset($adminRecord->time) ? date('c', $adminRecord->time) : null,
@@ -2407,7 +2409,7 @@ class PagesController extends BaseController
                             'name' => $userName,
                             'email' => $user->email ?? '',
                             'avatar' => $user->avatar ?? '',
-                            'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                            'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                             'verified' => (bool) ($user->verified ?? false),
                             'is_owner' => ((string) $user->user_id === (string) $page->user_id),
                             'added_at' => isset($adminRecord->time) ? date('c', $adminRecord->time) : null,
@@ -2448,7 +2450,7 @@ class PagesController extends BaseController
                         'name' => $ownerName,
                         'email' => $owner->email ?? '',
                         'avatar' => $owner->avatar ?? '',
-                        'avatar_url' => $owner->avatar ? asset('storage/' . $owner->avatar) : null,
+                        'avatar_url' => $owner->avatar ? MediaUrl::url($owner->avatar) : null,
                         'verified' => (bool) ($owner->verified ?? false),
                         'is_owner' => true,
                         'added_at' => null,
@@ -2588,19 +2590,19 @@ class PagesController extends BaseController
         $frontPath = '';
         if ($request->hasFile('id_proof_front_image') && $request->file('id_proof_front_image')->isValid()) {
             $file = $request->file('id_proof_front_image');
-            $frontPath = $file->storeAs($storagePath, $prefix . '_front.' . $file->getClientOriginalExtension(), 'public') ?: '';
+            $frontPath = $file->storeAs($storagePath, $prefix . '_front.' . $file->getClientOriginalExtension(), MediaUrl::storeOptions($storagePath)) ?: '';
         }
 
         $backPath = '';
         if ($request->hasFile('id_proof_back_image') && $request->file('id_proof_back_image')->isValid()) {
             $file = $request->file('id_proof_back_image');
-            $backPath = $file->storeAs($storagePath, $prefix . '_back.' . $file->getClientOriginalExtension(), 'public') ?: '';
+            $backPath = $file->storeAs($storagePath, $prefix . '_back.' . $file->getClientOriginalExtension(), MediaUrl::storeOptions($storagePath)) ?: '';
         }
 
         $livePhotoPath = '';
         if ($request->hasFile('live_photo') && $request->file('live_photo')->isValid()) {
             $file = $request->file('live_photo');
-            $livePhotoPath = $file->storeAs($storagePath, $prefix . '_live_photo.' . $file->getClientOriginalExtension(), 'public') ?: '';
+            $livePhotoPath = $file->storeAs($storagePath, $prefix . '_live_photo.' . $file->getClientOriginalExtension(), MediaUrl::storeOptions($storagePath)) ?: '';
         }
 
         $govDocPath = '';
@@ -2609,7 +2611,7 @@ class PagesController extends BaseController
             $govDocPath = $file->storeAs(
                 $storagePath,
                 $prefix . '_gov_reg.' . $file->getClientOriginalExtension(),
-                'public'
+                MediaUrl::storeOptions($storagePath)
             ) ?: '';
         }
 
@@ -2921,21 +2923,13 @@ class PagesController extends BaseController
         // For uploaded files (page_avatar_*, page_cover_*), always return URL
         // These are newly uploaded files that should exist
         if (str_contains($normalizedPath, 'page_avatar_') || str_contains($normalizedPath, 'page_cover_')) {
-            return asset('storage/' . $normalizedPath);
+            return MediaUrl::url($normalizedPath);
         }
 
-        // Check if file exists in storage
-        if (Storage::disk('public')->exists($normalizedPath)) {
-            return asset('storage/' . $normalizedPath);
-        }
-
-        // For default images (d-page.jpg, d-cover.jpg, etc.), return null if they don't exist
-        // These are expected to exist, but if they don't, return null to avoid 404
+        // Stock WoWonder default images: return null and let the client use its
+        // own placeholder. (No exists() check - on S3 that's a network call per page.)
         $defaultImages = ['d-page.jpg', 'd-cover.jpg', 'cover.jpg', 'd-avatar.jpg', 'f-avatar.jpg'];
-        $filename = basename($normalizedPath);
-        
-        if (in_array($filename, $defaultImages)) {
-            // For default images, only return URL if file exists
+        if (in_array(basename($normalizedPath), $defaultImages, true)) {
             return null;
         }
 
@@ -2947,11 +2941,11 @@ class PagesController extends BaseController
         // For any other path that starts with 'upload/', return URL anyway
         // This handles any uploaded files that might not match the exact pattern
         if (str_starts_with($normalizedPath, 'upload/')) {
-            return asset('storage/' . $normalizedPath);
+            return MediaUrl::url($normalizedPath);
         }
 
         // For any other path, return URL anyway (might be a valid file)
-        return asset('storage/' . $normalizedPath);
+        return MediaUrl::url($normalizedPath);
     }
 
     private function pageLikesTable(): ?string

@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Models\Message;
 use Illuminate\Http\JsonResponse;
@@ -405,7 +407,7 @@ class NotificationsController extends Controller
                 'last_name' => $notifier->last_name ?? '',
                 'name' => $notifier->name ?? $notifier->username ?? 'Unknown User',
                 'avatar' => $notifier->avatar ?? '',
-                'avatar_url' => $notifier->avatar ? asset('storage/' . $notifier->avatar) : null,
+                'avatar_url' => $notifier->avatar ? MediaUrl::url($notifier->avatar) : null,
                 'verified' => (bool) ($notifier->verified ?? false),
             ] : null;
 
@@ -472,7 +474,7 @@ class NotificationsController extends Controller
                     'username' => $user->username ?? 'Unknown',
                     'name' => $user->name ?? $user->username ?? 'Unknown User',
                     'avatar' => $user->avatar ?? '',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                     'verified' => (bool) ($user->verified ?? false),
                 ];
             }
@@ -491,7 +493,7 @@ class NotificationsController extends Controller
                     'username' => $user->username ?? 'Unknown',
                     'name' => $user->name ?? $user->username ?? 'Unknown User',
                     'avatar' => $user->avatar ?? '',
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                     'verified' => (bool) ($user->verified ?? false),
                 ];
             }

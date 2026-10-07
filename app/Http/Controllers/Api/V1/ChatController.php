@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Models\Conversation;
 use App\Models\ConversationParticipant;
@@ -441,7 +443,7 @@ class ChatController extends Controller
                 'username' => $user->username ?? '',
                 'name' => $this->displayName($user),
                 'avatar' => $user->avatar ?? '',
-                'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 'verified' => (bool) ($user->verified ?? false),
                 'is_online' => $showLastSeen && $lastSeen > (time() - self::ONLINE_WINDOW_SECONDS),
                 'last_seen' => $visibleLastSeen,

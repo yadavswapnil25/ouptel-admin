@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+
+use App\Support\MediaUrl;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -260,7 +262,7 @@ class VerificationRequest extends Model
         if (!$this->id_proof_front_image) {
             return null;
         }
-        return asset('storage/' . $this->id_proof_front_image);
+        return MediaUrl::forPath($this->id_proof_front_image);
     }
 
     /**
@@ -271,7 +273,7 @@ class VerificationRequest extends Model
         if (!$this->id_proof_back_image) {
             return null;
         }
-        return asset('storage/' . $this->id_proof_back_image);
+        return MediaUrl::forPath($this->id_proof_back_image);
     }
 
     /**

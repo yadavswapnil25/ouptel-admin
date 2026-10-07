@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+
+use App\Support\MediaUrl;
 use App\Http\Controllers\Controller;
 use App\Helpers\CommentVisibilityHelper;
 use App\Models\Comment;
@@ -414,10 +416,10 @@ class CommentController extends Controller
 
             // Clean up associated files before deleting
             if ($comment->c_file) {
-                Storage::delete($comment->c_file);
+                Storage::disk('public')->delete($comment->c_file);
             }
             if ($comment->record) {
-                Storage::delete($comment->record);
+                Storage::disk('public')->delete($comment->record);
             }
 
             // Delete the comment (hard delete since active field doesn't exist)
@@ -501,10 +503,10 @@ class CommentController extends Controller
 
             // Clean up associated files before deleting
             if (!empty($reply->c_file)) {
-                Storage::delete($reply->c_file);
+                Storage::disk('public')->delete($reply->c_file);
             }
             if (!empty($reply->record)) {
-                Storage::delete($reply->record);
+                Storage::disk('public')->delete($reply->record);
             }
 
             // Delete reactions for this reply if Wo_PostReactions table exists and has replay_id column
@@ -651,16 +653,16 @@ class CommentController extends Controller
                 'post_id' => $reply->post_id,
                 'text' => $reply->text,
                 'c_file' => $reply->c_file ?? '',
-                'c_file_url' => ($reply->c_file ?? '') ? asset('storage/' . $reply->c_file) : null,
+                'c_file_url' => ($reply->c_file ?? '') ? MediaUrl::url($reply->c_file) : null,
                 'record' => $reply->record ?? '',
-                'record_url' => ($reply->record ?? '') ? asset('storage/' . $reply->record) : null,
+                'record_url' => ($reply->record ?? '') ? MediaUrl::url($reply->record) : null,
                 'is_reply' => true,
                 'is_owner' => $reply->user_id == $tokenUserId,
                 'author' => [
                     'user_id' => $user->user_id,
                     'username' => $user->username,
                     'name' => $this->getUserName($user),
-                    'avatar_url' => $user->avatar ? asset('storage/' . $user->avatar) : null,
+                    'avatar_url' => $user->avatar ? MediaUrl::url($user->avatar) : null,
                 ],
                 'created_at' => date('c', $reply->time),
                 'created_at_human' => $this->getHumanTime($reply->time),
@@ -760,16 +762,16 @@ class CommentController extends Controller
                         'post_id' => $reply->post_id,
                         'text' => $reply->text,
                         'c_file' => $reply->c_file ?? '',
-                        'c_file_url' => ($reply->c_file ?? '') ? asset('storage/' . $reply->c_file) : null,
+                        'c_file_url' => ($reply->c_file ?? '') ? MediaUrl::url($reply->c_file) : null,
                         'record' => $reply->record ?? '',
-                        'record_url' => ($reply->record ?? '') ? asset('storage/' . $reply->record) : null,
+                        'record_url' => ($reply->record ?? '') ? MediaUrl::url($reply->record) : null,
                         'is_reply' => true,
                         'is_owner' => $reply->user_id == $tokenUserId,
                         'author' => [
                             'user_id' => $user->user_id,
                             'username' => $user->username ?? 'Unknown',
                             'name' => $this->getUserName($user),
-                            'avatar_url' => ($user->avatar) ? asset('storage/' . $user->avatar) : null,
+                            'avatar_url' => ($user->avatar) ? MediaUrl::url($user->avatar) : null,
                         ],
                         'created_at' => date('c', $reply->time),
                         'created_at_human' => $this->getHumanTime($reply->time),
@@ -997,16 +999,16 @@ class CommentController extends Controller
                     'post_id' => $reply->post_id ?? 0,
                     'text' => $reply->text,
                     'c_file' => $reply->c_file ?? '',
-                    'c_file_url' => ($reply->c_file ?? '') ? asset('storage/' . $reply->c_file) : null,
+                    'c_file_url' => ($reply->c_file ?? '') ? MediaUrl::url($reply->c_file) : null,
                     'record' => $reply->record ?? '',
-                    'record_url' => ($reply->record ?? '') ? asset('storage/' . $reply->record) : null,
+                    'record_url' => ($reply->record ?? '') ? MediaUrl::url($reply->record) : null,
                     'is_reply' => true,
                     'is_owner' => $reply->user_id == $userId,
                     'author' => [
                         'user_id' => $user->user_id,
                         'username' => $user->username ?? 'Unknown',
                         'name' => $this->getUserName($user),
-                        'avatar_url' => ($user->avatar) ? asset('storage/' . $user->avatar) : null,
+                        'avatar_url' => ($user->avatar) ? MediaUrl::url($user->avatar) : null,
                     ],
                     'created_at' => date('c', $reply->time),
                     'created_at_human' => $this->getHumanTime($reply->time),
@@ -1541,7 +1543,7 @@ class CommentController extends Controller
                 'user_id' => $author?->user_id ?? $comment->user_id,
                 'username' => $author?->username ?? 'Unknown',
                 'name' => $this->getUserName($author),
-                'avatar_url' => $avatar ? asset('storage/' . $avatar) : null,
+                'avatar_url' => $avatar ? MediaUrl::url($avatar) : null,
             ],
             'created_at' => date('c', $comment->time),
             'created_at_human' => $comment->human_time,
